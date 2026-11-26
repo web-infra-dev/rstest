@@ -1,5 +1,5 @@
 ---
-description: Print console traces when calling any console method, which is helpful for debugging.
+description: Print stack traces when calling console methods during tests.
 ---
 
 # printConsoleTrace
@@ -8,7 +8,7 @@ description: Print console traces when calling any console method, which is help
 - **Default:** `false`
 - **CLI:** `--printConsoleTrace`
 
-Print console traces when calling any console method, which is helpful for debugging.
+Print the stack trace where `console` methods (such as `console.log` or `console.warn`) are called during tests, helping locate where each log originates.
 
 import { Tab, Tabs } from '@theme';
 
@@ -30,5 +30,5 @@ export default defineConfig({
 </Tabs>
 
 :::note
-When [disableConsoleIntercept](/config/test/disable-console-intercept) is set to `true`, `printConsoleTrace` will not take effect.
+When [`disableConsoleIntercept`](/config/test/disable-console-intercept) is `true`, `printConsoleTrace` has no effect.
 :::

@@ -1,30 +1,49 @@
 ---
-description: Rstest 提供的核心 JavaScript API，包括定义、合并和加载测试配置等辅助方法。
+description: 从 @rstest/core 导出的核心 JavaScript API，用于定义、合并和加载配置。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Rstest core
 
-本章节介绍了 Rstest 提供的一些核心方法。
+从 `@rstest/core` 导出的核心配置函数。
 
 ## defineConfig
 
-此函数可用于自动补全 Rstest 配置的类型。
+为 Rstest 配置对象或配置工厂函数提供类型推导与多余属性检查。
 
 - **类型：**
 
 ```ts
+function defineConfig<
+  const Config extends RstestConfig,
+  const Definition extends Config | (() => Config) | (() => Promise<Config>),
+>(
+  config: Definition &
+    (Definition extends (...args: never[]) => infer CallbackResult
+      ? [Awaited<CallbackResult>] extends [RstestConfig]
+        ? unknown
+        : never
+      : RstestConfig &
+          Record<Exclude<keyof Definition, keyof RstestConfig>, never>),
+): Definition extends (...args: never[]) => infer CallbackResult
+  ? [CallbackResult] extends [RstestConfig]
+    ? RstestConfigSyncFn
+    : RstestConfigAsyncFn
+  : RstestConfig;
+function defineConfig<const Config extends RstestConfig>(
+  config: () => Config,
+): RstestConfigSyncFn;
+function defineConfig<const Config extends RstestConfig>(
+  config: () => Promise<Config>,
+): RstestConfigAsyncFn;
 function defineConfig(config: RstestConfig): RstestConfig;
-function defineConfig(config: () => RstestConfig): () => RstestConfig;
-function defineConfig(
-  config: () => Promise<RstestConfig>,
-): () => Promise<RstestConfig>;
+function defineConfig(config: RstestConfigExport): RstestConfigExport;
 ```
 
 - **示例：**
 
-直接传入配置对象：
+直接传入配置对象，或传入同步 / 异步工厂函数：
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -38,21 +57,10 @@ export default defineConfig({
 });
 ```
 
-通过同步 factory 返回配置：
-
 ```ts
 import { defineConfig } from '@rstest/core';
 
-export default defineConfig(() => ({
-  testTimeout: 10000,
-}));
-```
-
-通过异步 factory 返回配置：
-
-```ts
-import { defineConfig } from '@rstest/core';
-
+// 也可以通过同步（`() => ({ ... })`）或异步工厂函数返回配置：
 export default defineConfig(async () => ({
   testTimeout: 10000,
 }));
@@ -60,7 +68,7 @@ export default defineConfig(async () => ({
 
 ## defineProject
 
-此函数可用于自动补全 [Rstest Project](/guide/basic/projects) 配置的类型。
+为 [Rstest Project](/guide/basic/projects) 配置文件提供类型推导。支持传入项目配置对象、嵌套 `projects` 对象，或返回它们的同步/异步工厂函数。
 
 - **类型：**
 
@@ -69,21 +77,27 @@ type NestedProjectConfig = {
   projects: (InlineProjectConfig | string)[];
 };
 
-type ProjectConfigExport = ProjectConfig | NestedProjectConfig;
-
+function defineProject<
+  const Config extends ProjectConfig | NestedProjectConfig,
+>(
+  config: () => Config,
+): Config extends NestedProjectConfig
+  ? () => NestedProjectConfig
+  : () => ProjectConfig;
+function defineProject<
+  const Config extends ProjectConfig | NestedProjectConfig,
+>(
+  config: () => Promise<Config>,
+): Config extends NestedProjectConfig
+  ? () => Promise<NestedProjectConfig>
+  : () => Promise<ProjectConfig>;
 function defineProject(config: ProjectConfig): ProjectConfig;
 function defineProject(config: NestedProjectConfig): NestedProjectConfig;
-function defineProject(
-  config: () => ProjectConfigExport,
-): () => ProjectConfigExport;
-function defineProject(
-  config: () => Promise<ProjectConfigExport>,
-): () => Promise<ProjectConfigExport>;
 ```
 
 - **示例：**
 
-直接传入项目配置对象：
+直接传入项目配置对象，或传入同步 / 异步工厂函数：
 
 ```ts
 import { defineProject } from '@rstest/core';
@@ -94,29 +108,17 @@ export default defineProject({
 });
 ```
 
-通过同步 factory 返回项目配置：
-
 ```ts
 import { defineProject } from '@rstest/core';
 
-export default defineProject(() => ({
-  root: './apps/web',
-  testEnvironment: 'node',
-}));
-```
-
-通过异步 factory 返回项目配置：
-
-```ts
-import { defineProject } from '@rstest/core';
-
+// 也可以通过同步（`() => ({ ... })`）或异步工厂函数返回项目配置：
 export default defineProject(async () => ({
   root: './apps/web',
   testEnvironment: 'node',
 }));
 ```
 
-定义多个嵌套项目：
+定义嵌套项目：
 
 ```ts
 import { defineProject } from '@rstest/core';
@@ -135,17 +137,15 @@ export default defineProject({
 });
 ```
 
-`defineProject` 用于项目配置文件的顶层导出。如果该文件返回一个嵌套 `projects` 对象，`projects` 里的对象项仍然属于 inline project。
+`defineProject` 用于项目配置文件的顶层导出。如果返回的 `projects` 数组中包含对象项，这些对象项仍然属于 inline project。
 
-与 `defineInlineProject` 不同，`defineProject` 在顶层导出的 project 上不要求必须提供 `name`。如果省略 `name`，Rstest 会按照 [name](/config/test/name) 配置项的规则自动推导：优先读取当前项目 `package.json` 中的 `name`，否则使用文件夹名称。
+与 `defineInlineProject` 不同，`defineProject` 在顶层导出时不要求必须提供 `name`。省略时，Rstest 会按 [name](/config/test/name) 配置项的规则自动推导：优先读取项目 `package.json` 中的 `name`，否则使用目录名。
 
 ## defineInlineProject
 
 <ApiMeta addedVersion="0.9.6" />
 
-此函数可用于在 `defineConfig({ projects: [...] })` 中自动补全内联 Project 配置的类型。内联 project 必须提供 `name`。
-
-与 `defineProject` 不同，`defineInlineProject` 只用于 `projects` 数组中的对象项。由于这类 inline project 没有独立项目上下文可用于推导名称，因此必须显式提供 `name`。
+为 `defineConfig({ projects: [...] })` 中的内联项目条目提供类型推导。内联项目没有独立的配置文件用于推导名称，因此必须显式提供 `name`。
 
 - **类型：**
 
@@ -171,7 +171,7 @@ export default defineConfig({
 
 ## mergeRstestConfig
 
-将多个 Rstest 配置对象合并为单个配置。它会深度合并每个配置对象，自动将多个函数值合并为按顺序执行的函数数组，并返回合并后的配置对象。
+将多个 Rstest 配置对象深度合并为单个配置。多个函数值会合并为按顺序执行的函数数组（`browser` 配置除外，它采用普通对象深合并，会直接替换数组和函数）。后续配置中的 `include`、`forceRerunTriggers`、`reporters`、`coverage.reporters`，以及使用 `{ patterns, override: true }` 形式的 `exclude` 会覆盖前值，而非拼接。
 
 - **类型：**
 
@@ -198,7 +198,7 @@ const config = mergeRstestConfig(
 
 ## mergeProjectConfig
 
-将多个项目配置对象合并为单个配置。
+将多个项目配置对象深度合并为单个配置，合并规则与 `mergeRstestConfig` 一致。
 
 - **类型：**
 
@@ -224,7 +224,7 @@ const config = mergeProjectConfig(
 
 ## loadConfig
 
-加载 Rstest 配置。
+加载 Rstest 配置文件并解析其中的 `extends`。
 
 - **类型：**
 
@@ -232,7 +232,7 @@ const config = mergeProjectConfig(
 function loadConfig(params?: {
   // 默认为 process.cwd()
   cwd?: string;
-  // 指定配置文件（相对路径或绝对路径）
+  // 配置文件路径（相对路径或绝对路径）
   path?: string;
   envMode?: string;
   configLoader?: 'auto' | 'jiti' | 'native';
@@ -257,4 +257,4 @@ console.log('配置加载自：', filePath);
 console.log('配置：', content);
 ```
 
-如果在 cwd 目录中不存在 Rstest 配置文件，loadConfig 方法的返回值为 `{ content: {}, filePath: null, dependencies: [] }`。
+如果 `cwd` 目录中不存在 Rstest 配置文件，`loadConfig` 返回 `{ content: {}, filePath: null, dependencies: [] }`。

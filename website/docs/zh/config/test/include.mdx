@@ -1,5 +1,5 @@
 ---
-description: 匹配 glob 规则的文件将被视为测试文件。这些规则会相对于 root 解析（默认是 process.cwd()）。
+description: 匹配测试文件的 glob 规则列表，相对于 root 解析。
 ---
 
 # include
@@ -8,7 +8,7 @@ description: 匹配 glob 规则的文件将被视为测试文件。这些规则�
 - **默认值：** `['**/*.{test,spec}.?(c|m)[jt]s?(x)']`
 - **CLI：** `--include '**/*.test.ts' --include '**/*.spec.ts'`
 
-匹配 glob 规则的文件将被视为测试文件。这些规则会相对于 [root](/config/test/root) 解析（默认是 `process.cwd()`）。
+匹配测试文件的 glob 规则列表，相对于 [root](/config/test/root)（默认为 `process.cwd()`）解析。设置 `include` 会覆盖默认匹配规则。
 
 import { Tab, Tabs } from '@theme';
 
@@ -29,21 +29,18 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-你可以运行 `npx rstest list --filesOnly` 来查看 Rstest 会包含的测试文件列表。
+运行 `npx rstest list --filesOnly` 可以查看实际匹配到的测试文件：
 
 ```bash
 $ npx rstest list --filesOnly
 
-# the output is shown below:
 a.test.ts
 b.test.ts
 ```
 
 ## 默认行为
 
-默认情况下，Rstest 会匹配当前项目下所有文件名带有 `.test.` 或 `.spec.` 中缀的 JavaScript / TypeScript 文件。
-
-下面是默认匹配模式的示例：
+默认情况下，Rstest 会匹配文件名中包含 `.test.` 或 `.spec.` 的 JavaScript / TypeScript 文件：
 
 ```bash
 ├── __tests__
@@ -58,7 +55,7 @@ b.test.ts
 └── index.js # not test
 ```
 
-需要注意的是，如果你将 `include` 配置为 `index.test.ts`，Rstest 只会匹配根目录下的 `index.test.ts`。如果要匹配所有子目录中的 `index.test.ts`，需要使用 `**/index.test.ts`。
+不含目录前缀的模式（如 `index.test.ts`）只会匹配根目录下的文件。需要匹配所有子目录时，使用 `**/index.test.ts`：
 
 ```diff
 import { defineConfig } from '@rstest/core';
@@ -69,4 +66,4 @@ export default defineConfig({
 });
 ```
 
-需要注意的是，单个扩展名应直接写成 `**/*.ts`，不要写成 `**/*.{ts}`。底层 glob 库会把单元素花括号按字面量处理，因此 `**/*.{ts}` 不会匹配 `.ts` 文件。
+匹配单个扩展名时应写成 `**/*.ts`，不要写成 `**/*.{ts}`。底层 glob 库会把单元素花括号按字面量处理，`**/*.{ts}` 不会匹配 `.ts` 文件。

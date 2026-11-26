@@ -11,19 +11,23 @@ import { ApiMeta } from '@components/ApiMeta';
 
 ## source.decorators <RsbuildDocBadge path="/config/source/decorators" text="source.decorators" />
 
-用于配置装饰器语法。
+- **类型：** `{ version?: 'legacy' | '2022-03' | '2023-11' }`
+- **默认值：** `{ version: '2023-11' }`
 
-如果你使用了 TypeScript 的 [experimentalDecorators](https://www.typescriptlang.org/tsconfig/#experimentalDecorators)，此处应将 `source.decorators.version` 设置为 legacy。
+配置装饰器语法版本。
+
+如果项目使用了 TypeScript 的 [experimentalDecorators](https://www.typescriptlang.org/tsconfig/#experimentalDecorators)，请将 `source.decorators.version` 设为 `'legacy'`。
 
 ## source.assetsInclude <RsbuildDocBadge path="/config/source/assets-include" text="source.assetsInclude" />
 
 <ApiMeta addedVersion="0.9.6" />
 
-指定额外需要按静态资源处理的文件。
+- **类型：** `Rspack.RuleSetCondition`
+- **默认值：** `undefined`
 
-当你的测试会导入 Rsbuild 默认资源规则之外的文件类型时，这个配置很有用，比如 `.txt` 或 `.md`。
+指定额外按静态资源处理的文件类型（在 Rsbuild 默认资源规则之外，例如 `.txt` 或 `.md`）。
 
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -33,32 +37,66 @@ export default defineConfig({
 });
 ```
 
-如果你已经通过 `@rstest/adapter-rsbuild` 或 `@rstest/adapter-rslib` 复用 Rsbuild / Rslib 配置，`source.assetsInclude` 也会被自动继承。
+如果已通过 `@rstest/adapter-rsbuild` 或 `@rstest/adapter-rslib` 复用 Rsbuild / Rslib 配置，`source.assetsInclude` 会自动继承。
 
 ## source.define <RsbuildDocBadge path="/config/source/define" text="source.define" />
 
-构建时将代码中的变量替换成其它值或者表达式，可以用于在构建时向代码注入环境变量等信息。
+- **类型：** `Rspack.DefinePluginOptions`
+- **默认值：** `{}`（默认会自动将 `import.meta.env` 映射到 `process.env`）
+
+在编译阶段将代码中的全局标识符或表达式替换为指定值，可用于注入构建时环境变量或特性开关。
 
 ## source.exclude <RsbuildDocBadge path="/config/source/exclude" text="source.exclude" />
 
-排除不需要被 [SWC](https://rsbuild.rs/zh/guide/configuration/swc) 转译的 JavaScript 或 TypeScript 文件。
+- **类型：** `Rspack.RuleSetCondition[]`
+- **默认值：** `undefined`
 
-::: note
+排除不需要经过 [SWC](https://rsbuild.rs/zh/guide/configuration/swc) 转译的 JavaScript 或 TypeScript 文件。
 
-在 `source.exclude` 中配置的文件不会经过 SWC 转译，但被引用的文件仍然会被打包到产物中。
+:::note
+`source.exclude` 匹配的文件不会经过 SWC 转译，但被引用的文件仍会被打包进产物。
 
-如果你希望某些文件不被打包到产物中，可以使用 [output.externals](/config/build/output#outputexternals) 配置项或 Rspack 的 [IgnorePlugin](https://rspack.rs/zh/plugins/webpack/ignore-plugin)。
+如果不希望将某些文件打包进产物，请使用 [output.externals](/config/build/output#outputexternals) 或 Rspack 的 [IgnorePlugin](https://rspack.rs/zh/plugins/webpack/ignore-plugin)。
 :::
 
 ## source.include <RsbuildDocBadge path="/config/source/include" text="source.include" />
 
-指定额外需要编译的 JavaScript 文件。
+- **类型：** `Rspack.RuleSetCondition[]`
+- **默认值：** `undefined`
+
+指定额外需要由 SWC 编译的 JavaScript 或 TypeScript 文件（例如特定的 `node_modules` 依赖包）。
 
 ## source.transformImport <RsbuildDocBadge path="/config/source/transform-import" text="source.transformImport" />
 
 <ApiMeta addedVersion="0.9.6" />
 
-配置按需导入转换规则。
+- **类型：**
+
+```ts
+type TransformImport = {
+  libraryName: string;
+  libraryDirectory?: string;
+  customName?: string;
+  customStyleName?: string;
+  style?: string | boolean;
+  styleLibraryDirectory?: string;
+  camelToDashComponentName?: boolean;
+  transformToDefaultImport?: boolean;
+  ignoreEsComponent?: string[];
+  ignoreStyleComponent?: string[];
+};
+
+type TransformImportFn = (
+  imports: TransformImport[],
+) => TransformImport[] | void;
+
+type TransformImportConfig =
+  TransformImportFn | (TransformImport | TransformImportFn)[];
+```
+
+- **默认值：** `undefined`
+
+配置按需导入转换规则（例如将组件库的聚合导入改写为子路径导入）。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -77,31 +115,19 @@ export default defineConfig({
 ```
 
 :::caution
-
 `source.transformImport` 会在编译阶段改写最终的模块请求。
 
-当前实现下，`rs.mock('pkg')`、`rs.doMock('pkg')`、`rs.importActual('pkg')`、`rs.requireActual('pkg')` 这类仍然使用原始 specifier 的模块级 mock API，可能无法命中被改写后的模块请求。
-
+仍使用原始 specifier 的模块级 mock API（`rs.mock('pkg')`、`rs.doMock('pkg')`、`rs.importActual('pkg')`、`rs.requireActual('pkg')`）可能无法命中被改写后的模块请求。
 :::
 
 ## source.tsconfigPath <RsbuildDocBadge path="/config/source/tsconfig-path" text="source.tsconfigPath" />
 
+- **类型：** `string`
+- **默认值：** `'tsconfig.json'`（存在时在各项目根目录自动探测）
 - **CLI：** `--source.tsconfigPath <path>`
 
-配置自定义的 `tsconfig.json` 文件路径，可以是相对路径或绝对路径。
+指定自定义 `tsconfig.json` 文件路径（相对于项目根目录或绝对路径）。
 
-未配置该选项时，Rstest 会在每个项目的 root 目录探测 `tsconfig.json`。其中的 `compilerOptions.paths` 映射会用于模块解析。
+未设置时，Rstest 会在每个项目的根目录探测 `tsconfig.json`，并读取其中的 `compilerOptions.paths` 用于模块解析。
 
-Rstest 不会自动将其他 `compilerOptions` 转换为代码转换设置。需要时请配置对应的 Rstest 构建选项，包括用 [`source.decorators`](#sourcedecorators) 配置装饰器语法，以及用 [`tools.swc`](/config/build/tools#toolsswc) 配置输出 target 等 SWC 选项。adapter 可能会映射或推断额外的构建选项，请参考所用 [adapter 的文档](/guide/advanced/adapters)。例如，直接配置且使用 legacy 装饰器的项目可以这样配置：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  source: {
-    decorators: {
-      version: 'legacy',
-    },
-  },
-});
-```
+Rstest 不会自动将其他 `compilerOptions` 转换为代码转换设置。需要时请显式配置对应的 Rstest 构建选项——例如用 [`source.decorators`](#sourcedecorators) 配置装饰器语法（如 `version: 'legacy'`），用 [`tools.swc`](/config/build/tools#toolsswc) 配置 SWC 输出 target 等——或通过 [adapter](/guide/advanced/adapters) 自动映射。

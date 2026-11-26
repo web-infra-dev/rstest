@@ -1,63 +1,63 @@
 ---
-description: Rstest supports running multiple test projects simultaneously within a single Rstest process. These projects can have different test configurations and test environments.
+description: Run multiple test projects with separate test configurations and environments in a single Rstest process.
 ---
 
 # Test projects
 
-Rstest supports running multiple test projects simultaneously within a single Rstest process. These projects can have different test configurations and test environments.
+Rstest lets you run multiple test projects in a single Rstest process, each with its own test configuration and environment.
 
-In an unfiltered, one-shot Node.js run without coverage, bail, or failure selection, a project can start testing while another is still building. Runs with global setup or a reporter that needs the complete selection in `onTestRunStart` wait for all projects before dispatching tests.
+In an unfiltered, one-shot Node.js run without coverage, bail, or failure selection, a project can start running tests while another is still building. Runs with `globalSetup` or a reporter that needs the complete file selection in `onTestRunStart` wait for all projects to build before dispatching tests.
 
 In Node.js mode, Rstest limits concurrent environment builds to the number of CPUs available to the process by default. The `pool.maxWorkers` option controls how many workers execute test files.
 
 ## Use cases
 
-- **Monorepo projects**: When your codebase contains multiple sub-packages or modules, each sub-project might have different test configuration requirements.
-- **Different test environments**: Different sub-projects (or even the same sub-project) might need to run in different environments (e.g., Node environment and browser environment).
-- **File-specific testing**: You can specify different test or build configurations for specific test files/directories.
+- **Monorepo projects**: Each sub-package or app has its own test setup or build config.
+- **Mixed environments**: Run Node.js, `jsdom`, and Browser Mode tests side by side.
+- **Directory-specific settings**: Apply distinct timeouts, setup files, or plugins to different test folders.
 
 ## Example
 
-Define each sub-project in a monorepo as a project through the [projects](/config/test/projects) field, where each sub-project has its own test configuration.
+Point [projects](/config/test/projects) at your workspace directories in the root config. Rstest treats each matching subdirectory as an independent project and loads its own [rstest.config.ts](/guide/basic/configure-rstest#configuration-file) if present:
 
-Rstest will automatically recognize each subdirectory under the `packages` directory as an independent test project and run tests according to the [rstest.config.ts](/guide/basic/configure-rstest#configuration-file) file (if present) in the subdirectory.
-
-```ts name='rstest.config.ts'
-import { defineConfig, defineInlineProject } from '@rstest/core';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   projects: [
-    // A monorepo: each package directory is a project
+    // Treat each package directory as a project
     'packages/*',
   ],
 });
 ```
 
-## Configuration description
+## Configuration
 
-You can define multiple test projects through the [projects](/config/test/projects) field. Rstest will run the corresponding tests according to the configurations defined by each project, and all test results will be merged and displayed.
+When [projects](/config/test/projects) is defined, Rstest runs each matched project with its own config and merges all test results into a single report.
 
-If there is no `projects` field, `rstest` will treat the current directory as a single project.
+- If `projects` is omitted, Rstest treats the current directory as a single project.
+- If `projects` is an empty array (`[]`), Rstest throws a `No projects found` error.
+- Every resolved project must have a unique `name`; duplicate names fail at startup with the list of conflicting projects.
 
 ### Configuration syntax
 
-The `projects` field supports the following configuration methods:
+Each entry in `projects` can be:
 
-- **Directory path**: Specify a directory, and Rstest will automatically recognize all subdirectories under that directory as projects.
-- **Configuration file path**: Specify a configuration file path, and Rstest will run tests according to that file's configuration.
-- **Glob pattern**: Use glob patterns to match multiple directories or files, and Rstest will use the matching results as projects.
-- **Inline configuration object**: Directly define project configuration objects in the `projects` field. This allows you to define multiple test projects within a single project without creating separate configuration files for each test project.
-- **Nested projects**: Define projects nested within the rstest config of sub-projects.
+- **Directory path**: Loads the project in that directory (and its config file, if present).
+- **Configuration file path**: Loads that specific config file as a project.
+- **Glob pattern**: Matches multiple project directories or config files.
+- **Inline configuration object**: Defines a project directly inside `projects` via `defineInlineProject` without creating a separate file.
+- **Nested projects**: Sub-project configs can declare their own `projects` array.
 
-```ts name='rstest.config.ts'
+```ts title="rstest.config.ts"
 import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
   projects: [
-    // A monorepo: each package directory is a project
+    // Each package directory is a project
     'packages/*',
 
-    // All projects under the apps directory that provide an rstest config file
+    // All projects under apps/ that provide an rstest config file
     'apps/**/rstest.config.ts',
 
     // A specific project directory
@@ -66,7 +66,7 @@ export default defineConfig({
     // A specific project's config file
     './projects/web/rstest.config.ts',
 
-    // inline project configs
+    // Inline project configs
     defineInlineProject({
       name: 'node',
       include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
@@ -82,11 +82,11 @@ export default defineConfig({
 
 ### Root configuration
 
-When the `projects` field exists in the root directory's rstest config file, Rstest will not treat it as a test project. In this case, the root directory's rstest.config file is only used to define `projects` and [global configuration](#global-configuration).
+When the root config defines `projects`, the root directory itself is no longer treated as a test project—the root config only supplies `projects` and [global configuration](#global-configuration).
 
-If you want to treat the root directory as a project as well, you can define the test configuration for the root directory in `projects`.
+To also run tests in the root directory, add an inline project for it inside `projects`:
 
-```ts name='rstest.config.ts'
+```ts title="rstest.config.ts"
 import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
@@ -102,31 +102,30 @@ export default defineConfig({
 
 #### Global configuration
 
-The following configurations are global configurations and are invalid when configured in projects. If you need to modify global configuration, you need to configure it in the root project's rstest config or override it through CLI options.
+The following options are global and cannot be set per project. Configure them in the root config file, or override the options that expose a [CLI flag](/guide/basic/cli#cli-options) (such as `--reporters`, `--pool`, `--isolate`, `--coverage`, `--bail`, or `--teardownTimeout`) from the command line:
 
 - `reporters`: Global reporters configuration.
-- `pool`: Global pool configuration.
-- `isolate`: Global isolate configuration.
-- `coverage`: Global coverage configuration.
-- `bail`: Global bail configuration.
-- `teardownTimeout`: CLI process exit timeout.
-- `resolveSnapshotPath`: Snapshot file path resolver.
-- `onConsoleLog`: Console log filter.
-- `output.distPath`: Global output directory path.
+- `pool`: Worker pool configuration.
+- `isolate`: Environment isolation toggle.
+- `coverage`: Code coverage configuration.
+- `bail`: Failure threshold to stop the run.
+- `teardownTimeout`: Process exit timeout for `rstest run`.
+- `resolveSnapshotPath`: Snapshot file path resolver (config-only).
+- `onConsoleLog`: Console log filter (config-only).
+- `output.distPath`: Global output directory path (config-only).
 
 ### Project configuration
 
 #### Define project configuration
 
-Project configuration is a subset of the Rstest configuration object, supporting most configuration options but not [global configurations](#global-configuration) such as `reporters`.
+A project config supports most Rstest options, excluding [global configuration](#global-configuration).
 
-Use [defineInlineProject](/api/javascript-api/rstest-core#defineinlineproject) for object items inside any `projects` array, including nested `projects`. Use [defineProject](/api/javascript-api/rstest-core#defineproject) only for the top-level export of a project config file.
+Use [defineInlineProject](/api/javascript-api/rstest-core#defineinlineproject) for inline objects inside any `projects` array (including nested `projects`), and [defineProject](/api/javascript-api/rstest-core#defineproject) for the top-level export of a project config file.
 
-The difference is mainly how `name` is handled. `defineProject` can omit `name` on the exported project, and Rstest will infer it using the same rules as the [name](/config/test/name) option. `defineInlineProject` requires `name` explicitly for every inline project item.
+- `defineProject` accepts an object or a sync/async factory function (`() => ...` / `async () => ...`), and can omit `name` (Rstest infers it following the [name](/config/test/name) rules).
+- `defineInlineProject` requires `name` on every inline project item.
 
-You can define a project configuration using the [defineProject](/api/javascript-api/rstest-core#defineproject) helper function:
-
-```ts title='packages/pkg-a/rstest.config.ts'
+```ts title="packages/pkg-a/rstest.config.ts"
 import { defineProject } from '@rstest/core';
 
 export default defineProject({
@@ -137,33 +136,31 @@ export default defineProject({
 
 #### Share configuration
 
-Project configuration does not inherit the configuration from the root directory. Only the `projects` field and [global configuration](#global-configuration) in the root directory are effective.
+Project configs do not inherit options from the root config—only `projects` and [global configuration](#global-configuration) in the root config apply across the run.
 
-If there are reusable configuration items between your sub-projects, you can extract shared configurations and introduce them in sub-projects respectively:
+To share common settings across sub-projects, extract a shared config and combine it with [mergeProjectConfig](/api/javascript-api/rstest-core#mergeprojectconfig) or [mergeRstestConfig](/api/javascript-api/rstest-core#mergerstestconfig):
 
-```ts title='packages/pkg-a/rstest.config.ts'
-import { defineConfig, mergeRstestConfig } from '@rstest/core';
+```ts title="packages/pkg-a/rstest.config.ts"
+import { mergeProjectConfig } from '@rstest/core';
 import sharedConfig from '../shared/rstest.config';
 
-export default mergeRstestConfig(sharedConfig, {
+export default mergeProjectConfig(sharedConfig, {
   name: 'pkg-a',
 });
 ```
 
-You can override all project configurations through [CLI options](/guide/basic/cli#cli-options).
+[CLI options](/guide/basic/cli#cli-options) (such as `--testTimeout`, `--testEnvironment`, or `--globals`) override matching fields across all projects.
 
 ### Nested projects
 
-Rstest supports defining nested projects in sub-project rstest config files. This allows you to define more test projects in sub-projects without defining all projects in the root project.
+Sub-project config files can define their own `projects` array instead of declaring every variant in the root config.
 
-This is especially useful when your sub-projects need to support multiple test environments or multiple configurations.
+For example, split `packages/pkg-a` into separate Node.js and `jsdom` projects:
 
-For example, define Node.js and browser test environments for `packages/pkg-a`:
+```ts title="packages/pkg-a/rstest.config.ts"
+import { defineProject, defineInlineProject } from '@rstest/core';
 
-```ts title='packages/pkg-a/rstest.config.ts'
-import { defineConfig, defineInlineProject } from '@rstest/core';
-
-export default defineConfig({
+export default defineProject({
   projects: [
     defineInlineProject({
       name: 'node',
@@ -180,60 +177,56 @@ export default defineConfig({
 
 ### Projects in browser mode
 
-When you use `projects` with Browser Mode, each project compiles and executes with its own build config. This lets you keep different stacks or build setups in one repository while still running them in a single Rstest process.
+Each Browser Mode project compiles and runs with its own build configuration, so projects with different stacks or plugins can run in the same Rstest process.
 
-In the same run, browser launch options must stay consistent across browser projects:
+Currently `'playwright'` is the only supported `provider`. Within a run, you can target different browsers across projects (via `browser.instances`) or mix Browser Mode projects with `testEnvironment: 'node'` or `'jsdom'` projects, subject to these constraints:
 
-- `provider`
-- `browser`
-- `headless`
-
-So mixing multiple providers, or multiple browser types, in one run is not supported yet.
+- **At most one headed browser per run**: All other browsers must set `headless: true` (narrow with `--browser.instances` or `--project` if needed); see [Launch rules](/config/test/browser#launch-rules).
+- **No mixed headed + headless in watch mode**: `rstest watch` allows a single headed browser, not both modes together; see [Launch rules](/config/test/browser#launch-rules).
+- **Unique reported project names**: Multi-browser projects report as `<project> (<browser>)`, which must not collide with another project's `name`; see [Multi-browser reporting](/config/test/browser#multi-browser-reporting).
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
+  projects: ['./project-a/rstest.config.ts', './project-b/rstest.config.ts'],
 });
 ```
 
 ```ts title="project-a/rstest.config.ts"
 import { pluginReact } from '@rsbuild/plugin-react';
-import { defineConfig } from '@rstest/core';
+import { defineProject } from '@rstest/core';
 
-export default defineConfig({
+export default defineProject({
   name: 'project-a',
   plugins: [pluginReact()],
   include: ['tests/**/*.test.tsx'],
   browser: {
     enabled: true,
     provider: 'playwright',
+    instances: [{ browserName: 'chromium' }],
   },
 });
 ```
 
 ```ts title="project-b/rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+import { defineProject } from '@rstest/core';
 
-export default defineConfig({
+export default defineProject({
   name: 'project-b',
   include: ['tests/**/*.test.ts'],
   browser: {
     enabled: true,
     provider: 'playwright',
+    instances: [{ browserName: 'firefox', headless: true }],
   },
 });
 ```
 
-You can still mix Browser Mode projects with `testEnvironment: 'node'` or `'jsdom'` projects in one `projects` list, and results will be merged in the final report.
-
 ### Inspect configuration
 
-If you want to view the final effective configuration of Rstest, you can enable [debug mode](/guide/debug/debugging#debug-mode) through the `DEBUG=rstest` environment variable. Rstest will write the final effective Rstest configuration and build configuration to the output directory.
+To inspect the final resolved configuration for each project, enable [debug mode](/guide/debug/debugging#debug-mode) with `DEBUG=rstest`. Rstest writes the resolved Rstest and Rsbuild configs to the output directory.
 
 ## Filtering projects
 
-You can filter projects through the [--project](/guide/basic/test-filter#filter-by-project-name) CLI option, or you can filter specific files under projects by directly filtering file names or file paths.
-
-For more information, please refer to the [Test Filtering](/guide/basic/test-filter) chapter.
+Use [`--project`](/guide/basic/test-filter#filter-by-project-name) to run specific projects by name or glob pattern, or pass file filters to select files across projects. See [Filtering tests](/guide/basic/test-filter) for details.

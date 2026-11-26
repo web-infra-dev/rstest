@@ -1,6 +1,6 @@
 ---
 title: Rstest types
-description: Import public TypeScript types from @rstest/core for configuration, runtime APIs, reporters, and mock helpers.
+description: Public TypeScript types exported from @rstest/core for configuration, runtime APIs, reporters, mocks, and plugins.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
@@ -15,11 +15,21 @@ import type { Mock, Mocked, RstestConfig } from '@rstest/core';
 
 ## Configuration types
 
-Use these types when you need to type a config object, a config factory, or shared config utilities outside `defineConfig`.
+Use these types when typing config objects, config factories, or adapters outside [`defineConfig`](/api/javascript-api/rstest-core#defineconfig), [`defineProject`](/api/javascript-api/rstest-core#defineproject), and [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject).
 
 ```ts
 import type {
+  BrowserExpectConfig,
+  BrowserInstanceConfig,
+  BrowserName,
+  BrowserViewport,
+  CoverageOptions,
+  ExpectConfig,
+  ExpectPollConfig,
+  ExtendConfig,
+  ExtendConfigFn,
   ProjectConfig,
+  RstestCommand,
   RstestConfig,
   RstestConfigAsyncFn,
   RstestConfigExport,
@@ -27,13 +37,15 @@ import type {
 } from '@rstest/core';
 ```
 
-- `RstestConfig`: The top-level Rstest configuration type.
-- `RstestConfigSyncFn`: A synchronous function that returns `RstestConfig`.
-- `RstestConfigAsyncFn`: An asynchronous function that returns `RstestConfig`.
-- `RstestConfigExport`: The union accepted by a Rstest config file.
-- `ProjectConfig`: The type for a standalone [Rstest Project](/guide/basic/projects) config.
-
-For most config files, prefer [`defineConfig`](/api/javascript-api/rstest-core#defineconfig), [`defineProject`](/api/javascript-api/rstest-core#defineproject), and [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject) because they preserve autocomplete without requiring explicit annotations.
+- `RstestConfig`: Top-level Rstest configuration object.
+- `RstestConfigSyncFn` / `RstestConfigAsyncFn`: Synchronous and asynchronous config factory functions returning `RstestConfig`.
+- `RstestConfigExport`: Union of `RstestConfig`, `RstestConfigSyncFn`, and `RstestConfigAsyncFn`.
+- `ProjectConfig`: Configuration type for a standalone [Rstest Project](/guide/basic/projects).
+- `ExtendConfig` / `ExtendConfigFn`: Return value and callback types accepted by [`extends`](/config/test/extends) and config adapters.
+- `RstestCommand`: Active CLI command (`'watch' | 'run' | 'list' | 'merge-reports'`).
+- `ExpectConfig` / `ExpectPollConfig`: Configuration types for [`expect`](/config/test/expect) and `expect.poll`.
+- `CoverageOptions`: Configuration type for [`coverage`](/config/test/coverage).
+- `BrowserInstanceConfig` / `BrowserExpectConfig` / `BrowserName` / `BrowserViewport`: Browser Mode instance, assertion, browser name, and viewport types.
 
 ## Test API types
 
@@ -44,34 +56,43 @@ import type {
   Describe,
   Expect,
   ExpectStatic,
+  FileFixtureOptions,
   FixtureCleanup,
   FixtureLifecycle,
+  Fixtures,
+  MaybePromise,
   Rstest,
   RstestUtilities,
+  TaskMeta,
+  TaskMetaValue,
+  TestAPIs,
   TestContext,
+  TestForFn,
+  TestOptions,
+  Use,
+  WorkerFixtureOptions,
 } from '@rstest/core';
 ```
 
-<ApiMeta addedVersion="0.10.1" />
+<ApiMeta addedVersion="0.10.1" /> <ApiMeta addedVersion="0.11.7" />
 
-`TestContext` is available as a public type export starting in Rstest 0.10.1.
-
-<ApiMeta addedVersion="0.11.7" />
-
-`FixtureCleanup` and `FixtureLifecycle` support the named fixture form starting in Rstest 0.11.7.
-
-- `Rstest`: The full runtime API shape, including `test`, `describe`, `expect`, hooks, and `rs` / `rstest` utilities.
-- `RstestUtilities`: The type of the `rs` and `rstest` utility objects.
-- `TestContext`: The context object passed to test callbacks and lifecycle hooks.
-- `Describe`: The type of the `describe` API.
-- `Expect`: The assertion type returned by `expect(value)`.
-- `ExpectStatic`: The callable `expect` API type.
-- `FixtureCleanup`: A cleanup callback registered by a named fixture.
-- `FixtureLifecycle`: The lifecycle object that provides `onCleanup` to a named fixture.
+- `Rstest`: Full runtime API surface (`test`, `it`, `describe`, `expect`, `assert`, hooks, `rs`, and `rstest`).
+- `RstestUtilities`: Type of the `rs` and `rstest` utility objects.
+- `TestContext`: Context object passed to test callbacks and per-test hooks (`TestContext` is exported since `0.10.1`).
+- `TestOptions`: Per-test and per-suite options (`timeout`, `retry`, `repeats`, `meta`).
+- `TestAPIs`: Return type of `test.extend(...)`, exposing `test` modifiers and chained `.extend()`.
+- `TestForFn`: Call signature type of `test.for`.
+- `Describe`: Type of the `describe` API.
+- `Expect` / `ExpectStatic`: Callable `expect` API type (`Expect` is an alias of `ExpectStatic`).
+- `TaskMeta` / `TaskMetaValue`: JSON-serializable metadata map and value types. See [Metadata](/guide/advanced/metadata).
+- `Fixtures` / `Use`: Fixtures object map and `use(value)` callback type for `test.extend`.
+- `FileFixtureOptions` / `WorkerFixtureOptions`: Scope options (`{ scope: 'file' }` and `{ scope: 'worker' }`) for named fixtures.
+- `FixtureCleanup` / `FixtureLifecycle`: Cleanup callback and `{ onCleanup }` lifecycle parameter for named fixtures (added in `0.11.7`).
+- `MaybePromise<T>`: Utility union `T | Promise<T>`.
 
 ## Mock types
 
-Use mock types when a helper accepts mock functions, spies, or mocked modules.
+Use these types when helpers accept mock functions, spies, or mocked modules.
 
 ```ts
 import type { Mock, Mocked, MockInstance } from '@rstest/core';
@@ -79,7 +100,7 @@ import type { Mock, Mocked, MockInstance } from '@rstest/core';
 
 ### Mock
 
-`Mock<T>` represents a callable mock function created by [`rs.fn`](/api/runtime-api/rstest/mock-functions#rsfn). It preserves the parameters and return type of `T` while adding mock control APIs.
+`Mock<T>` represents a callable mock function created by [`rs.fn`](/api/runtime-api/rstest/mock-functions#rsfn). It preserves the parameters and return type of `T` and adds mock control methods.
 
 ```ts
 import { rs } from '@rstest/core';
@@ -95,7 +116,7 @@ loadUser.mockResolvedValue({ name: 'Jack' });
 
 <ApiMeta addedVersion="0.10.1" />
 
-`MockInstance<T>` represents the shared mock control API on both `rs.fn()` mocks and `rs.spyOn()` spies. Use it when a helper only needs mock methods such as `mockClear`, `mockReset`, or `mockRestore` and does not need to call the mock function directly.
+`MockInstance<T>` represents the shared mock control interface on `rs.fn()` mocks and `rs.spyOn()` spies. Use it when a helper only calls control methods (`mockClear`, `mockReset`, `mockRestore`, etc.) without invoking the mock directly.
 
 ```ts
 import type { MockInstance } from '@rstest/core';
@@ -105,16 +126,9 @@ function resetTrackedMock(mock: MockInstance) {
 }
 ```
 
-When you create a mock or spy inline, you usually do not need to annotate it because TypeScript can infer the type.
-
-```ts
-const spy = rs.spyOn(service, 'loadUser');
-spy.mockResolvedValue({ name: 'Jack' });
-```
-
 ### Mocked
 
-`Mocked<T>` wraps an object or module type so its methods are typed as mocks. This is useful after [`rs.mock`](/api/runtime-api/rstest/mock-modules#rsmock), [`rs.mockObject`](/api/runtime-api/rstest/mock-functions#rsmockobject), or [`rs.mocked`](/api/runtime-api/rstest/mock-functions#rsmocked).
+`Mocked<T>` wraps an object or module type so its methods are typed as mocks. Use it with [`rs.mock`](/api/runtime-api/rstest/mock-modules#rsmock), [`rs.mockObject`](/api/runtime-api/rstest/mock-functions#rsmockobject), or [`rs.mocked`](/api/runtime-api/rstest/mock-functions#rsmocked).
 
 ```ts
 import { rs } from '@rstest/core';
@@ -129,43 +143,49 @@ mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
 
 ## Reporter and result types
 
-Use these types when creating custom reporters or external tools that consume Rstest results.
+Use these types when building custom reporters or consuming Rstest run results. See [Reporter](/api/javascript-api/reporter) for full interface definitions.
 
 ```ts
 import type {
+  CoverageMapData,
+  Duration,
   Reporter,
+  ReporterContext,
+  SerializedError,
+  SnapshotSummary,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
+  TestInfo,
   TestResult,
+  TestResultStatus,
+  TestRunEndPayload,
+  TestRunStartPayload,
+  TestRunStatus,
+  TestRunSummary,
   TestSuiteInfo,
+  UserConsoleLog,
 } from '@rstest/core';
 ```
 
-For reporter implementation details, see [Reporter](/api/javascript-api/reporter).
-
-<ApiMeta addedVersion="0.11.1" />
-
-The result `meta` fields contain JSON-serializable metadata initialized from `TestOptions.meta` and written at runtime through `context.task.meta`. Suite metadata is inherited by descendant suites and tests with child top-level keys overriding parent keys; inherited values are copied for each descendant so runtime mutation does not leak between siblings. `TestFileResult.meta` contains metadata written by file-level `beforeAll` / `afterAll` hooks through `ctx.meta`, and suite results passed to `onTestSuiteResult` contain metadata written by that suite's lifecycle hooks.
-
-```ts
-import { afterAll, test } from '@rstest/core';
-
-afterAll((ctx) => {
-  ctx.meta.fileTag = 'mutation-run';
-});
-
-test('records metadata', { meta: { owner: 'stryker' } }, (ctx) => {
-  ctx.task.meta.hitCount = 1;
-});
-```
+- `Reporter` / `ReporterContext`: Custom reporter interface and constructor context (`{ rootPath, config }`).
+- `TestFileInfo` / `TestSuiteInfo` / `TestCaseInfo` / `TestInfo`: Discovery and lifecycle task metadata passed to reporter start/ready hooks.
+- `TestResult` / `TestFileResult` / `TestResultStatus`: Per-case, per-suite, and per-file execution results and status union (`'skipped' | 'passed' | 'failed' | 'todo'`).
+- `TestRunStartPayload` / `TestRunEndPayload` / `TestRunStatus` / `TestRunSummary`: Run-level hook payloads, run status (`'passed' | 'failed' | 'error'`), and aggregate counts.
+- `Duration` / `SerializedError` / `UserConsoleLog`: Phase timings, JSON-serializable errors, and captured stdio log records.
+- `SnapshotSummary` / `CoverageMapData`: Snapshot summary and Istanbul coverage map types.
 
 ## Assertion types
 
-Use `Assertion` or `ExpectStatic` when typing custom assertion helpers.
+Use these types when typing custom assertion helpers or augmenting matchers.
 
 ```ts
-import type { Assertion, ExpectStatic } from '@rstest/core';
+import type {
+  Assertion,
+  AsymmetricMatchersContaining,
+  ExpectStatic,
+  Matchers,
+} from '@rstest/core';
 
 function expectVisible(
   expect: ExpectStatic,
@@ -175,10 +195,14 @@ function expectVisible(
 }
 ```
 
-## Rsbuild type
+- `Assertion<T>`: Chainable assertion object returned by `expect(value)`.
+- `ExpectStatic`: Callable `expect` function type with static helpers (`poll`, `soft`, `extend`, etc.).
+- `Matchers<T>` / `AsymmetricMatchersContaining`: Matcher interfaces from `@vitest/expect` for module augmentation or custom matcher typing.
 
-Rstest re-exports `Rspack` from `@rsbuild/core` for integrations that need to type Rsbuild or Rspack hooks while staying on the same dependency graph as Rstest.
+## Rsbuild and plugin types
+
+Rstest re-exports `Rspack` and `RsbuildPlugin` from `@rsbuild/core`, along with `RstestExposeAPI` for Rsbuild plugins that read or modify the resolved Rstest config via `api.useExposed('rstest')`.
 
 ```ts
-import type { Rspack } from '@rstest/core';
+import type { RsbuildPlugin, Rspack, RstestExposeAPI } from '@rstest/core';
 ```

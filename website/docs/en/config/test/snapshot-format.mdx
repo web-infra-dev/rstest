@@ -1,13 +1,13 @@
 ---
-description: Customize the snapshot format using options from the pretty-format.
+description: Customize the snapshot serialization format using options from pretty-format.
 ---
 
 # snapshotFormat
 
-- **Type:** `PrettyFormatOptions`
+- **Type:** `Omit<PrettyFormatOptions, 'plugins' | 'compareKeys'>`
 - **Default:** `{ printShadowRoot: false }`
 
-Customize the snapshot format using options from the [pretty-format](https://www.npmjs.com/package/pretty-format).
+Customize snapshot serialization using options from [pretty-format](https://www.npmjs.com/package/pretty-format). `plugins` and `compareKeys` are omitted because snapshot format options must be serializable across worker boundaries.
 
 Rstest omits shadow roots from snapshots by default. Set `printShadowRoot` to `true` to include them.
 

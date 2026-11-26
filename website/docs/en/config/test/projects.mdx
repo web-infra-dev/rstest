@@ -1,5 +1,5 @@
 ---
-description: Define multiple test projects. It can be an array of directories, configuration files, or glob patterns, or an object.
+description: Define multiple test projects in a single Rstest process using directories, config files, globs, or inline project configs.
 ---
 
 # projects
@@ -14,34 +14,19 @@ type InlineProjectConfig = ProjectConfig & { name: string };
 type Projects = (string | InlineProjectConfig)[];
 ```
 
-- **Default:** `[<rootDir>]`
+- **Default:** `undefined` (runs the root directory as a single project)
 
-Define multiple test projects. It can be an array of directories, configuration files, or glob patterns, or an object.
+Run multiple test projects in a single Rstest process and combine all results in the output. Each entry in the array can be a directory path, config file path, glob pattern, or inline project configuration object.
 
-Rstest will run the tests for each project according to the configuration defined in each project, and the test results from all projects will be combined and displayed.
-
-```ts name='rstest.config.ts'
+```ts title="rstest.config.ts"
 import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
   projects: [
-    // A monorepo: each package directory is a project
+    // Monorepo: each package directory is a project
     'packages/*',
 
-    // All projects under the apps directory that provide an rstest config file
-    'apps/**/rstest.config.ts',
-
-    // A specific project directory
-    '<rootDir>/services/auth',
-
-    // A specific project's config file
-    './projects/web/rstest.config.ts',
-
-    // inline project configs
-    defineInlineProject({
-      name: 'node',
-      include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
-    }),
+    // Inline project config
     defineInlineProject({
       name: 'react',
       include: ['tests/react/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
@@ -51,8 +36,6 @@ export default defineConfig({
 });
 ```
 
-Use `defineInlineProject()` for object items in any `projects` array, including nested `projects`. Use `defineProject()` only for the top-level export of a project config file.
+Use `defineInlineProject()` (requires [`name`](/config/test/name)) for object items in a `projects` array, and `defineProject()` (which can infer `name`) for top-level exports of project config files.
 
-`defineProject()` can omit `name` on the exported project and let Rstest infer it using the [name](/config/test/name) option rules. `defineInlineProject()` requires `name` for each inline project item.
-
-More information about projects can be found in [Test projects](/guide/basic/projects).
+To run only specific projects from the command line, pass `--project <name>` (supports wildcards). See [Test projects](/guide/basic/projects) for directory/glob entries, sharing configs, global options, and nested projects.

@@ -41,25 +41,4 @@ export default defineConfig({
 
 `federation` 只负责开启 Rstest 的测试运行时支持，不会配置远程模块、暴露模块或共享依赖。使用 [@module-federation/rstest](https://github.com/module-federation/core) 时，该插件会配置模块联邦构建，并为基于 Node 的测试环境自动启用 Rstest 兼容模式，因此在这些环境下不需要再设置 `federation: true`。
 
-安装方式和 Rstest 测试流程，请先阅读[模块联邦指南](/guide/advanced/module-federation)。复用已有的 Rsbuild 模块联邦配置以及完整插件选项，请参考 [Rstest 官方集成指南](https://module-federation.io/integrations/build-tool/rstest.html)。
-
-```ts title="rstest.config.ts"
-import { federation } from '@module-federation/rstest';
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  plugins: [
-    federation({
-      name: 'main_app',
-      remotes: {
-        'component-app': 'component_app@http://localhost:3001/remoteEntry.cjs',
-      },
-      shared: {
-        react: { singleton: true },
-      },
-    }),
-  ],
-});
-```
-
-该 Node 示例消费面向 Node 的 `remoteEntry.cjs`，Browser Mode 应消费浏览器构建的 `remoteEntry.js`。两者的区别请参考[模块联邦指南](/guide/advanced/module-federation)；完整配置可参考 [Node 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node)和 [Browser 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser)。
+安装方式、插件配置和 Rstest 测试流程，请先阅读[模块联邦指南](/guide/advanced/module-federation)。复用已有的 Rsbuild 模块联邦配置以及完整插件选项，请参考 [Rstest 官方集成指南](https://module-federation.io/integrations/build-tool/rstest.html)；完整配置可参考 [Node 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-node)和 [Browser 示例](https://github.com/rstackjs/rstack-examples/tree/main/rstest/module-federation-browser)。

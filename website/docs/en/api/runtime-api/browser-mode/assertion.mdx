@@ -1,6 +1,6 @@
 ---
 title: Assertion
-description: expect.element is the API for DOM assertions in Browser Mode. It accepts a Locator or DOM Element and returns a chainable assertion object.
+description: expect.element creates auto-retrying DOM assertions for a Locator or DOM Element in Browser Mode, and toMatchScreenshot compares visual screenshots.
 overviewHeaders: [2, 3]
 ---
 
@@ -8,15 +8,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # Assertion
 
-`expect.element` is the API for DOM assertions in Browser Mode. It accepts a [Locator](/api/runtime-api/browser-mode/locator) or DOM `Element` and returns a chainable assertion object. Unlike `expect(value)` which primarily compares JS values, `expect.element` targets the real element state on the page, suitable for verifying visibility, text, form values, count, and other user-observable results.
-
-:::tip Auto-retry
-With the Playwright provider, all `expect.element` matchers automatically retry until the assertion passes or the timeout is reached. You do not need to write manual `waitFor` or polling logic — just assert the expected state and the framework handles the waiting.
-:::
-
-When you import `@rstest/browser` in a Browser Mode test (e.g., importing `page`), `expect` automatically gains the `element` capability. This allows queries, interactions, and assertions to be organized around the same `Locator`, focusing failure messages on element state.
-
-The following minimal example demonstrates common usage: first assert visibility, then verify a checked state change, and finally validate an element attribute.
+`expect.element` creates auto-retrying DOM assertions for a [Locator](/api/runtime-api/browser-mode/locator) or DOM `Element` in Browser Mode. Importing `@rstest/browser` in a Browser Mode test extends `@rstest/core`'s `expect` with `expect.element()` and `expect(target).toMatchScreenshot()`.
 
 ```ts title="src/assertion.test.ts"
 import { page } from '@rstest/browser';
@@ -37,27 +29,15 @@ test('asserts element states in browser mode', async () => {
 });
 ```
 
-## Type signature
+## expect.element
 
-```ts
-expect.element(target: Locator | Element): BrowserElementExpect
-```
+- **Type:** `(target: Locator | Element) => BrowserElementExpect`
+
+`BrowserElementExpect` exposes `.not` and all element matchers documented below.
 
 ## Auto-retry and timeout
 
-Assertion behavior in `expect.element` depends on the provider. With the Playwright provider, `expect.element` matchers are **web-first assertions**: they continuously retry within the timeout duration until the assertion passes or times out. You do not need to write manual `waitFor` or polling logic.
-
-### Timeout priority
-
-The assertion timeout is determined by the following rules:
-
-1. **Per-assertion timeout**: The `timeout` parameter passed directly to the matcher, highest priority. This includes `0`; with Playwright, an explicit `0` means no matcher-specific deadline when there is no finite active test or hook deadline. Inside a finite non-concurrent test or hook, it is capped by the remaining scope timeout.
-2. **Configured poll timeout**: When no matcher timeout is provided, the assertion uses `expect.poll.timeout`. Its default is `1000ms` in Node Mode and `5000ms` in Browser Mode.
-3. **Remaining test or hook timeout**: Outside concurrent flows, an implicit assertion timeout is capped by the active test or hook deadline, so it cannot outlive that scope. Browser Mode tests default to `15000ms`.
-
-Outside concurrent flows, the effective timeout is capped by the remaining active test or hook timeout. With no per-assertion override, it is the smaller of `expect.poll.timeout` and that remaining time. With an explicit matcher timeout, it is the smaller of the requested timeout and that remaining time. The Browser Mode `5000ms` default gives asynchronous UI updates more time without making a failed assertion wait for the full `testTimeout`. If there is no finite active test or hook deadline, an explicit `timeout: 0` retains Playwright's no-deadline behavior.
-
-For `test.concurrent`, use the test-scoped `expect` fixture (`async ({ expect }) => ...`) when the assertion must use that test's remaining deadline. The shared file-level `expect` uses the configured poll timeout because browsers cannot identify concurrent async flows reliably. The same limitation applies to hooks inside `describe.concurrent`; their assertions use the poll timeout and can still be ended by the enclosing hook timeout.
+With the Playwright provider, `expect.element` matchers are **web-first assertions**: they retry until the condition holds or the timeout expires, so manual `waitFor` or polling loops are unnecessary.
 
 ```ts
 // Uses the Browser Mode expect.poll.timeout default (5000ms),
@@ -66,14 +46,19 @@ await expect.element(page.getByText('Done')).toBeVisible();
 
 // Override with a longer timeout
 await expect.element(page.getByText('Done')).toBeVisible({ timeout: 10000 });
-
-// With testTimeout: 0, element assertions use the configured poll timeout
-// (5000ms by default in Browser Mode).
 ```
+
+### Timeout priority
+
+1. **Per-assertion timeout**: `options.timeout` passed directly to the matcher has the highest priority, including `0`. With Playwright, an explicit `0` removes the matcher deadline when there is no finite active test or hook deadline; inside a finite non-concurrent test or hook, it is still capped by the remaining scope timeout.
+2. **Configured poll timeout**: When no matcher timeout is passed, assertions use `expect.poll.timeout` (`1000ms` in Node Mode, `5000ms` in Browser Mode).
+3. **Remaining test or hook timeout**: Outside concurrent flows, the effective timeout is capped by the active test or hook deadline (`15000ms` by default for Browser Mode tests). Without a per-assertion override, it is `min(expect.poll.timeout, remainingTime)`; with an explicit matcher timeout, it is `min(timeout, remainingTime)`.
+
+For `test.concurrent`, use the test-scoped `expect` fixture (`async ({ expect }) => ...`) so assertions respect that test's remaining deadline. The shared file-level `expect` uses `expect.poll.timeout` because browsers cannot reliably track concurrent async flows. Hooks inside `describe.concurrent` follow the same rule, though they can still be ended by the enclosing hook timeout.
 
 ### Failure output
 
-When an assertion times out, the error message includes: the expected element state, the actual state, and the timeout duration. For example:
+When an assertion times out, the error reports the expected state, actual state, and timeout:
 
 ```
 Error: Expected element to be visible
@@ -81,29 +66,16 @@ Error: Expected element to be visible
   Timeout: 5000ms
 ```
 
-### Use cases
-
-Auto-retry is especially useful for handling async rendering scenarios — such as waiting for a loading indicator to disappear or UI changes after data finishes loading:
-
-```ts
-// Click and wait for async result to appear
-await page.getByRole('button', { name: 'Submit' }).click();
-await expect.element(page.getByText('Submitted!')).toBeVisible();
-
-// Wait for loading to disappear
-await expect.element(page.getByTestId('spinner')).toBeHidden();
-```
-
 ## Input constraints
 
-- The target must be an Rstest `Locator` or a DOM `Element` from the current test document. Hand-crafted objects and locators from other libraries are not supported.
-- `expect.element` is not available outside of Browser Mode. It relies on Browser Mode's browser runtime and communication channel to execute element assertions; pure Node test environments only support regular `expect(value)` assertions.
+- `target` must be an Rstest `Locator` or a DOM `Element` from the current test document. Hand-crafted objects and locators from other libraries throw an error.
+- `expect.element` is only available in Browser Mode; Node tests use standard `expect(value)` assertions.
 
 ## DOM elements
 
 <ApiMeta addedVersion="0.12.5" />
 
-`expect.element()` also accepts DOM elements returned by Testing Library or native DOM queries. It converts the element through [`page.elementLocator()`](/api/runtime-api/browser-mode/locator#elementlocator) and uses the same retry and timeout behavior as Locator assertions.
+`expect.element()` also accepts DOM elements returned by Testing Library or native DOM queries. It converts the element via [`page.elementLocator()`](/api/runtime-api/browser-mode/locator#elementlocator) and uses the same retry and timeout rules as `Locator` assertions.
 
 ```ts
 import { getByRole } from '@testing-library/dom';
@@ -113,7 +85,7 @@ await expect.element(button).toBeEnabled();
 await expect.element(button).not.toBeDisabled();
 ```
 
-Retries check the same element. If a rerender replaces it, use a query Locator to find the replacement. Elements from another document or iframe are rejected.
+Retries keep checking that same DOM node. If a rerender replaces it, use a query `Locator` to resolve the replacement. Elements from another document or iframe are rejected.
 
 ## Screenshot matching
 
@@ -121,25 +93,25 @@ Retries check the same element. If a rerender replaces it, use a query Locator t
 
 <ApiMeta addedVersion="0.12.4" />
 
-With the Playwright provider, `toMatchScreenshot()` captures either a Locator or the page and compares it with a PNG reference. The first run creates a reference when snapshot updates allow new snapshots. Later runs compare against that reference; use `--update` to replace a mismatched reference.
+- **Type:**
 
-The matcher accepts an optional reference name and capture or comparison options.
+```ts
+function toMatchScreenshot(options?: ToMatchScreenshotOptions): Promise<void>;
+function toMatchScreenshot(
+  name?: string,
+  options?: ToMatchScreenshotOptions,
+): Promise<void>;
+```
 
-Pass a Locator or the `page` object from `@rstest/browser`. The matcher is only available with the Playwright provider and does not support `.not`.
+With the Playwright provider, captures a `Locator` or `page` screenshot and compares it against a stored PNG reference. The first run saves a reference when snapshot updates allow new snapshots; subsequent runs compare against it, and `--update` replaces mismatched references. `.not` is not supported.
 
-By default, the current test name identifies the reference. Pass a name to share a reference across assertions or give multiple screenshots in one test distinct names:
+By default, the current test name identifies the reference. Pass `name` to share a reference across assertions or distinguish multiple screenshots in one test, or pass only an options object to keep the default reference name. Unnamed assertions in the same test are numbered starting at `1`. In `test.concurrent`, use the test-scoped `expect` fixture (`async ({ expect }) => ...`) to use the test name, or pass `name` explicitly when using the shared file-level `expect`.
 
 ```ts
 await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
   'primary-save-button',
 );
-```
 
-Unnamed assertions in the same test are assigned distinct references automatically. In `test.concurrent`, use the test-scoped `expect` fixture (`async ({ expect }) => ...`) to use the test name; if you use the shared file-level `expect`, provide a name explicitly.
-
-Pass the options object on its own to use the default reference name, or after a name to use a custom reference. This example allows up to 20 differing pixels, waits up to one second for a stable capture, and masks a timestamp that changes between runs.
-
-```ts
 await expect(page.locator('#profile-card')).toMatchScreenshot({
   maxDiffPixels: 20,
   stabilityTimeout: 1000,
@@ -147,15 +119,31 @@ await expect(page.locator('#profile-card')).toMatchScreenshot({
 });
 ```
 
-`threshold` sets the per-pixel color distance from `0` (strict) to `1` (loose). `maxDiffPixels` limits the number of differing pixels, and `maxDiffPixelRatio` limits their fraction of the image. With `{ maxDiffPixels: 100, maxDiffPixelRatio: 0.01 }`, a screenshot passes if at most 100 pixels differ and those pixels cover at most 1% of the image. With neither limit set, no pixels may differ after applying the default `threshold` of `0.1`.
+When a reference exists, a regular assertion passes as soon as the first capture matches it within the configured tolerance. If the first capture differs, Rstest waits until two consecutive captures have the same dimensions and match within that tolerance before comparing against the reference again. Creating or updating a reference also uses the stability check.
 
-When a reference exists, a regular assertion passes as soon as the first capture matches it within the configured tolerance. If the first capture differs, Rstest compares against the reference again once two consecutive captures have the same dimensions and match within that tolerance. Creating or updating a reference also uses the stability check.
+`ToMatchScreenshotOptions` options (internal type, not re-exported by `@rstest/browser`):
 
-`stabilityTimeout` defaults to `5000` ms. Set it to `0` to skip stability checks; positive values must be at least `100` ms so Rstest can take a follow-up capture. Rstest disables animations during capture. Use `mask` for dynamic content, `maskColor` to change the overlay color, or `style` to inject CSS before capture. The remaining capture options (`caret`, `scale`, and `omitBackground`) are passed to Playwright's screenshot API. `fullPage` is available only for page assertions.
+| Option              | Default     | Behavior                                                                                                                      |
+| ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `threshold`         | `0.1`       | Per-pixel color distance threshold from `0` (strict) to `1` (loose).                                                          |
+| `maxDiffPixels`     | `undefined` | Maximum number of differing pixels allowed. Can be combined with `maxDiffPixelRatio` (the stricter limit applies).            |
+| `maxDiffPixelRatio` | `undefined` | Maximum fraction of differing pixels allowed (`0` to `1`). Can be combined with `maxDiffPixels` (the stricter limit applies). |
+| `stabilityTimeout`  | `5000`      | Maximum time in ms to wait for consecutive captures to match. Set to `0` to disable; positive values must be at least `100`.  |
+| `mask`              | `undefined` | `Locator[]` of dynamic areas to cover during capture.                                                                         |
+| `maskColor`         | `'#FF00FF'` | Fill color for masked areas.                                                                                                  |
+| `fullPage`          | `false`     | Capture the full scrollable page instead of the viewport. Only supported on `page` assertions.                                |
+| `style`             | `undefined` | Additional CSS string injected before capture.                                                                                |
+| `caret`             | `'hide'`    | Whether to hide (`'hide'`) or keep (`'initial'`) the text caret during capture.                                               |
+| `scale`             | `'device'`  | Screenshot scale (`'css'` or `'device'`).                                                                                     |
+| `omitBackground`    | `false`     | Omit the default white page background so transparent areas stay transparent.                                                 |
+
+With neither `maxDiffPixels` nor `maxDiffPixelRatio` set, no pixels may differ after applying `threshold`. Rstest disables CSS animations during capture. Reference PNGs are stored under `__screenshots__` grouped by test file, with the sanitized reference name, browser, and OS in the filename (plus a stable hash suffix if sanitization could collide). On mismatch, Rstest writes the actual screenshot and diff image to a sibling `__failures__` directory. Capture uses the remaining active test timeout; with `testTimeout: 0`, `stabilityTimeout` still applies.
+
+Set project-wide matcher defaults and reference paths with [`browser.expect.toMatchScreenshot`](/config/test/browser#expecttomatchscreenshot).
 
 #### Element screenshots
 
-Pass a Locator to capture only the matched element:
+Pass a `Locator` to capture only the matched element:
 
 ```ts
 await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
@@ -163,26 +151,22 @@ await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
 
 #### Page screenshots
 
-Pass the `page` object from `@rstest/browser` to capture the current viewport. Set `fullPage: true` to capture the full page:
+Pass `page` from `@rstest/browser` to capture the current viewport, or set `fullPage: true` for the full page:
 
 ```ts
 await expect(page).toMatchScreenshot();
 await expect(page).toMatchScreenshot('full-page', { fullPage: true });
 ```
 
-References are PNG files under `__screenshots__`, grouped by test file. Their names include the sanitized test name, browser, and operating system; names that could collide after sanitization receive a stable suffix. Every unnamed assertion gets a sequence number starting at `1`; explicitly named assertions do not. On a mismatch, Rstest reports the reference, actual screenshot, and pixel diff; the actual and diff images are written to a sibling `__failures__` directory. Screenshot capture uses the remaining active test timeout. With `testTimeout: 0`, there is no test deadline, but `stabilityTimeout` still applies.
-
-Set project-wide matcher defaults and reference paths with [`browser.expect.toMatchScreenshot`](/config/test/browser#expecttomatchscreenshot).
-
 ## Element assertions
 
-The matchers listed below represent the currently supported subset. Matchers not listed here are not yet available.
+Only the matchers listed below are currently supported. All matchers accept an optional `options?: { timeout?: number }` parameter unless stated otherwise.
 
 ### not
 
 - **Type:** `BrowserElementExpect`
 
-Negates the subsequent assertion.
+Negates the chained matcher.
 
 ```ts
 await expect
@@ -190,15 +174,11 @@ await expect
   .not.toBeDisabled();
 ```
 
-All the following matchers support an optional `options?: { timeout?: number }` parameter (unless the type signature states otherwise).
-
 ### toBeVisible
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The `Locator` resolves to a mounted and visible element within the `timeout`.
-
-Visibility is determined by: the element has a non-empty bounding box and `visibility` is not `hidden`. For example, `display: none` or zero dimensions are not considered visible; `opacity: 0` is still considered visible.
+Asserts that the element is mounted and visible (non-empty bounding box and `visibility !== 'hidden'`). `display: none` and zero-size elements fail; `opacity: 0` still counts as visible.
 
 ```ts
 await expect.element(page.getByRole('button', { name: 'Save' })).toBeVisible();
@@ -208,9 +188,7 @@ await expect.element(page.getByRole('button', { name: 'Save' })).toBeVisible();
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The `Locator` meets any of the following conditions within the `timeout`: does not match any DOM node, or matches a non-visible node.
-
-Think of it as the opposite of `toBeVisible`; for example, setting only `opacity: 0` typically will not cause `toBeHidden` to pass.
+Asserts that the `Locator` matches no DOM node or matches a non-visible node (the inverse of `toBeVisible`).
 
 ```ts
 await expect.element(page.getByTestId('loading')).toBeHidden();
@@ -220,9 +198,7 @@ await expect.element(page.getByTestId('loading')).toBeHidden();
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The element is not in a disabled state.
-
-Disabled determination: a native form control with the `disabled` attribute, within a disabled `fieldset`, or within an `aria-disabled=true` semantic context may all be considered disabled.
+Asserts that the element is not disabled (neither `disabled`, inside a disabled `fieldset`, nor `aria-disabled="true"`).
 
 ```ts
 await expect
@@ -234,9 +210,7 @@ await expect
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The element is determined to be disabled.
-
-The determination rules are the same as `toBeEnabled`, just with the opposite result. Recommended for scenarios like button submission and preventing duplicate clicks.
+Asserts that the element is disabled (inverse of `toBeEnabled`).
 
 ```ts
 await expect
@@ -248,9 +222,7 @@ await expect
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The `checked` state of a checkbox or radio is `true`.
-
-Commonly used to verify user check actions or whether a default checked state has taken effect.
+Asserts that a checkbox or radio control has `checked === true`.
 
 ```ts
 await expect.element(page.getByLabel('Agree')).toBeChecked();
@@ -260,9 +232,7 @@ await expect.element(page.getByLabel('Agree')).toBeChecked();
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The `checked` state of a checkbox or radio is `false`.
-
-Suitable for use with `check` / `uncheck` to verify state changes before and after interaction.
+Asserts that a checkbox or radio control has `checked === false`.
 
 ```ts
 await expect.element(page.getByLabel('Agree')).toBeUnchecked();
@@ -272,9 +242,7 @@ await expect.element(page.getByLabel('Agree')).toBeUnchecked();
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The node pointed to by the `Locator` is connected to a `Document` or `ShadowRoot` (equivalent to `Node.isConnected === true`).
-
-This assertion only checks "whether it is in the DOM tree" and does not require the element to be visible.
+Asserts that the node is connected to a `Document` or `ShadowRoot` (`Node.isConnected === true`), regardless of visibility.
 
 ```ts
 await expect.element(page.locator('#toast')).toBeAttached();
@@ -284,9 +252,7 @@ await expect.element(page.locator('#toast')).toBeAttached();
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The `Locator` no longer points to a connected DOM node.
-
-Common for verification after conditional rendering, async unmounting, or delete operations.
+Asserts that the `Locator` no longer resolves to a connected DOM node.
 
 ```ts
 await expect.element(page.locator('#toast')).toBeDetached();
@@ -296,9 +262,7 @@ await expect.element(page.locator('#toast')).toBeDetached();
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The element is both enabled and not readonly.
-
-Readonly determination includes both the native `readonly` attribute and `aria-readonly=true` semantics.
+Asserts that the element is both enabled and not read-only (`readonly` or `aria-readonly="true"`).
 
 ```ts
 await expect.element(page.getByLabel('Bio')).toBeEditable();
@@ -308,9 +272,7 @@ await expect.element(page.getByLabel('Bio')).toBeEditable();
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-The element is the current document's focus target (active element).
-
-Suitable for verifying keyboard navigation, auto-focus, or form focus-switching behavior.
+Asserts that the element is the active focus target in the document.
 
 ```ts
 await expect.element(page.getByLabel('Username')).toBeFocused();
@@ -320,9 +282,7 @@ await expect.element(page.getByLabel('Username')).toBeFocused();
 
 - **Type:** `(options?: { timeout?: number }) => Promise<void>`
 
-An editable element's content is empty, or a regular DOM node has no text content.
-
-It checks "whether the content is empty", not "whether the element exists" or "whether it is visible".
+Asserts that an editable element's value is empty or a regular element has no text content.
 
 ```ts
 await expect.element(page.locator('#empty-state')).toBeEmpty();
@@ -332,9 +292,7 @@ await expect.element(page.locator('#empty-state')).toBeEmpty();
 
 - **Type:** `(options?: { timeout?: number; ratio?: number }) => Promise<void>`
 
-The element intersects with the viewport (based on Intersection Observer semantics).
-
-`ratio` represents the minimum intersection ratio; for example, `ratio: 0.5` means at least half of the area is within the viewport.
+Asserts that the element intersects the viewport based on Intersection Observer semantics. `ratio` sets the minimum intersection ratio (for example, `0.5` requires at least half the element to be visible).
 
 ```ts
 await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
@@ -346,7 +304,7 @@ await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
 
 - **Type:** `(role: string, options?: { timeout?: number }) => Promise<void>`
 
-Assert the element's ARIA role. The role must match exactly; role hierarchy is not considered.
+Asserts the element's exact ARIA role (role inheritance is not matched).
 
 ```ts
 await expect.element(page.getByTestId('save')).toHaveRole('button');
@@ -358,7 +316,7 @@ await expect.element(page.getByTestId('save')).toHaveRole('button');
 
 - **Type:** `(name: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-Assert the element's accessible name. String values match the full normalized name.
+Asserts the element's accessible name. Strings match the full normalized name.
 
 ```ts
 await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
@@ -370,7 +328,7 @@ await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
 
 - **Type:** `(description: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-Assert the element's accessible description. String values match the full normalized description.
+Asserts the element's accessible description. Strings match the full normalized description.
 
 ```ts
 await expect
@@ -382,9 +340,7 @@ await expect
 
 - **Type:** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-The element's text fully matches the expected value (supports `string` / `RegExp`).
-
-Text computation includes nested child element content. When the expected value is a `string`, whitespace and line breaks are normalized before matching.
+Asserts that the element's text content (including descendants, with whitespace normalized) matches `text`.
 
 ```ts
 await expect.element(page.getByRole('status')).toHaveText('Saved');
@@ -394,9 +350,7 @@ await expect.element(page.getByRole('status')).toHaveText('Saved');
 
 - **Type:** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-The element's text contains the expected substring, or matches the given regex.
-
-The difference from `toHaveText` is: `toContainText` does substring matching, while `toHaveText` does full matching.
+Asserts that the element's text content (with whitespace normalized) contains the `string` substring or matches the `RegExp`.
 
 ```ts
 await expect.element(page.getByRole('status')).toContainText('Save');
@@ -406,9 +360,7 @@ await expect.element(page.getByRole('status')).toContainText('Save');
 
 - **Type:** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-The form control's current `value` matches the expected value (supports `string` / `RegExp`).
-
-Applicable to `input`, `textarea`, `select`, and other elements with retrievable values.
+Asserts that a form control (`input`, `textarea`, `select`) has a `value` matching `value`.
 
 ```ts
 await expect.element(page.getByLabel('Email')).toHaveValue('dev@rstest.rs');
@@ -420,7 +372,7 @@ await expect.element(page.getByLabel('Email')).toHaveValue('dev@rstest.rs');
 
 - **Type:** `(values: (string | RegExp)[], options?: { timeout?: number }) => Promise<void>`
 
-Assert all selected option values of a `<select multiple>` element. Values must match the expected array in DOM order. Each item can be a string or a regular expression; an empty array asserts that no options are selected.
+Asserts all selected option values of a `<select multiple>` element in DOM order. Pass `[]` to assert that no options are selected.
 
 ```ts
 const languages = page.getByLabel('Languages');
@@ -432,9 +384,7 @@ await expect.element(languages).toHaveValues(['typescript', /^rust$/]);
 
 - **Type:** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-The element's `id` matches the expected value (supports `string` / `RegExp`).
-
-Suitable for validating dynamically generated IDs or fixed IDs injected after component mounting.
+Asserts that the element's `id` matches `value`.
 
 ```ts
 await expect
@@ -446,9 +396,7 @@ await expect
 
 - **Type:** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-The element's `class` attribute matches the expected value (supports `string` / `RegExp`).
-
-When passing a `string`, it matches against the entire `class` string. If you only care about a specific class, consider using a more targeted regex.
+Asserts that the element's `class` attribute matches `value`. Strings match the entire `class` string; use a `RegExp` to match a single class name.
 
 ```ts
 await expect.element(page.getByRole('alert')).toHaveClass(/error/);
@@ -456,13 +404,9 @@ await expect.element(page.getByRole('alert')).toHaveClass(/error/);
 
 ### toHaveAttribute
 
-- **Type:**
-  - `(name: string, options?: { timeout?: number }) => Promise<void>`
-  - `(name: string, value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(name: string, value?: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-When only `name` is passed, it asserts the attribute exists. When `name + value` is passed, it asserts the attribute value matches (`value` supports `string` / `RegExp`).
-
-Common use cases include validating structural attributes like `type`, `disabled`, `aria-*`, etc.
+Asserts that attribute `name` exists when `value` is omitted (or `undefined`), or that its value matches when `value` is provided.
 
 ```ts
 await expect
@@ -477,9 +421,7 @@ await expect
 
 - **Type:** `(count: number, options?: { timeout?: number }) => Promise<void>`
 
-The number of elements resolved by the `Locator` exactly matches `count`.
-
-Suitable for list rendering, filter results, pagination item counts, and similar scenarios.
+Asserts that the `Locator` resolves to exactly `count` elements.
 
 ```ts
 await expect.element(page.getByRole('listitem')).toHaveCount(3);
@@ -489,9 +431,7 @@ await expect.element(page.getByRole('listitem')).toHaveCount(3);
 
 - **Type:** `(name: string, value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-The specified CSS property value in the element's computed style matches the expected value.
-
-`name` must be a non-empty string; `value` supports `string` / `RegExp`.
+Asserts that the computed CSS property `name` (non-empty string) matches `value`.
 
 ```ts
 await expect.element(page.getByRole('alert')).toHaveCSS('display', 'block');
@@ -501,9 +441,7 @@ await expect.element(page.getByRole('alert')).toHaveCSS('display', 'block');
 
 - **Type:** `(name: string, value: unknown, options?: { timeout?: number }) => Promise<void>`
 
-The JS property on the element matches the expected value.
-
-`name` must be a non-empty string; `value` must be JSON-serializable (assertion parameters are transmitted through the Browser Mode channel).
+Asserts that the DOM element's JavaScript property `name` (non-empty string) equals `value` (`value` must be JSON-serializable).
 
 ```ts
 await expect

@@ -3,7 +3,6 @@ description: This E2E testing guide covers how to use @rstest/playwright to test
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
-import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
 # E2E testing
@@ -16,7 +15,7 @@ The test code runs in Node.js workers and uses Playwright to drive a real browse
 
 ## Install
 
-Install both packages:
+Install both packages (requires `playwright ^1.49.1`):
 
 - [@rstest/playwright](https://www.npmjs.com/package/@rstest/playwright) adds the Rstest fixtures and assertions.
 - [playwright](https://www.npmjs.com/package/playwright) provides the browser automation runtime.
@@ -70,7 +69,7 @@ import { chromium, request } from 'playwright';
 
 For normal E2E tests, use the `browser`, `context`, `page`, and `request` fixtures instead. Rstest creates and cleans up those resources according to the fixture lifecycle.
 
-Regular lifecycle helpers are also available from `@rstest/playwright`:
+`beforeAll`, `afterAll`, `beforeEach`, `afterEach`, and `describe` are also exported from `@rstest/playwright`:
 
 ```ts
 import { beforeEach, describe, test } from '@rstest/playwright';
@@ -97,7 +96,7 @@ export default defineConfig({
 });
 ```
 
-## Configure playwright options
+## Configure Playwright options
 
 <ApiMeta addedVersion="0.12.0" />
 
@@ -147,14 +146,14 @@ If only a few tests need different options, call `test.extend` again from those 
 
 The `playwright` fixture supports these options:
 
-| Option           | Description                                          |
-| ---------------- | ---------------------------------------------------- |
-| `browserName`    | Browser engine to launch. Currently only `chromium`. |
-| `launchOptions`  | Options passed to `browserType.launch()`.            |
-| `contextOptions` | Options passed to `browser.newContext()`.            |
-| `requestOptions` | Options passed to `request.newContext()`.            |
-| `debug`          | Convenience options for local headed debugging.      |
-| `trace`          | Capture Playwright trace artifacts for debugging.    |
+| Option           | Description                                                     |
+| ---------------- | --------------------------------------------------------------- |
+| `browserName`    | Browser engine to launch. Currently only `chromium`.            |
+| `launchOptions`  | Options passed to `browserType.launch()`.                       |
+| `contextOptions` | Options passed to `browser.newContext()`.                       |
+| `requestOptions` | Options passed to `request.newContext()`.                       |
+| `debug`          | `boolean \| PlaywrightDebugOptions` for local headed debugging. |
+| `trace`          | Capture Playwright trace artifacts for debugging.               |
 
 ### E2E defaults
 
@@ -169,23 +168,7 @@ Using `extends: definePlaywrightConfig({})` also provides these defaults for the
 | Playwright locator/page assertion timeout | `expect.poll.timeout` (`5000ms` with this helper) |
 | Rstest `expect.poll.timeout`              | `5000ms`                                          |
 
-Explicit Rstest configuration overrides the inherited defaults. For example:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-import { definePlaywrightConfig } from '@rstest/playwright/config';
-
-export default defineConfig({
-  extends: definePlaywrightConfig({}),
-  testTimeout: 60_000,
-  hookTimeout: 45_000,
-  expect: {
-    poll: { timeout: 2000 },
-  },
-});
-```
-
-Here, Playwright locator/page assertions and `expect.poll()` both use `2000ms`. Per-call timeout options still take precedence for both APIs.
+Explicit Rstest configuration overrides the inherited defaults (for example, `testTimeout`, `hookTimeout`, and [`expect.poll.timeout`](#assertion-timeout)).
 
 These defaults apply only when using `definePlaywrightConfig`; importing `test` or `expect` from `@rstest/playwright` alone does not change Rstest's runner defaults. In a mixed unit/E2E workspace, apply the helper only to the E2E project.
 
@@ -205,7 +188,7 @@ Playwright trace saving, context closing, and browser closing each use `hookTime
 | `request` | A new `APIRequestContext` for each test that uses it. It is disposed after the test. |
 | `serve`   | Starts a static server from inside the test and cleans it up automatically.          |
 
-The sections below show how each fixture is commonly used. `page` and `serve` link to the existing examples to avoid repeating the same code.
+See [Basic usage](#basic-usage) and [Local app server](#local-app-server) for `page` and `serve` examples.
 
 ### Using fixtures in hooks
 
@@ -241,9 +224,7 @@ describe('dashboard', () => {
 });
 ```
 
-Hooks are scoped to their `describe` block, not to an extended test object. Every test in the block must provide the fixtures requested by the hook; otherwise, Rstest fails that test before invoking the hook and reports the missing fixture. The same behavior applies to `afterEach` and to cleanup functions returned by `beforeEach`. Fixture instances are shared across the hooks and test body for one test attempt, then torn down in reverse setup order.
-
-Declare fixture dependencies through direct object destructuring in the hook parameter. Destructuring a named context inside the hook body does not request fixtures. Rest properties and default values are not supported in fixture-aware callbacks.
+See [Using fixtures in hooks](/api/runtime-api/test-api/test#using-fixtures-in-hooks) for scoping, destructuring, and lifecycle rules.
 
 ### Using fixtures with `test.for`
 
@@ -297,10 +278,6 @@ test('multiple pages', async ({ context }) => {
 });
 ```
 
-### `page`
-
-See [Basic usage](#basic-usage) for the common E2E flow of opening and asserting a page.
-
 ### `request`
 
 Use `request` when you only need Playwright's API client and do not need to launch a browser:
@@ -314,10 +291,6 @@ test('health check', async ({ request }) => {
   expect(response.ok()).toBe(true);
 });
 ```
-
-### `serve`
-
-See [Local app server](#local-app-server) for serving a built app from local files.
 
 ## Assertions
 
@@ -336,15 +309,15 @@ Locator assertions target Playwright [`Locator`](https://playwright.dev/docs/api
 - `toBeEditable(options?)`
 - `toBeFocused(options?)`
 - `toBeEmpty(options?)`
-- `toBeInViewport(options?)`
+- `toBeInViewport(options?)` — accepts `{ timeout?: number; ratio?: number }` to require a minimum visible ratio in the viewport.
 - `toContainText(expected, options?)`
-- `toHaveAttribute(name, expected?, options?)`
+- `toHaveAttribute(name, expected?, options?)` — omit `expected` (e.g. `toHaveAttribute('disabled')`) to assert that the attribute is present regardless of value.
 - `toHaveClass(expected, options?)`
 - `toHaveCSS(propertyName, expected, options?)`
 - `toHaveCount(expected, options?)`
 - `toHaveId(expected, options?)`
 - `toHaveJSProperty(name, expected, options?)`
-- `toHaveText(expected, options?)`
+- `toHaveText(expected, options?)` — `expected` accepts `string | RegExp | (string | RegExp)[]`; passing an array checks the count and text of each matched element in order.
 - `toHaveValue(expected, options?)`
 
 Page assertions:
@@ -438,6 +411,8 @@ const e2e = test.extend({
       screenshots: true,
       snapshots: true,
       sources: true,
+      print: true,
+      summary: true,
     },
   } satisfies PlaywrightOptions,
 });
@@ -447,7 +422,7 @@ By default, traces are written to `.rstest/playwright-traces/<test-name>-<hash>/
 
 - `trace.zip`: Playwright's official trace artifact. Open it with `npx playwright show-trace <path-to-trace.zip>`.
 
-When `summary` is enabled (the default), the directory also contains:
+When `print` is enabled (the default), saving a trace also logs the `npx playwright show-trace` command to stdout. When `summary` is enabled (the default), the directory also contains:
 
 - `trace-summary.json`: Rstest-aware test metadata, artifact paths, and error stacks for tools and AI assistants.
 - `debug.md`: a human-readable debugging report.
@@ -456,7 +431,7 @@ When `summary` is enabled (the default), the directory also contains:
 
 ## Local app server
 
-Use the `serve` fixture when a test needs to serve a built app. It starts a static server for the entry file and automatically stops the server after the test.
+Use the `serve` fixture to serve a built app over HTTP from an HTML entry file or a directory (which serves its `index.html` at `/`). It returns `{ url, close }` and stops the server automatically after the test; call `await close()` if you need to shut it down early.
 
 ```ts
 import { expect, test } from '@rstest/playwright';
@@ -469,7 +444,12 @@ test('home page', async ({ page, serve }) => {
 });
 ```
 
-When `PWDEBUG=1` is enabled, `serve` keeps the server alive by default so the opened page remains available for inspection. In non-watch runs, this may keep the Rstest process open until you stop it manually. Set `keepAliveOnDebug: false` if you want the server to close even in debug mode.
+`serve(entry, options?)` accepts:
+
+- `host`: host interface to bind (default: `'127.0.0.1'`).
+- `port`: port to listen on (default: random available port).
+- `headers`: extra HTTP response headers for static files.
+- `keepAliveOnDebug`: keep the server alive when debug mode is active so the opened page remains available for inspection (default: `true`). In non-watch runs, this may keep the Rstest process open until you stop it manually. Set `keepAliveOnDebug: false` to close the server even in debug mode.
 
 ## Headed debugging
 
@@ -485,7 +465,7 @@ This environment variable keeps your tests unchanged and applies these defaults:
 - `slowMo: 100`
 - `devtools: true`
 
-You can also override the debug defaults from the test:
+You can also enable debug mode from the test with `debug: true` or an options object:
 
 ```ts
 import { test } from '@rstest/playwright';
@@ -569,19 +549,4 @@ Use `@rstest/playwright` when you want Playwright-driven E2E tests to run in the
 
 ## Migrate from Playwright
 
-An existing Playwright Test project can be migrated by a Coding Agent that supports Skills, using the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill. Agent Skills are domain knowledge packs installed into a Coding Agent so it gives more accurate suggestions or performs actions for a specific scenario; the [skills](https://www.npmjs.com/package/skills) package installs them. The `migrate-to-rstest` skill includes Playwright-specific migration guidance for configuration, fixtures, and behavior parity.
-
-Install the skill first:
-
-<PackageManagerTabs
-  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
-  dlx
-/>
-
-Then copy the following prompt and send it to your Coding Agent:
-
-<Prompt
-  title="Migrate Playwright to @rstest/playwright"
-  description="Copy this prompt and send it to your Coding Agent."
-  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
-/>
+Migrate an existing Playwright Test project to `@rstest/playwright` using the [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) Agent Skill or the migration prompt on the [AI guide](/guide/start/ai).

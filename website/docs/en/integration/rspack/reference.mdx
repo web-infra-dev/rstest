@@ -4,24 +4,24 @@ description: API and configuration mapping reference for the Rstest Rspack adapt
 
 # Rspack adapter reference
 
-For setup and important caveats, see the [Rspack integration overview](./). This page contains the complete adapter API, compatibility mapping, and debugging workflow.
+For setup and important caveats, see the [Rspack integration overview](./). This page covers the adapter APIs, configuration mapping, and debug workflow.
 
 ## API
 
 ### `withRspackConfig(options)`
 
-Returns a configuration function that loads Rspack config and converts it to Rstest configuration.
+Returns a configuration function that loads an Rspack config file and converts it to Rstest configuration.
 
 #### `cwd`
 
 - **Type:** `string`
 - **Default:** `process.cwd()`
 
-The working directory to resolve the Rspack config file.
+Working directory used to resolve the Rspack config file and relative persistent cache paths.
 
-When your Rspack config is in a different directory or you are running tests in a monorepo (where your `process.cwd()` is not your config directory), you can specify the `cwd` option to resolve the Rspack config file from a different directory.
+Use `cwd` when your Rspack config lives in another directory, such as a package in a monorepo:
 
-```ts
+```ts title="rstest.config.ts"
 export default defineConfig({
   extends: withRspackConfig({
     cwd: './packages/my-app',
@@ -32,21 +32,24 @@ export default defineConfig({
 #### `configPath`
 
 - **Type:** `string`
-- **Default:** `'./rspack.config.ts'`
+- **Default:** `undefined`
 
-Path to rspack config file.
+Path to the Rspack config file. Relative paths resolve against `cwd`.
+
+When omitted, the adapter checks `rspack.config.{js,ts,mjs,mts,cjs,cts}` (starting with `.js`) in `cwd`. If no config file is found, or if the specified path does not exist, `withRspackConfig` returns `{}`.
+
+When a config file is loaded, its path is added to [`forceRerunTriggers`](/config/test/force-rerun-triggers) and, for persistent caches, to `performance.buildCache.buildDependencies`.
 
 #### `configName`
 
 - **Type:** `string`
 - **Default:** `undefined`
 
-Select a named configuration when using [multi-config](https://rspack.rs/config/other-options#name) in your Rspack config file. Set to a string to use the config with a matching `name` field.
+Selects a configuration by its `name` field when your Rspack config exports an array of configs, and sets Rstest's `name` (`configName ?? config.name`). Throws an error if no entry matches. When omitted on an array export, the adapter uses the first entry.
 
-If your Rspack config exports an array of configurations:
+Given an array config:
 
-```ts
-// rspack.config.ts
+```ts title="rspack.config.ts"
 export default [
   {
     name: 'client',
@@ -63,9 +66,9 @@ export default [
 ];
 ```
 
-You can select a specific configuration in your Rstest config:
+Select a single entry with `configName`:
 
-```ts
+```ts title="rstest.config.ts"
 export default defineConfig({
   extends: withRspackConfig({
     configName: 'client',
@@ -73,9 +76,9 @@ export default defineConfig({
 });
 ```
 
-When you need to test multiple parts of your application with different configurations independently, you can define multiple Rstest projects:
+To test multiple targets independently, define separate Rstest `projects`:
 
-```ts
+```ts title="rstest.config.ts"
 export default defineConfig({
   projects: [
     {
@@ -95,12 +98,11 @@ export default defineConfig({
 - **Type:** `Record<string, unknown> | string[]`
 - **Default:** `undefined`
 
-Environment values passed to the Rspack config function. This corresponds to the `env` parameter in `rspack.config.ts` when exporting a function:
+Environment values passed to Rspack when loading a function-style config:
 
-```ts
-// rspack.config.ts
+```ts title="rspack.config.ts"
 export default (env) => {
-  console.log(env); // receives the values from adapter
+  console.log(env); // receives the value passed to `env`
   return {/* ... */};
 };
 ```
@@ -110,16 +112,16 @@ export default (env) => {
 - **Type:** `string`
 - **Default:** `undefined`
 
-The `NODE_ENV` value used when loading the Rspack config.
+`NODE_ENV` value used while loading the Rspack config.
 
 #### `modifyRspackConfig`
 
 - **Type:** `(config: RspackOptions) => RspackOptions`
 - **Default:** `undefined`
 
-Modify the Rspack config before it gets converted to Rstest config:
+Modifies the selected Rspack config before conversion. The callback must return an `RspackOptions` object:
 
-```ts
+```ts title="rstest.config.ts"
 export default defineConfig({
   extends: withRspackConfig({
     modifyRspackConfig: (rspackConfig) => {
@@ -130,80 +132,127 @@ export default defineConfig({
 });
 ```
 
+### `toRstestConfig(options)`
+
+Converts an in-memory `RspackOptions` object directly to Rstest configuration without loading a config file from disk.
+
+```ts title="rstest.config.ts"
+import type { RspackOptions } from '@rspack/core';
+import { defineConfig } from '@rstest/core';
+import { toRstestConfig } from '@rstest/adapter-rspack';
+
+const rspackConfig: RspackOptions = {
+  target: 'web',
+  resolve: {
+    alias: {
+      '@': './src',
+    },
+  },
+};
+
+export default defineConfig({
+  extends: toRstestConfig({
+    rspackConfig,
+  }),
+});
+```
+
+#### `rspackConfig`
+
+- **Type:** `RspackOptions`
+
+The single Rspack configuration object to convert.
+
+#### `configPath`
+
+- **Type:** `string`
+- **Default:** `undefined`
+
+Source file path associated with `rspackConfig`. Does not load from disk; adds the normalized path to [`forceRerunTriggers`](/config/test/force-rerun-triggers) and persistent `performance.buildCache.buildDependencies`.
+
+Also accepts `cwd` (used to resolve relative `rspackConfig.context` or as the fallback cache root when `context` is unset), `configName` (overrides `name`), and `modifyRspackConfig`—see [`withRspackConfig`](#withrspackconfigoptions).
+
 ## Configuration mapping
 
-`withRspackConfig` does not copy the entire Rspack configuration into the test compiler unchanged. It routes each option according to which layer owns the behavior: equivalent concepts become Rstest configuration, compatible compiler options reach Rspack, and settings that would conflict with the generated test build remain under Rstest's control.
+The adapter routes each Rspack option based on which layer owns the behavior: equivalent concepts become Rstest config, compatible compiler options are forwarded to Rspack, and build-only or test-incompatible settings stay under Rstest's control.
 
-The following tables cover every top-level option in Rspack 2.1. Some options appear in more than one table because their sub-options have different owners. For example, Rstest must understand `resolve.alias`, while Rspack itself must receive `resolve.fallback`; similarly, Rstest derives its cache from `cache`, but does not reuse every persistent-cache tuning option.
+### Mapped to Rstest options
 
-Some Rspack options have direct equivalents in Rstest. The adapter converts these values before creating the compiler because Rstest needs them to select the test environment, resolve test modules, or prepare build output. Only the listed `resolve` fields are shared with Rsbuild; the remaining Rspack resolver options are handled in the next table.
+These options are converted before creating the compiler so Rstest can select the test environment, resolve modules, and configure build caching:
 
-| Rspack option                                                     | Rstest equivalent         | Notes                                                                 |
-| ----------------------------------------------------------------- | ------------------------- | --------------------------------------------------------------------- |
-| `name`                                                            | `name`                    | Configuration identifier                                              |
-| `resolve.alias`, `extensions`, `conditionNames`, and `mainFields` | `resolve`                 | Shared module-resolution options                                      |
-| `resolve.tsConfig.configFile`                                     | `source.tsconfigPath`     | TypeScript config path                                                |
-| `output.module`                                                   | `output.module`           | Output module type                                                    |
-| `target`                                                          | `testEnvironment`         | `'node'`/`'async-node'` maps to `'node'`, others map to `'happy-dom'` |
-| `cache`                                                           | `performance.buildCache`  | Reuses storage identity, version, and build dependencies              |
-| `context`                                                         | Persistent cache paths    | Resolves relative Rspack cache paths                                  |
-| `mode`                                                            | Persistent cache identity | Used for the default cache name; Rstest controls the compiler mode    |
+| Rspack option                                                     | Rstest equivalent         | Notes                                                                                                                                        |
+| ----------------------------------------------------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `name`                                                            | `name`                    | `configName` takes precedence (`configName ?? config.name`)                                                                                  |
+| `resolve.alias`, `extensions`, `conditionNames`, and `mainFields` | `resolve`                 | Shared module-resolution options; `resolve.alias: false` is skipped here and forwarded to `tools.rspack` instead                             |
+| `resolve.tsConfig`                                                | `source.tsconfigPath`     | Accepts a string path or `{ configFile }`; full `resolve.tsConfig` is also forwarded to `tools.rspack`                                       |
+| `output.module`                                                   | `output.module`           | Output module format                                                                                                                         |
+| `target`                                                          | `testEnvironment`         | `'node'` for `'async-node'` or any `node*` target (string or array); `'happy-dom'` for all others or when unset                              |
+| `cache`                                                           | `performance.buildCache`  | Maps persistent `storage.directory`, `version`, and `buildDependencies`; `false` or `{ type: 'memory' }` sets `buildCache: false`            |
+| `context`                                                         | Persistent cache paths    | Resolves relative `cache.storage.directory`, `cache.storage.location`, and `cache.buildDependencies`                                         |
+| `mode`                                                            | Persistent cache identity | Contributes to the default cache name (`<name>-<mode>`, defaulting mode to `'production'`); compiler `mode` is set by Rstest from `NODE_ENV` |
 
-Other options still affect the final Rspack compilation but cannot safely replace the generated test configuration. The adapter combines them according to the option's semantics—for example, rules and plugins are appended, Rspack-only resolver options are merged, and the generated output path is retained. Rstest's later compiler hooks can still restore values required by the test runtime.
+### Merged with Rstest compiler hooks
 
-| Rspack option      | Behavior                                                                                                                                                                      |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `module`           | Merges module options and appends rules                                                                                                                                       |
-| `plugins`          | Appends plugins after removing `HtmlRspackPlugin`                                                                                                                             |
-| `output`           | Merges output options and preserves Rstest's path; later hooks own `iife`, `importFunctionName`, and source map filename templates                                            |
-| `resolve`          | Merges Rspack-only options such as `fallback`, `byDependency`, and `tsConfig.references`; `alias: false` clears aliases, while Rstest retains required Node/CommonJS settings |
-| `experiments`      | Merges experiments, while Rstest retains `runtimeMode: 'webpack'` and disables Rspack's async WebAssembly handling                                                            |
-| `optimization`     | Merges optimization options, while Rstest retains its test runtime chunk and `emitOnErrors` behavior                                                                          |
-| `devtool`          | Keeps inline source map variants; Rstest normalizes non-inline variants to `'nosources-source-map'`                                                                           |
-| `watchOptions`     | Merges watch strategy options used when Rstest starts the compiler in watch mode                                                                                              |
-| `externalsPresets` | Merges compatible presets, then keeps `node: false` so Rstest can assign the correct external type for each request                                                           |
-| `cache`            | Applies memory or disabled cache settings; persistent cache is regenerated from the storage identity, version, and build dependencies described above                         |
+These options affect the Rspack compilation via `tools.rspack`, while Rstest retains invariants needed by the test runtime:
 
-The next group does not overlap with Rstest-owned build structure, so the adapter passes it to the compiler through Rsbuild's `mergeConfig`. This uses Rspack's standard merge semantics and keeps the generated configuration as the base. Arrays and nested objects therefore follow Rspack's normal merge behavior instead of being assigned by an adapter-specific rule.
+| Rspack option      | Behavior                                                                                                                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `module`           | Merges `module` options and appends `rules` after Rstest's base rules                                                                                                                                                          |
+| `plugins`          | Appends `plugins` after filtering out `HtmlRspackPlugin`; the adapter also removes Rsbuild's built-in CSS plugins (`rsbuild:css`, `rsbuild:less`, `rsbuild:sass`)                                                              |
+| `output`           | Merges `output` options while preserving Rstest's `output.path`; Rstest retains `iife`, `importFunctionName`, and `devtoolModuleFilenameTemplate`                                                                              |
+| `resolve`          | Merges Rspack-only options (`fallback`, `byDependency`, `extensionAlias`, `preferRelative`, `tsConfig`, etc.); `alias: false` clears aliases, while Rstest keeps required `.cjs`, `extensionAlias`, and Node/CommonJS defaults |
+| `experiments`      | Merges `experiments`, while Rstest retains `runtimeMode: 'webpack'` and disables `asyncWebAssembly`                                                                                                                            |
+| `optimization`     | Merges `optimization`, while Rstest retains its shared `runtimeChunk` and `emitOnErrors: true`                                                                                                                                 |
+| `devtool`          | Keeps inline source map variants; Rstest normalizes non-inline or unset values to `'nosources-source-map'`                                                                                                                     |
+| `watchOptions`     | Merges watch options used when Rstest runs in watch mode                                                                                                                                                                       |
+| `externalsPresets` | Merges compatible presets, then sets `node: false` so Rstest can assign external types per request                                                                                                                             |
+| `cache`            | Applies `false` or `{ type: 'memory' }` directly; for `{ type: 'persistent' }`, Rstest regenerates the cache config while preserving the resolved `storage.location`                                                           |
 
-| Rspack option           | Behavior                                                                                                                                    |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `externals`             | Merges user externals with Rstest's generated externals instead of replacing them                                                           |
-| `externalsType`         | Sets the default type for user externals that do not declare one; Rstest-generated externals specify their type per request                 |
-| `infrastructureLogging` | Merges compiler and plugin infrastructure logging options                                                                                   |
-| `loader`                | Merges custom values exposed through the loader context                                                                                     |
-| `ignoreWarnings`        | Appends user warning filters to Rstest's generated filters                                                                                  |
-| `resolveLoader`         | Merges loader resolution options                                                                                                            |
-| `amd`                   | Applies the configured values of `require.amd` and `define.amd`                                                                             |
-| `incremental`           | Applies the configured Rspack incremental build strategy; Rspack may normalize a preset such as `'safe'` into its concrete compiler options |
+:::warning
+Because the adapter removes Rsbuild's built-in CSS plugins (`rsbuild:css`, `rsbuild:less`, `rsbuild:sass`), Rsbuild-specific CSS options such as `output.cssModules` are unavailable. Configure CSS rules and loaders in your Rspack config instead.
+:::
 
-The remaining options either describe an application build, belong to a multi-compiler or dev-server workflow, or control output that Rstest reports itself. Applying them would replace generated test structure or create a setting with no observable effect, so the adapter leaves them under Rstest's control. `extends` is the exception: Rspack CLI consumes it while loading the config, so the adapter receives the already-merged result rather than forwarding the `extends` field.
+### Passed through via `mergeConfig`
 
-| Rspack option     | Reason                                                                 |
-| ----------------- | ---------------------------------------------------------------------- |
-| `dependencies`    | Rstest selects one config instead of running a multi-compiler          |
-| `extends`         | Rspack CLI resolves extended configs before conversion                 |
-| `entry`           | Rstest generates entry points from test files                          |
-| `output.path`     | Rstest controls the output directory                                   |
-| `context`         | Rstest controls the compiler context; this still resolves cache paths  |
-| `mode`            | Rstest uses development mode; this still contributes to cache identity |
-| `node`            | Rstest preserves each source module's filename and directory           |
-| `stats`           | Rstest controls compiler stats extraction and reporter output          |
-| `bail`            | Rstest controls compilation error handling                             |
-| `performance`     | Application bundle size limits do not apply to generated test bundles  |
-| `watch`           | Rstest controls compiler watch mode                                    |
-| `devServer`       | Rstest does not use the Rspack dev server                              |
-| `lazyCompilation` | Rstest does not use Rspack lazy compilation                            |
+These options do not conflict with Rstest's test build structure and are merged onto the base Rspack config via Rsbuild's `mergeConfig`:
 
-Rspack 2.1 moved the former top-level `snapshot` option to `cache.snapshot`, so it is no longer a top-level configuration option. Persistent Rspack cache is converted into Rstest's generated build cache; Rspack-specific tuning fields such as `cache.snapshot`, `maxAge`, `portable`, and `readonly` are not copied to that generated cache.
+| Rspack option           | Behavior                                                                                                          |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `externals`             | Merges user externals with Rstest's generated externals                                                           |
+| `externalsType`         | Sets the default type for user externals that omit one; Rstest-generated externals specify their type per request |
+| `infrastructureLogging` | Merges compiler and plugin infrastructure logging options                                                         |
+| `loader`                | Merges custom values exposed on the loader context                                                                |
+| `ignoreWarnings`        | Appends user warning filters to Rstest's generated filters                                                        |
+| `resolveLoader`         | Merges loader resolution options                                                                                  |
+| `amd`                   | Applies `require.amd` and `define.amd` values                                                                     |
+| `incremental`           | Applies Rspack incremental build settings (Rspack may normalize presets such as `'safe'` into concrete options)   |
+
+### Ignored or controlled by Rstest
+
+These options describe application entry points, multi-compiler orchestration, dev servers, or output owned by Rstest, so the adapter does not forward them:
+
+| Rspack option     | Reason                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `dependencies`    | Rstest converts a single config rather than running a multi-compiler                                                            |
+| `extends`         | Rspack CLI resolves extended configs while loading the file, before conversion                                                  |
+| `entry`           | Rstest generates entry points from test files                                                                                   |
+| `output.path`     | Rstest controls the output directory                                                                                            |
+| `context`         | Rstest sets compiler `context` to project root; Rspack `context` only resolves cache paths                                      |
+| `mode`            | Rstest sets compiler `mode` from `NODE_ENV` (`'production'` or `'development'`); Rspack `mode` only contributes to cache naming |
+| `node`            | Rstest preserves each source module's filename and directory                                                                    |
+| `stats`           | Rstest controls compiler stats extraction and reporter output                                                                   |
+| `bail`            | Rstest controls compilation error handling                                                                                      |
+| `performance`     | Application bundle size hints do not apply to generated test bundles                                                            |
+| `watch`           | Rstest controls compiler watch mode                                                                                             |
+| `devServer`       | Rstest does not run the Rspack dev server                                                                                       |
+| `lazyCompilation` | Rstest does not use Rspack lazy compilation                                                                                     |
+| `snapshot`        | Top-level `snapshot` is ignored                                                                                                 |
+
+Persistent-cache tuning fields such as `cache.snapshot`, `maxAge`, `portable`, and `readonly` are also not copied to Rstest's generated build cache.
 
 ## Debug config
 
-Set `DEBUG=rstest` to write the resolved Rstest, Rsbuild, and Rspack configurations. The command output prints their locations. Inspect the generated Rspack configuration to verify which options reach the compiler:
-
-```bash
-DEBUG=rstest rstest
-```
+Run with `DEBUG=rstest` to write the resolved Rstest, Rsbuild, and Rspack configurations to disk. See [Debug mode](/guide/debug/debugging#debug-mode).
 
 ## Related documentation
 

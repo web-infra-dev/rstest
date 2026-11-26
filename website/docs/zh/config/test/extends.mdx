@@ -1,5 +1,5 @@
 ---
-description: extends 选项允许你从外部来源扩展 Rstest 配置，例如使用适配器将其他构建工具的配置转换为 Rstest 兼容格式。
+description: 从共享预设、异步函数或构建工具适配器扩展 Rstest 配置。
 ---
 
 # extends
@@ -7,24 +7,19 @@ description: extends 选项允许你从外部来源扩展 Rstest 配置，例如
 - **类型：** `ExtendConfig | ExtendConfigFn | (ExtendConfig | ExtendConfigFn)[]`
 - **默认值：** `undefined`
 
-`extends` 选项允许你从外部来源扩展 Rstest 配置，例如使用适配器将其他构建工具的配置转换为 Rstest 兼容格式。
-
-这样可以实现以下功能：
-
-- **适配器集成**：通过 `@rstest/adapter-rslib` 等适配器从其他构建工具配置中扩展 Rstest 配置
-- **异步配置**：从外部源异步加载配置
-- **配置合并**：自动将扩展配置与本地 Rstest 配置合并
-- **可组合预设**：通过 `extends` 数组组合多个共享配置
+从共享预设、异步工厂函数或构建工具适配器（如 `@rstest/adapter-rslib`）扩展 Rstest 配置。
 
 ## 基本用法（对象）
 
 ```ts
-type ExtendConfig = Omit<RstestConfig, 'projects'>;
+type LooseRstestConfig = Omit<RstestConfig, 'reporters'> & {
+  reporters?: any;
+};
+
+type ExtendConfig = Omit<LooseRstestConfig, 'projects'>;
 ```
 
-`ExtendConfig` 是 `RstestConfig` 子集，不包含 `projects` 字段。
-
-你可以用它从外部源扩展 Rstest 配置。Rstest 会按[合并规则](#配置合并)将扩展配置与本地配置合并。
+`ExtendConfig` 是不包含 `projects` 的 `RstestConfig` 子集，同时将 `reporters` 放宽为 `any`，以兼容不同 `@rstest/core` 版本下的适配器。Rstest 会按照[合并规则](#配置合并)将扩展配置与本地配置合并。
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -42,13 +37,11 @@ export default defineConfig({
 
 ```ts
 type ExtendConfigFn = (
-  userConfig: Readonly<RstestConfig>,
+  userConfig: Readonly<LooseRstestConfig>,
 ) => ExtendConfig | Promise<ExtendConfig>;
 ```
 
-`ExtendConfigFn` 是一个接收用户配置(只读)并返回扩展配置的函数。
-
-它适用于加载外部配置文件、获取远程配置或基于用户设置进行动态配置。
+`ExtendConfigFn` 接收用户配置（只读），同步或异步返回扩展配置，适用于加载外部配置文件、获取远程配置或基于用户设置动态生成配置：
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -60,7 +53,7 @@ export default defineConfig({
       setupFiles: useJsdom ? ['<rootDir>/setupDomTests.ts'] : undefined,
       source: {
         define: {
-          BUILD_TARGET: '"test" ',
+          BUILD_TARGET: '"test"',
         },
       },
     };
@@ -71,11 +64,9 @@ export default defineConfig({
 
 ## 多个 extends
 
-当你需要组合多个预设时，可以给 `extends` 传入数组。
+传入数组即可组合多个预设。Rstest 按从左到右的顺序合并，后项覆盖前项，本地配置保持最高优先级。
 
-Rstest 会按从左到右的顺序依次解析数组。后面的条目会覆盖前面的冲突字段，而本地配置仍然拥有最高优先级。
-
-当数组项为函数时，每个 `ExtendConfigFn` 都会基于原始的用户配置独立解析。数组顺序只影响最终合并优先级，不会影响传给每个函数的输入。
+数组中的函数会各自独立接收原始用户配置；数组顺序只影响合并优先级，不影响传入每个函数的参数。
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -96,22 +87,22 @@ export default defineConfig({
 
 ## 配置合并
 
-Rstest 对对象配置执行深度合并，对基本类型配置执行简单覆盖。本地配置优先于扩展配置。
-
-当 `extends` 为数组时，优先级顺序如下：
+Rstest 对对象字段执行深度合并，对基本类型字段执行覆盖，本地配置优先于扩展配置。当 `extends` 为数组时，优先级顺序如下：
 
 ```ts
 extends[0] < extends[1] < ... < extends[n] < local config
 ```
 
-主要合并规则如下：
+合并规则如下：
 
-- `testTimeout`、`retry`、`globals` 这类基本类型字段由后者直接覆盖前者。
-- `setupFiles`、`globalSetup` 和 `plugins` 会拼接，方便多个预设共同追加配置。
-- `include`、`reporters` 和 `coverage.reporters` 会被后者整体替换。
+- `testTimeout`、`retry`、`globals` 等基本类型字段由后者直接覆盖前者。
+- `setupFiles`、`globalSetup` 和 `plugins` 会依次拼接，便于多个预设追加配置。
+- `include`、`forceRerunTriggers`、`reporters` 和 `coverage.reporters` 会被后者整体替换。
 - `source`、`resolve`、`output`、`tools`、`env` 和 `coverage` 等对象字段会执行深度合并。
-- `browser` 中的普通对象会执行深度合并，包括嵌套的 `providerOptions`。数组、函数和类实例由后者整体替换。例如，覆盖 `providerOptions.launch.args` 会替换整个参数数组，同时保留先前的 `launch.timeout` 和 `context.locale`。
+- `browser` 中的普通对象会执行深度合并（包括嵌套的 `providerOptions`）；数组、函数和类实例由后者整体替换（例如覆盖 `providerOptions.launch.args` 会替换整个参数数组，同时保留之前的 `launch.timeout` 和 `context.locale`）。
 - 每个扩展配置中的 `projects` 都会被忽略。
+
+示例：
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -161,9 +152,7 @@ export default defineConfig({
 
 ## 使用适配器
 
-### 示例：从 Rslib 配置扩展
-
-使用 `@rstest/adapter-rslib` 适配器可从现有 Rslib 配置文件扩展 Rstest 配置。该适配器会自动映射兼容选项，如 `source.define`、`source.include`、`source.exclude`、`source.transformImport` 等。
+`@rstest/adapter-rslib` 等适配器会自动将已有构建配置中的兼容选项（如 `source.define`、`source.include`、`source.exclude`、`source.transformImport`）映射到 Rstest：
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -181,7 +170,7 @@ export default defineConfig({
 
 ## 限制
 
-`extends` 配置不支持 `projects` 字段。要定义多个项目，请单独扩展每个项目：
+`extends` 配置不支持 `projects` 字段。需要配置多个项目时，在各个项目配置中单独使用 `extends`：
 
 ```ts
 export default defineConfig({

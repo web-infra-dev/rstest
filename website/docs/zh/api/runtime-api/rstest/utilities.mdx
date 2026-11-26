@@ -1,12 +1,12 @@
 ---
-description: 提供一些实用的工具函数，如模拟环境变量、全局变量等。
+description: Rstest 提供的运行时工具函数，用于模拟环境变量与全局变量、动态修改运行时配置以及异步轮询。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Utilities
 
-一些实用的工具函数。
+`rs`（别名 `rstest`）上提供的运行时工具函数，用于模拟环境变量与全局变量、修改运行时配置以及异步轮询等待条件满足。
 
 ## rs.stubEnv
 
@@ -14,13 +14,10 @@ import { ApiMeta } from '@components/ApiMeta';
 
 - **类型：** `(name: string, value: string | undefined) => RstestUtilities & Disposable`
 
-临时设置 `process.env` 和 `import.meta.env` 中的环境变量为指定值。适用于测试依赖环境变量的代码。
+临时设置 `process.env` 和 `import.meta.env` 中的环境变量。
 
-- 如果 `value` 为 `undefined`，该变量会从 `process.env` 和 `import.meta.env` 中移除。
-- 可多次调用以模拟多个环境变量。
-- 使用 [`rs.unstubAllEnvs()`](#rsunstuballenvs) 可恢复所有通过此方法更改的环境变量。
-
-- **示例：**
+- 传入 `undefined` 会从 `process.env` 和 `import.meta.env` 中移除该变量。
+- 多次调用会按栈叠加；调用 [`rs.unstubAllEnvs()`](#rsunstuballenvs) 可恢复所有被修改的环境变量。
 
 ```ts
 rs.stubEnv('NODE_ENV', 'test');
@@ -36,9 +33,7 @@ expect(import.meta.env.MY_VAR).toBeUndefined();
 
 <ApiMeta addedVersion="0.10.3" />
 
-`rs.stubEnv()` 返回一个 `Disposable`，可配合 `using` 语法在代码块退出时自动恢复当前 env stub。
-
-`_env` 变量以下划线开头，表示它不会被直接使用。`using` 语法要求声明一个变量，因此不能省略 `_env`，但可以使用其他变量名。
+`rs.stubEnv()` 返回一个 `Disposable`，在 `using` 代码块退出时自动恢复该变量的原始值（`using` 语法要求声明变量，例如 `_env`）：
 
 ```ts
 {
@@ -55,30 +50,17 @@ expect(import.meta.env.MY_VAR).toBeUndefined();
 
 - **类型：** `() => RstestUtilities`
 
-恢复所有通过 [`rs.stubEnv`](#rsstubenv) 更改的环境变量到原始值。
-
-- 测试后调用此方法以清理环境变量。
-- 如果配置项 [`unstubEnvs`](/config/test/unstub-envs) 启用，则每个测试前会自动调用。
-
-**示例：**
+将所有通过 [`rs.stubEnv`](#rsstubenv) 修改的环境变量恢复为原始值。启用 [`unstubEnvs`](/config/test/unstub-envs) 时会在每个测试前自动执行。
 
 ```ts
 const originalNodeEnv = process.env.NODE_ENV;
 rs.stubEnv('NODE_ENV', 'production');
-// ... 执行相关代码
+// ... 在模拟环境变量下运行代码
 rs.unstubAllEnvs();
 expect(process.env.NODE_ENV).toBe(originalNodeEnv);
 ```
 
-在多个测试中模拟环境变量时，可以在 [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) Hook 中调用 `rs.unstubAllEnvs()`，以便在每个测试结束后恢复环境变量：
-
-```ts
-import { afterEach } from '@rstest/core';
-
-afterEach(() => {
-  rs.unstubAllEnvs();
-});
-```
+如果不启用 [`unstubEnvs`](/config/test/unstub-envs)，也可以在 [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) 中调用 `rs.unstubAllEnvs()` 以便每个测试后恢复。
 
 ## rs.stubGlobal
 
@@ -86,12 +68,7 @@ afterEach(() => {
 
 - **类型：** `(name: string | number | symbol, value: unknown) => RstestUtilities & Disposable`
 
-临时设置全局变量为指定值。适用于模拟全局对象或函数。
-
-- 可多次调用以模拟多个全局变量。
-- 使用 [`rs.unstubAllGlobals()`](#rsunstuballglobals) 可恢复所有通过此方法更改的全局变量。
-
-- **示例：**
+临时将 `globalThis` 上的指定属性设置为 `value`。多次调用会按栈叠加；调用 [`rs.unstubAllGlobals()`](#rsunstuballglobals) 可恢复所有被修改的全局变量。
 
 ```ts
 rs.stubGlobal('myGlobal', 123);
@@ -105,9 +82,7 @@ expect(globalThis[Symbol.for('foo')]).toBe('bar');
 
 <ApiMeta addedVersion="0.10.3" />
 
-`rs.stubGlobal()` 返回一个 `Disposable`，可配合 `using` 语法在代码块退出时自动恢复当前 global stub。
-
-`_global` 变量以下划线开头，表示它不会被直接使用。`using` 语法要求声明一个变量，因此不能省略 `_global`，但可以使用其他变量名。
+`rs.stubGlobal()` 返回一个 `Disposable`，在 `using` 代码块退出时自动恢复该全局变量的原始值：
 
 ```ts
 {
@@ -124,29 +99,16 @@ expect(globalThis[Symbol.for('foo')]).toBe('bar');
 
 - **类型：** `() => RstestUtilities`
 
-恢复所有通过 [`rs.stubGlobal`](#rsstubglobal) 更改的全局变量到原始值。
-
-- 测试后调用此方法以清理全局变量。
-- 如果配置项 [`unstubGlobals`](/config/test/unstub-globals) 启用，则每个测试前会自动调用。
-
-**示例：**
+将所有通过 [`rs.stubGlobal`](#rsstubglobal) 修改的全局变量恢复为原始属性描述符（原本不存在的属性会被删除）。启用 [`unstubGlobals`](/config/test/unstub-globals) 时会在每个测试前自动执行。
 
 ```ts
 rs.stubGlobal('myGlobal', 123);
-// ... 执行相关代码
+// ... 在模拟全局变量下运行代码
 rs.unstubAllGlobals();
 expect(globalThis.myGlobal).toBeUndefined();
 ```
 
-在多个测试中模拟全局变量时，可以在 [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) Hook 中调用 `rs.unstubAllGlobals()`，以便在每个测试结束后恢复全局变量：
-
-```ts
-import { afterEach } from '@rstest/core';
-
-afterEach(() => {
-  rs.unstubAllGlobals();
-});
-```
+如果不启用 [`unstubGlobals`](/config/test/unstub-globals)，也可以在 [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) 中调用 `rs.unstubAllGlobals()` 以便每个测试后恢复。
 
 ## rs.setConfig
 
@@ -155,7 +117,7 @@ afterEach(() => {
 - **类型：**
 
 ```ts
-type RuntimeConfig = {
+type RuntimeOptions = {
   testTimeout?: number;
   hookTimeout?: number;
   clearMocks?: boolean;
@@ -165,17 +127,15 @@ type RuntimeConfig = {
   retry?: number;
 };
 
-type SetConfig = (config: RuntimeConfig) => void;
+type SetConfig = (config: RuntimeOptions) => void;
 ```
 
-动态更新当前测试的运行时配置。适用于需要在单个测试文件中临时覆盖某些测试设置（如超时时间、并发数、mock 行为等）的场景。
-
-**示例：**
+动态更新当前测试文件的运行时配置。
 
 ```ts
 rs.setConfig({ testTimeout: 1000, retry: 2 });
-// ... 在新的配置下运行代码
-rs.resetConfig(); // 恢复默认配置
+// ... 使用更新后的配置运行测试
+rs.resetConfig();
 ```
 
 ## rs.resetConfig
@@ -184,7 +144,7 @@ rs.resetConfig(); // 恢复默认配置
 
 - **类型：** `() => void`
 
-将通过 [`rs.setConfig`](#rssetconfig) 修改的运行时配置重置为默认值。
+将通过 [`rs.setConfig`](#rssetconfig) 修改的运行时配置恢复为当前测试文件的初始值。
 
 ## rs.getConfig
 
@@ -193,7 +153,7 @@ rs.resetConfig(); // 恢复默认配置
 - **类型：**
 
 ```ts
-type GetConfig = () => RuntimeConfig & {
+type GetConfig = () => RuntimeOptions & {
   expect: {
     poll: {
       interval: number;
@@ -203,13 +163,11 @@ type GetConfig = () => RuntimeConfig & {
 };
 ```
 
-<ApiMeta addedVersion="0.12.0" />
-
-返回值还包含合并后的 `expect.poll` 配置副本。修改该副本不会改变运行时配置。
-
 获取当前测试文件的运行时配置。
 
-**示例：**
+<ApiMeta addedVersion="0.12.0" />
+
+返回值还包含合并后的 `expect.poll` 配置副本；修改该副本不会影响运行时配置。
 
 ```ts
 const config = rs.getConfig();
@@ -234,12 +192,10 @@ type WaitFor = <T>(
 ) => Promise<T>;
 ```
 
-不断重试 `callback`，直到其执行成功（不抛错）或超时。
+不断重试 `callback`，直到执行成功（不抛错）或达到 `timeout` 超时。
 
-- 当 `options` 为数字时，会被视为 `timeout`。
-- 超时时会抛出 callback 最后一次抛出的错误。
-
-**示例：**
+- `options` 为数字时，作为 `timeout` 使用。
+- 超时时会抛出 `callback` 最后一次抛出的错误（若超时前尚未抛出过错误，则抛出超时错误）。
 
 ```ts
 await rs.waitFor(
@@ -260,6 +216,9 @@ await rs.waitFor(
 - **类型：**
 
 ```ts
+type Falsy = false | 0 | 0n | '' | null | undefined;
+type Truthy<T> = Exclude<T, Falsy>;
+
 type WaitUntilOptions = {
   timeout?: number; // 默认: 1000
   interval?: number; // 默认: 50
@@ -268,16 +227,14 @@ type WaitUntilOptions = {
 type WaitUntil = <T>(
   callback: () => T | Promise<T>,
   options?: number | WaitUntilOptions,
-) => Promise<T>;
+) => Promise<Truthy<Awaited<T>>>;
 ```
 
-仅当 `callback` 没有返回值（`undefined` 或 `null`）或返回 falsy 值时才会继续重试；当其返回 truthy 值时会立刻 resolve。
+在 `callback` 返回 falsy 值期间持续重试，并在返回首个 truthy 值时 resolve。
 
-- 当 `options` 为数字时，会被视为 `timeout`。
-- 如果 callback 抛错，会立即中断并抛出该错误。
+- `options` 为数字时，作为 `timeout` 使用。
+- 若 `callback` 抛错，会立即中断并重新抛出该错误。
 - 超时时会抛出超时错误。
-
-**示例：**
 
 ```ts
 const serverReady = await rs.waitUntil(

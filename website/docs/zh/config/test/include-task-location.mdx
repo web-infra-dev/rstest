@@ -1,5 +1,5 @@
 ---
-description: 在收集测试信息时，是否包含测试的位置信息。
+description: 在收集测试信息时为测试用例和 suite 添加行列号位置信息。
 ---
 
 # includeTaskLocation
@@ -8,11 +8,9 @@ description: 在收集测试信息时，是否包含测试的位置信息。
 - **默认值：** `false`
 - **CLI：** `--includeTaskLocation`
 
-在收集测试信息时，是否包含测试的位置信息。
+收集测试信息时，在传给 reporter 的任务对象（`TestCaseInfo`、`TestSuiteInfo`）和 `list` 命令输出中包含 `location`（`{ line, column }`）字段。
 
-启用此配置后，会为测试用例和测试套件添加行号和列号信息，这对于调试和 reporter 中收集测试信息非常有用。
-
-需要注意的是，启用此配置会导致性能小幅度下降。
+启用此选项会在测试收集阶段采集调用栈，对运行性能有轻微影响。
 
 import { Tab, Tabs } from '@theme';
 
@@ -35,17 +33,15 @@ export default defineConfig({
 
 ## 与 list 命令一起使用
 
-`includeTaskLocation` 选项在与 `list` 命令一起使用时特别有用，当您想要查看测试的确切位置时：
+在 `rstest list` 中传入 `--printLocation`，会自动启用 `includeTaskLocation` 并在每条测试旁输出 `file:line:column`：
 
 ```bash
 npx rstest list --printLocation
 ```
 
-这将自动启用 `includeTaskLocation` 并显示每个测试用例的位置信息。
-
 ## 示例输出
 
-启用后，reporter 和 list 命令将包含位置信息：
+启用 `includeTaskLocation: true` 后，reporter 收到的 `TestCaseInfo` 和 `TestSuiteInfo` 对象会包含 `location` 字段：
 
 ```json
 {

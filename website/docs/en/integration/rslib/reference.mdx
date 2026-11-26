@@ -19,9 +19,9 @@ Returns a configuration function that loads or accepts Rslib config and converts
 - **Type:** `string`
 - **Default:** `process.cwd()`
 
-The `cwd` is the working directory to resolve the Rslib config file.
+The `cwd` is the working directory used to resolve the Rslib config file (and `tsconfig.json` when auto-detecting `experimentalDecorators`).
 
-When your Rslib config is in a different directory or you are running tests in a monorepo (where your `process.cwd()` is not your config directory), you can specify the `cwd` option to resolve the Rslib config file from a different directory.
+When your Rslib config is in another directory or you run tests from a monorepo root, pass `cwd`:
 
 ```ts
 export default defineConfig({
@@ -34,9 +34,9 @@ export default defineConfig({
 #### `configPath`
 
 - **Type:** `string`
-- **Default:** `'./rslib.config.ts'`
+- **Default:** `undefined`
 
-Path to rslib config file.
+Path to the Rslib config file. When omitted, auto-discovers `rslib.config.*` in `cwd`.
 
 :::tip
 If both `config` and `configPath` are provided, `config` takes precedence as the config content.
@@ -111,7 +111,7 @@ You can then reference specific lib configurations in your Rstest config. Rstest
 This still does not copy the whole lib config verbatim. The adapter only takes the lib's `source`, `output`, `tools`, `plugins`, and `resolve` fields that are relevant to test execution, then merges them with the shared config before converting the result to Rstest format.
 
 ```ts
-// For testing the 'core' environment
+// For testing the 'core' lib
 export default defineConfig({
   extends: withRslibConfig({
     libId: 'core',
@@ -120,7 +120,7 @@ export default defineConfig({
 });
 ```
 
-When you need to test multiple parts of your application with different configurations independently, you can define multiple Rstest projects. Each project can extend a specific lib configuration by setting the `libId` option.
+When you need to test multiple library configurations independently, define multiple Rstest projects and pass `libId` to each:
 
 ```ts
 export default defineConfig({
@@ -139,10 +139,10 @@ export default defineConfig({
 
 #### `modifyLibConfig`
 
-- **Type:** `(config: RslibConfig) => RslibConfig | void`
+- **Type:** `(config: RslibConfig) => RslibConfig`
 - **Default:** `undefined`
 
-Modify the Rslib config before it gets converted to Rstest config:
+Modify the Rslib config before it gets converted to Rstest config. The callback must return the `RslibConfig` object:
 
 ```ts
 export default defineConfig({
@@ -175,43 +175,37 @@ export default defineConfig({
 
 ## Configuration mapping
 
-The adapter automatically maps these Rslib options to Rstest:
+Only the Rslib options listed below are inherited by Rstest. Unlisted build-only options such as `lib[].dts`, `lib[].bundle`, `lib[].shims`, `lib[].autoExternal`, `dev`, and `server` are ignored during conversion.
 
-Only the fields listed below are inherited. Rslib options that are not listed are ignored by default, which means test-irrelevant sections such as `dev`, `server`, and `html` are automatically pruned during conversion.
+| Rslib option             | Rstest equivalent        | Notes                                                                             |
+| ------------------------ | ------------------------ | --------------------------------------------------------------------------------- |
+| `root`                   | `root`                   | Project root directory                                                            |
+| `libId` option           | `name`                   | Selected library identifier                                                       |
+| `plugins`                | `plugins`                | Plugin configuration                                                              |
+| `source.decorators`      | `source.decorators`      | Decorator support (see below for `tsconfig.json` auto-detection)                  |
+| `source.assetsInclude`   | `source.assetsInclude`   | Additional static asset patterns                                                  |
+| `source.define`          | `source.define`          | Global constants                                                                  |
+| `source.include`         | `source.include`         | Source inclusion patterns                                                         |
+| `source.exclude`         | `source.exclude`         | Source exclusion patterns                                                         |
+| `source.transformImport` | `source.transformImport` | On-demand import transform rules                                                  |
+| `source.tsconfigPath`    | `source.tsconfigPath`    | TypeScript config path                                                            |
+| `resolve`                | `resolve`                | Module resolution                                                                 |
+| `output.cssModules`      | `output.cssModules`      | CSS modules configuration                                                         |
+| `output.module`          | `output.module`          | Uses `output.module`; otherwise `true` unless selected `lib` sets `format: 'cjs'` |
+| `performance.buildCache` | `performance.buildCache` | Reused with rstest-aware defaults                                                 |
+| `tools.rspack`           | `tools.rspack`           | Rspack configuration                                                              |
+| `tools.swc`              | `tools.swc`              | SWC configuration                                                                 |
+| `tools.bundlerChain`     | `tools.bundlerChain`     | Bundler chain configuration                                                       |
+| `output.target`          | `testEnvironment`        | `'happy-dom'` for `'web'`, `'node'` for `'node'`, other targets, and when unset   |
 
-| Rslib option                 | Rstest equivalent        | Notes                                                  |
-| ---------------------------- | ------------------------ | ------------------------------------------------------ |
-| `root`                       | `root`                   | Project root directory                                 |
-| `lib.id` selected by `libId` | `name`                   | Selected library identifier                            |
-| `plugins`                    | `plugins`                | Plugin configuration                                   |
-| `source.decorators`          | `source.decorators`      | Decorator support                                      |
-| `source.assetsInclude`       | `source.assetsInclude`   | Additional static asset patterns                       |
-| `source.define`              | `source.define`          | Global constants                                       |
-| `source.include`             | `source.include`         | Source inclusion patterns                              |
-| `source.exclude`             | `source.exclude`         | Source exclusion patterns                              |
-| `source.transformImport`     | `source.transformImport` | On-demand import transform rules                       |
-| `source.tsconfigPath`        | `source.tsconfigPath`    | TypeScript config path                                 |
-| `resolve`                    | `resolve`                | Module resolution                                      |
-| `output.cssModules`          | `output.cssModules`      | CSS modules configuration                              |
-| `output.module`              | `output.module`          | Uses `output.module`, or falls back to `lib.format`    |
-| `tools.rspack`               | `tools.rspack`           | Rspack configuration                                   |
-| `tools.swc`                  | `tools.swc`              | SWC configuration                                      |
-| `tools.bundlerChain`         | `tools.bundlerChain`     | Bundler chain configuration                            |
-| `output.target`              | `testEnvironment`        | 'happy-dom' for web, 'node' for node and other targets |
+The adapter also applies these rules during conversion:
+
+- **Plugin removal:** Removes the `rsbuild:dts` and `rsbuild:type-check` plugins because declaration generation and type checking do not run in the test pipeline.
+- **Decorator auto-detection:** When neither your Rstest config (`source.tsconfigPath` or `source.decorators.version`) nor your Rslib config (`source.decorators.version`) sets a decorator version, the adapter reads the TypeScript config at Rslib's `source.tsconfigPath` (or `tsconfig.json` in `cwd`) and sets `source.decorators.version` to `'legacy'` if `compilerOptions.experimentalDecorators` is enabled.
 
 ## Debug config
 
-To see the resolved configuration returned by the adapter, wrap it and log the result:
-
-```typescript
-export default defineConfig({
-  extends: async (user) => {
-    const config = await withRslibConfig({ libId: 'react' })(user);
-    console.log('Extended config:', JSON.stringify(config, null, 2));
-    return config;
-  },
-});
-```
+Run with `DEBUG=rstest` to write the resolved Rstest, Rsbuild, and Rspack configurations to disk. See [Debug mode](/guide/debug/debugging#debug-mode).
 
 ## Related documentation
 

@@ -1,43 +1,58 @@
 ---
 title: Hooks
-description: Hooks allow you to run setup and teardown logic before or after your tests or test suites.
+description: Run setup and teardown logic before or after tests and test suites.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Hooks
 
-Hooks allow you to run setup and teardown logic before or after your tests or test suites.
+Register setup and teardown callbacks for suites and individual tests.
 
 ## beforeAll
 
-- **Type:** `(fn: (ctx: SuiteContext) => void | ((ctx: SuiteContext) => void | Promise<void>) | Promise<void | ((ctx: SuiteContext) => void | Promise<void>)>, timeout?: number) => void`
+- **Type:**
 
-Runs once before all tests in the current suite.
+```ts
+interface SuiteContext {
+  filepath: string;
+  meta: TaskMeta;
+}
 
-Rstest does not run this hook when the current suite has no tests to run. For example, this happens when all tests are skipped, excluded by test name filtering, or not selected by `test.only`.
+type BeforeAll = (
+  fn: (
+    ctx: SuiteContext,
+  ) =>
+    | void
+    | ((ctx: SuiteContext) => void | Promise<void>)
+    | Promise<void | ((ctx: SuiteContext) => void | Promise<void>)>,
+  timeout?: number,
+) => void;
+```
+
+Runs once before any test in the current suite (or once for the file when called at top level).
+
+Rstest skips `beforeAll` when the suite has no runnable tests — for example, when all tests are skipped, filtered out by name, or unselected by `test.only`.
 
 ```ts
 import { beforeAll } from '@rstest/core';
 
 beforeAll(async (ctx) => {
-  // Setup logic before all tests
-  // ctx.filepath gives the current test file path
+  // ctx.filepath holds the current test file path
   ctx.meta.startedAt = Date.now();
 });
 ```
 
-`beforeAll` also supports returning a cleanup function. It runs after the suite's `afterAll` hooks, in the order configured by [`sequence.hooks`](/config/test/sequence#sequencehooks):
+Returning a function from `beforeAll` registers a suite cleanup callback that runs after the suite's `afterAll` hooks, in the order configured by [`sequence.hooks`](/config/test/sequence#sequencehooks):
 
 ```ts
 import { beforeAll } from '@rstest/core';
 
 beforeAll(async () => {
-  const cleanUp = await doSomething();
+  const resource = await acquireResource();
 
-  // Cleanup logic after all tests
   return async () => {
-    await cleanUp();
+    await resource.close();
   };
 });
 ```
@@ -46,30 +61,25 @@ beforeAll(async () => {
 
 - **Type:** `(fn: (ctx: SuiteContext) => void | Promise<void>, timeout?: number) => void`
 
-Runs once after all tests in the current suite.
-
-Rstest does not run this hook when the current suite has no tests to run. For example, this happens when all tests are skipped, excluded by test name filtering, or not selected by `test.only`.
+Runs once after all tests in the current suite finish. Skipped when the suite has no runnable tests.
 
 ```ts
 import { afterAll } from '@rstest/core';
 
 afterAll(async (ctx) => {
-  // Cleanup logic after all tests
   ctx.meta.finished = true;
 });
 ```
 
 <ApiMeta addedVersion="0.11.1" />
 
-`ctx.meta` is the mutable metadata object for the current suite. If the suite was declared with `describe(name, { meta }, fn)`, `ctx.meta` starts with that metadata after suite inheritance has been applied. File-level hooks write metadata to `TestFileResult.meta`; hooks inside a `describe` block write metadata to that suite result passed to custom reporters.
+`ctx.meta` is the mutable metadata object for the current suite. When a suite is declared with `describe(name, { meta }, fn)`, `ctx.meta` starts with the inherited metadata. File-level hooks write to `TestFileResult.meta`; hooks inside `describe` write to that suite's `TestResult.meta` in custom reporters.
 
 ## beforeEach
 
 - **Type:** `<ExtraContext = object>(fn: (ctx: TestContext & ExtraContext) => void | ((ctx: TestContext & ExtraContext) => void | Promise<void>) | Promise<void | ((ctx: TestContext & ExtraContext) => void | Promise<void>)>, timeout?: number) => void`
 
-See [`TestContext`](/api/runtime-api/test-api/test#testcontext) for the `ctx` fields (the same applies to the per-test hooks below).
-
-Runs before each test in the current suite.
+Runs before each test in the current suite. See [`TestContext`](/api/runtime-api/test-api/test#testcontext) for the fields on `ctx` (same for `afterEach`, `onTestFinished`, and `onTestFailed`).
 
 ```ts
 import { beforeEach } from '@rstest/core';
@@ -79,26 +89,23 @@ beforeEach(async () => {
 });
 ```
 
-`beforeEach` also supports returning a cleanup function. It runs after all `afterEach` hooks for the test, in the order configured by [`sequence.hooks`](/config/test/sequence#sequencehooks):
+Returning a function from `beforeEach` registers a per-test cleanup callback that runs after all `afterEach` hooks for that test, in the order configured by [`sequence.hooks`](/config/test/sequence#sequencehooks):
 
 ```ts
 import { beforeEach } from '@rstest/core';
 
 beforeEach(async () => {
-  const cleanUp = await doSomething();
+  const handle = await openHandle();
 
-  // Cleanup logic after each test
   return async () => {
-    await cleanUp();
+    await handle.close();
   };
 });
 ```
 
 <ApiMeta addedVersion="0.11.4" />
 
-The `beforeEach` and `afterEach` callbacks, as well as a cleanup returned by `beforeEach`, can use fixtures created with `test.extend`. Pass the fixture type as `ExtraContext`; Rstest initializes each fixture before the callback that first requests it. See [Using fixtures in hooks](/api/runtime-api/test-api/test#using-fixtures-in-hooks).
-
-List fixture dependencies through direct object destructuring in the hook parameter. Rstest does not infer dependencies from the hook body. Object rest properties and default values are not supported in fixture-aware callbacks.
+`beforeEach`, `afterEach`, and cleanups returned from `beforeEach` can consume fixtures created with `test.extend`. Pass the fixture interface as `ExtraContext` and destructure the required fixtures directly in the callback parameter. Rstest does not infer fixture dependencies from the hook body, and object rest properties or default values are not supported. See [Using fixtures in hooks](/api/runtime-api/test-api/test#using-fixtures-in-hooks).
 
 ## afterEach
 
@@ -118,25 +125,24 @@ afterEach(async () => {
 
 - **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
-Called after the test has finished running **whatever the test result is**. This can be used to perform cleanup actions. This hook will be called after `afterEach`.
+Registers a callback that runs after the current test finishes, regardless of whether it passed or failed. Runs after `afterEach`. Must be called inside a running test.
 
 ```ts
 import { onTestFinished, test } from '@rstest/core';
 
-test('test server', () => {
+test('closes server after test', () => {
   const server = startServer();
-  // Register a cleanup function to close the server after the test
   onTestFinished(() => server.close());
 
-  server.listen(3000, () => {
-    console.log('Server is running on port 3000');
-  });
+  server.listen(3000);
 });
 ```
 
-It should be noted that when you use the `onTestFinished` hook in concurrent tests, you should get the hook from the test context. This is because Rstest cannot accurately track the specific test to which the global `onTestFinished` hook belongs in concurrent tests.
+In concurrent tests, read `onTestFinished` from the test context parameter rather than the top-level import so Rstest binds the cleanup to that specific test:
 
 ```ts
+import { describe, test } from '@rstest/core';
+
 describe.concurrent('concurrent suite', () => {
   test('test 1', async ({ onTestFinished }) => {
     /* ... */
@@ -151,22 +157,16 @@ describe.concurrent('concurrent suite', () => {
 
 - **Type:** `(fn: (ctx: TestContext) => void | Promise<void>, timeout?: number) => void`
 
-Called after the test has failed.
+Registers a callback that runs only when the current test fails. Must be called inside a running test.
 
 ```ts
 import { onTestFailed, test } from '@rstest/core';
 
-test('test server', () => {
-  const server = startServer();
-
+test('logs errors on failure', () => {
   onTestFailed(({ task }) => {
     console.log(task.result?.errors);
-  });
-
-  server.listen(3000, () => {
-    console.log('Server is running on port 3000');
   });
 });
 ```
 
-It should be noted that when you use the `onTestFailed` hook in concurrent tests, you should get the hook from the test context. This is because Rstest cannot accurately track the specific test to which the global `onTestFailed` hook belongs in concurrent tests.
+In concurrent tests, read `onTestFailed` from the test context parameter rather than the top-level import so Rstest binds the hook to that specific test.

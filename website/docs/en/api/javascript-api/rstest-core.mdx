@@ -1,30 +1,49 @@
 ---
-description: Core JavaScript APIs provided by Rstest, including helpers for defining, merging, and loading test configurations.
+description: Core JavaScript APIs exported from @rstest/core for defining, merging, and loading configurations.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Rstest core
 
-Rstest offers these core methods.
+Core configuration functions exported from `@rstest/core`.
 
 ## defineConfig
 
-This function helps you to autocomplete configuration types. It accepts a Rstest config object, or a function that returns a config.
+Provides type inference and excess-property checking for an Rstest configuration object or factory function.
 
 - **Type:**
 
 ```ts
+function defineConfig<
+  const Config extends RstestConfig,
+  const Definition extends Config | (() => Config) | (() => Promise<Config>),
+>(
+  config: Definition &
+    (Definition extends (...args: never[]) => infer CallbackResult
+      ? [Awaited<CallbackResult>] extends [RstestConfig]
+        ? unknown
+        : never
+      : RstestConfig &
+          Record<Exclude<keyof Definition, keyof RstestConfig>, never>),
+): Definition extends (...args: never[]) => infer CallbackResult
+  ? [CallbackResult] extends [RstestConfig]
+    ? RstestConfigSyncFn
+    : RstestConfigAsyncFn
+  : RstestConfig;
+function defineConfig<const Config extends RstestConfig>(
+  config: () => Config,
+): RstestConfigSyncFn;
+function defineConfig<const Config extends RstestConfig>(
+  config: () => Promise<Config>,
+): RstestConfigAsyncFn;
 function defineConfig(config: RstestConfig): RstestConfig;
-function defineConfig(config: () => RstestConfig): () => RstestConfig;
-function defineConfig(
-  config: () => Promise<RstestConfig>,
-): () => Promise<RstestConfig>;
+function defineConfig(config: RstestConfigExport): RstestConfigExport;
 ```
 
 - **Examples:**
 
-Pass a config object directly:
+Pass a config object or a sync/async factory function:
 
 ```ts
 import { defineConfig } from '@rstest/core';
@@ -38,21 +57,10 @@ export default defineConfig({
 });
 ```
 
-Return a config from a synchronous factory:
-
 ```ts
 import { defineConfig } from '@rstest/core';
 
-export default defineConfig(() => ({
-  testTimeout: 10000,
-}));
-```
-
-Return a config from an asynchronous factory:
-
-```ts
-import { defineConfig } from '@rstest/core';
-
+// Or return a config from a sync (`() => ({ ... })`) or async factory:
 export default defineConfig(async () => ({
   testTimeout: 10000,
 }));
@@ -60,7 +68,7 @@ export default defineConfig(async () => ({
 
 ## defineProject
 
-This function helps you to autocomplete configuration types for [Rstest Project](/guide/basic/projects). It accepts a Rstest project config object, or a function that returns a config.
+Provides type inference for an [Rstest Project](/guide/basic/projects) config file. Accepts a project config object, a nested `projects` object, or a sync/async factory function returning either.
 
 - **Type:**
 
@@ -69,21 +77,27 @@ type NestedProjectConfig = {
   projects: (InlineProjectConfig | string)[];
 };
 
-type ProjectConfigExport = ProjectConfig | NestedProjectConfig;
-
+function defineProject<
+  const Config extends ProjectConfig | NestedProjectConfig,
+>(
+  config: () => Config,
+): Config extends NestedProjectConfig
+  ? () => NestedProjectConfig
+  : () => ProjectConfig;
+function defineProject<
+  const Config extends ProjectConfig | NestedProjectConfig,
+>(
+  config: () => Promise<Config>,
+): Config extends NestedProjectConfig
+  ? () => Promise<NestedProjectConfig>
+  : () => Promise<ProjectConfig>;
 function defineProject(config: ProjectConfig): ProjectConfig;
 function defineProject(config: NestedProjectConfig): NestedProjectConfig;
-function defineProject(
-  config: () => ProjectConfigExport,
-): () => ProjectConfigExport;
-function defineProject(
-  config: () => Promise<ProjectConfigExport>,
-): () => Promise<ProjectConfigExport>;
 ```
 
 - **Examples:**
 
-Pass a project config object directly:
+Pass a project config object or a sync/async factory function:
 
 ```ts
 import { defineProject } from '@rstest/core';
@@ -94,29 +108,17 @@ export default defineProject({
 });
 ```
 
-Return a project config from a synchronous factory:
-
 ```ts
 import { defineProject } from '@rstest/core';
 
-export default defineProject(() => ({
-  root: './apps/web',
-  testEnvironment: 'node',
-}));
-```
-
-Return a project config from an asynchronous factory:
-
-```ts
-import { defineProject } from '@rstest/core';
-
+// Or return a project config from a sync (`() => ({ ... })`) or async factory:
 export default defineProject(async () => ({
   root: './apps/web',
   testEnvironment: 'node',
 }));
 ```
 
-Define multiple nested projects:
+Define nested projects:
 
 ```ts
 import { defineProject } from '@rstest/core';
@@ -135,17 +137,15 @@ export default defineProject({
 });
 ```
 
-Use `defineProject` for the top-level export of a project config file. If that file returns a nested `projects` object, the object items inside `projects` are still inline projects.
+Use `defineProject` for the top-level export of a project config file. Object items inside a returned `projects` array remain inline projects.
 
-Compared with `defineInlineProject`, `defineProject` does not require `name` on the top-level exported project. If `name` is omitted, Rstest will resolve it the same way as the [name](/config/test/name) option: first from the current project's `package.json`, then from the folder name.
+Unlike `defineInlineProject`, `defineProject` does not require `name` on the top-level project. When omitted, Rstest resolves `name` using the [name](/config/test/name) option rules: first from the project's `package.json`, then from its directory name.
 
 ## defineInlineProject
 
 <ApiMeta addedVersion="0.9.6" />
 
-This function helps you to autocomplete inline project configuration types inside `defineConfig({ projects: [...] })`. Inline projects must include a `name`.
-
-Unlike `defineProject`, `defineInlineProject` is for object items inside a `projects` array. Inline projects must provide `name` explicitly because they do not have a standalone project root to infer it from.
+Provides type inference for an inline project entry inside `defineConfig({ projects: [...] })`. Inline projects must specify `name` because they do not have a standalone config file to infer it from.
 
 - **Type:**
 
@@ -171,7 +171,7 @@ export default defineConfig({
 
 ## mergeRstestConfig
 
-Merge multiple Rstest config objects into a single config. It deeply merges each configuration object, automatically combining multiple function values into an array of sequentially executed functions, and returns a merged configuration object.
+Deeply merges multiple Rstest config objects into a single config. Multiple function values are combined into sequentially executed functions (except under `browser`, which uses plain deep merge so arrays and functions are replaced). Later configs replace rather than concatenate `include`, `forceRerunTriggers`, `reporters`, `coverage.reporters`, and `exclude` when passed in `{ patterns, override: true }` form.
 
 - **Type:**
 
@@ -198,7 +198,7 @@ const config = mergeRstestConfig(
 
 ## mergeProjectConfig
 
-Merge multiple Project config objects into a single config.
+Deeply merges multiple project config objects into a single config using the same merge rules as `mergeRstestConfig`.
 
 - **Type:**
 
@@ -224,15 +224,15 @@ const config = mergeProjectConfig(
 
 ## loadConfig
 
-Load Rstest configuration.
+Loads an Rstest config file and resolves any `extends` entries.
 
 - **Type:**
 
 ```ts
 function loadConfig(params?: {
-  // Default is process.cwd()
+  // Defaults to process.cwd()
   cwd?: string;
-  // Specify the configuration file (relative or absolute path)
+  // Config file path (relative or absolute)
   path?: string;
   envMode?: string;
   configLoader?: 'auto' | 'jiti' | 'native';
@@ -257,4 +257,4 @@ console.log('Config loaded from:', filePath);
 console.log('Config:', content);
 ```
 
-If the Rstest config file does not exist in the cwd directory, the return value of the loadConfig method is `{ content: {}, filePath: null, dependencies: [] }`.
+If no Rstest config file exists in `cwd`, `loadConfig` returns `{ content: {}, filePath: null, dependencies: [] }`.

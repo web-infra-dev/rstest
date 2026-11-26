@@ -1,5 +1,5 @@
 ---
-description: "Rstest provides a debug mode to troubleshoot problems, you can add the DEBUG=rstest environment variable when testing to enable Rstest's debug mode, and you can also debug by setting breakpoints in VS Code."
+description: Debug Rstest builds and tests with DEBUG=rstest, worker inspector flags, Browser Mode headed runs, VS Code breakpoints, and leak detection.
 ---
 
 import { Prompt } from '@rspress/core/theme';
@@ -8,73 +8,57 @@ import { Prompt } from '@rspress/core/theme';
 
 ## Debug mode
 
-Rstest provides a debug mode to troubleshoot problems, you can add the `DEBUG=rstest` environment variable when testing to enable Rstest's debug mode.
+Enable debug mode with the `DEBUG=rstest` environment variable (comma-separated values containing `rstest`, `rsbuild`, `builder`, or `*` are accepted, case-insensitively):
 
 ```bash
 DEBUG=rstest pnpm test
 ```
 
-In debug mode, Rstest will:
+In debug mode, Rstest:
 
-- Write test temporary outputs to disk
-- Write the Rstest config, Rsbuild config and Rspack config to the dist directory
-- Show full error stack traces
-- Set logger level to `verbose`
+- Writes temporary test build outputs to disk
+- Writes the resolved Rstest, Rsbuild, and Rspack configs to disk
+- Prints full error stack traces
+- Sets logger level to `verbose` and disables terminal screen clearing in watch mode
 
 ### Rstest config file
 
-In debug mode, Rstest will automatically generate `dist/.rstest-temp/rsbuild/rstest.config.mjs` file, which contains the final generated Rstest config. In this file, you can know the final result of the Rstest config you passed in after being processed by the framework and Rstest.
+In debug mode, Rstest writes the resolved configs to `dist/.rstest-temp/.rsbuild/` (or `<output.distPath.root>/.rsbuild/` if configured):
 
-The content of the file is as follows:
+- `rstest.config.mjs`: resolved Rstest config
+- `rsbuild.config.mjs`: generated Rsbuild config
+- `rspack.config.<project>.mjs`: generated Rspack config for each project (for example, `rspack.config.rstest.mjs`)
 
-```js title="rstest.config.mjs"
+For the default configuration, `dist/.rstest-temp/.rsbuild/rstest.config.mjs` looks similar to:
+
+```js title="dist/.rstest-temp/.rsbuild/rstest.config.mjs"
 export default {
+  root: '/path/to/project',
   name: 'rstest',
   include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-  exclude: [
-    '**/node_modules/**',
-    '**/dist/**',
-    '**/.{idea,git,cache,output,temp}/**',
-    '**/dist/.rstest-temp',
-  ],
-  includeSource: [],
-  pool: {
-    type: 'forks',
-  },
-  isolate: true,
-  globals: false,
-  passWithNoTests: false,
-  update: false,
-  testTimeout: 5000,
-  testEnvironment: 'node',
-  retry: 0,
-  clearMocks: false,
-  resetMocks: false,
-  restoreMocks: false,
-  slowTestThreshold: 300,
-  // other configs...
+  // ...
 };
 ```
 
-For a complete introduction to Rstest config, please see the [Configure Rstest](/guide/basic/configure-rstest) chapter.
+See [Configure Rstest](/guide/basic/configure-rstest) for all configuration options.
 
 ## View test temporary outputs
 
-In the [debug mode](#debug-mode) or when [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled, Rstest will write test temporary outputs to disk. You can view the files in `dist/.rstest-temp` directory to help you troubleshoot problems.
+In [debug mode](#debug-mode) or when [dev.writeToDisk](/config/build/dev#devwritetodisk) is enabled, Rstest writes compiled test bundles and source maps to `dist/.rstest-temp` (or `output.distPath.root`).
 
 ### Inspect bundle coverage
 
-If a Node.js test bundle is larger than expected, enable [V8 coverage](/config/test/coverage#v8-provider) and set `DEBUG=rstest:bundle-coverage` to see which generated files the test runner received and which parts of them executed.
+If a Node.js test bundle is larger than expected, enable [V8 coverage](/config/test/coverage#v8-provider) and set `DEBUG=rstest:bundle-coverage` to inspect which generated files the test runner received and which parts executed:
 
 ```bash
 DEBUG=rstest:bundle-coverage pnpm rstest run --coverage --coverage.provider v8
 ```
 
-Rstest prints the path to `.rstest/bundle-coverage-<timestamp>.json` under the Rstest root directory. For each test file, `assets` lists the size of each generated file in bytes, and `rawV8` contains V8 execution ranges for the generated code before source-map remapping. You can pass a test file filter to `rstest run` to focus on one bundle.
+Rstest writes `.rstest/bundle-coverage-<timestamp>.json` under the project root and prints its path. For each test file, `assets` records the byte size of each generated file, and `rawV8` records V8 execution ranges before source-map remapping. Pass a test file filter to `rstest run` to inspect a single bundle.
 
-A dependency fully replaced by `rs.mock()` can still be bundled, so use [`output.externals`](/config/build/output#outputexternals) if you want to leave it out of the bundle.
+A dependency fully replaced by `rs.mock()` can still be bundled. Use [`output.externals`](/config/build/output#outputexternals) to exclude it from the bundle.
 
-If your coding agent supports skills, install `rstest-debugging`, then copy the prompt below.
+If your coding agent supports skills, install `rstest-debugging` and use the prompt below:
 
 ```bash
 npx skills add rstackjs/agent-skills --skill rstest-debugging
@@ -86,11 +70,38 @@ npx skills add rstackjs/agent-skills --skill rstest-debugging
   prompt="Use the rstest-debugging skill to inspect bundle coverage for this project's Node.js tests, trace why large dependencies are bundled, and verify any proposed change against the same tests."
 />
 
+## Debugging test workers
+
+Rstest strips `--inspect*` and `--debug-port` flags passed to the host `node` process before spawning workers so worker ports do not collide. Running `node --inspect ./node_modules/@rstest/core/bin/rstest.js` only attaches the debugger to the main Rstest process.
+
+To attach a Node.js inspector to a test worker, pass `--inspect-brk` through [`pool.execArgv`](/config/test/pool#pass-nodejs-flags-to-workers), limit execution to one worker with `--pool.maxWorkers=1`, and disable timeouts with `--testTimeout=0`:
+
+```bash
+npx rstest run --pool.execArgv=--inspect-brk --pool.maxWorkers=1 --testTimeout=0
+```
+
+When `pool.execArgv` includes `--inspect*` (or the host process itself is being inspected), Rstest automatically configures inline source maps (`inline-nosources-source-map`) and splits chunks to 1 MB so breakpoints resolve cleanly to your test source files.
+
+## Debugging browser mode
+
+To inspect DOM state, console output, or browser DevTools during [Browser Mode](/guide/browser-testing) tests, run with `--browser.headless=false` to open a visible browser window:
+
+```bash
+npx rstest run --browser.headless=false
+```
+
+When `browser.headless` is `true` (the default in CI), Rstest saves a PNG screenshot under `.rstest/screenshots/` on test failure unless [`browser.screenshotFailures`](/config/test/browser#screenshotfailures) is disabled.
+
+## Debugging async leaks and memory
+
+- Pass `--detectAsyncLeaks` to fail test files that leave active async resources (such as unclosed timers) behind and report their creation stacks. See [`detectAsyncLeaks`](/config/test/detect-async-leaks).
+- Pass `--logHeapUsage` to print V8 `heapUsed` after each test file and test case in Node.js pools. See [`logHeapUsage`](/config/test/log-heap-usage).
+
 ## Debugging in VS Code
 
-Rstest supports debugging in VS Code using `debugger` statements or breakpoints. Just open the `JavaScript Debug Terminal` and run the test command in the terminal.
+You can debug tests in VS Code using `debugger` statements or editor breakpoints by opening a `JavaScript Debug Terminal` and running your test command there.
 
-You can also add a dedicated launch configuration to debug a test file in VS Code:
+To debug the current test file with `F5` or the `Run and Debug` panel, add a launch configuration to `.vscode/launch.json`:
 
 ```json title=".vscode/launch.json"
 {
@@ -109,5 +120,3 @@ You can also add a dedicated launch configuration to debug a test file in VS Cod
   ]
 }
 ```
-
-Then you can start debugging the current test file directly in VS Code by pressing `F5` or go to the `Run and Debug` panel.

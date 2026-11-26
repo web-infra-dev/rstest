@@ -9,9 +9,9 @@ overviewHeaders: []
 - **默认值：** `false`
 - **CLI：** `--globals`
 
-为测试文件提供全局的 Rstest API，如 `expect`、`test`、`describe` 等。
+将 `expect`、`test`、`describe` 等 Rstest API 注入测试文件的全局作用域，无需再从 `@rstest/core` 导入。
 
-默认情况下，Rstest 不提供全局 API。如果你想像使用 Jest 一样全局使用这些 API，可以在配置中添加 `globals: true`或者在命令行中传入 `--globals` 选项。
+默认情况下，Rstest 不注册全局 API。如需像 Jest 一样直接全局调用，可在配置中设置 `globals: true` 或在命令行中传入 `--globals` 选项。
 
 import { Tab, Tabs } from '@theme';
 
@@ -64,11 +64,11 @@ describe('Index', () => {
 - `rs`
 - `rstest`
 
-`rs` 和 `rstest` 是等价别名，提供相同的 runtime utility。
+`rs` 和 `rstest` 互为别名，提供相同的运行时工具 API。
 
 ### 类型支持
 
-为了让 TypeScript 正确识别全局 API，推荐在测试文件对应的 `tsconfig.json` 中，将 `@rstest/core/globals` 添加到 `compilerOptions.types`：
+为了让 TypeScript 识别全局 API 的类型，建议在测试对应的 `tsconfig.json` 中将 `@rstest/core/globals` 添加到 `compilerOptions.types`：
 
 ```json title=tsconfig.json
 {

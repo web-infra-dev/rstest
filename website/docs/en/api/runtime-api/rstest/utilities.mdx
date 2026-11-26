@@ -1,12 +1,12 @@
 ---
-description: Utility functions provided by Rstest, such as stubbing environment variables and globals.
+description: Runtime utility functions provided by Rstest for stubbing environment variables and globals, updating runtime config, and polling async conditions.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Utilities
 
-A set of useful utility functions.
+Runtime utilities on `rs` (`rstest`) for stubbing environment variables and globals, modifying runtime config, and polling async conditions.
 
 ## rs.stubEnv
 
@@ -14,13 +14,10 @@ A set of useful utility functions.
 
 - **Type:** `(name: string, value: string | undefined) => RstestUtilities & Disposable`
 
-Temporarily sets an environment variable in `process.env` and `import.meta.env` to the specified value. Useful for testing code that depends on environment variables.
+Temporarily sets an environment variable on `process.env` and `import.meta.env`.
 
-- If `value` is `undefined`, the variable will be removed from `process.env` and `import.meta.env`.
-- You can call this multiple times to stub multiple variables.
-- Use [`rs.unstubAllEnvs()`](#rsunstuballenvs) to restore all environment variables changed by this method.
-
-- **Example:**
+- Passing `undefined` deletes the variable from `process.env` and `import.meta.env`.
+- Subsequent calls stack; [`rs.unstubAllEnvs()`](#rsunstuballenvs) restores all stubbed variables.
 
 ```ts
 rs.stubEnv('NODE_ENV', 'test');
@@ -36,9 +33,7 @@ expect(import.meta.env.MY_VAR).toBeUndefined();
 
 <ApiMeta addedVersion="0.10.3" />
 
-`rs.stubEnv()` returns a `Disposable` that works with the `using` syntax to restore the current env stub automatically when the block exits.
-
-The `_env` binding is intentionally unused, as indicated by its leading underscore. A binding is required by the `using` syntax, so it cannot be omitted.
+`rs.stubEnv()` returns a `Disposable` that restores that stub when the `using` block exits (`using` requires a binding variable such as `_env`):
 
 ```ts
 {
@@ -55,30 +50,17 @@ The `_env` binding is intentionally unused, as indicated by its leading undersco
 
 - **Type:** `() => RstestUtilities`
 
-Restores all environment variables that were changed using [`rs.stubEnv`](#rsstubenv) to their original values.
-
-- Call this after your test to clean up any environment changes.
-- Automatically called before each test if the [`unstubEnvs`](/config/test/unstub-envs) config is enabled.
-
-**Example:**
+Restores all environment variables changed by [`rs.stubEnv`](#rsstubenv) to their original values. Automatically runs before each test when [`unstubEnvs`](/config/test/unstub-envs) is enabled.
 
 ```ts
 const originalNodeEnv = process.env.NODE_ENV;
 rs.stubEnv('NODE_ENV', 'production');
-// ... run some code
+// ... run code under stubbed env
 rs.unstubAllEnvs();
 expect(process.env.NODE_ENV).toBe(originalNodeEnv);
 ```
 
-When stubbing environment variables in multiple tests, call `rs.unstubAllEnvs()` in an [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) hook to restore them after every test:
-
-```ts
-import { afterEach } from '@rstest/core';
-
-afterEach(() => {
-  rs.unstubAllEnvs();
-});
-```
+To restore manually after every test instead of enabling [`unstubEnvs`](/config/test/unstub-envs), call `rs.unstubAllEnvs()` in [`afterEach`](/api/runtime-api/test-api/hooks#aftereach).
 
 ## rs.stubGlobal
 
@@ -86,12 +68,7 @@ afterEach(() => {
 
 - **Type:** `(name: string | number | symbol, value: unknown) => RstestUtilities & Disposable`
 
-Temporarily sets a global variable to the specified value. Useful for mocking global objects or functions.
-
-- You can call this multiple times to stub multiple globals.
-- Use [`rs.unstubAllGlobals()`](#rsunstuballglobals) to restore all globals changed by this method.
-
-- **Example:**
+Temporarily sets a property on `globalThis` to `value`. Subsequent calls stack; use [`rs.unstubAllGlobals()`](#rsunstuballglobals) to restore all stubbed globals.
 
 ```ts
 rs.stubGlobal('myGlobal', 123);
@@ -105,9 +82,7 @@ expect(globalThis[Symbol.for('foo')]).toBe('bar');
 
 <ApiMeta addedVersion="0.10.3" />
 
-`rs.stubGlobal()` returns a `Disposable` that works with the `using` syntax to restore the current global stub automatically when the block exits.
-
-The `_global` binding is intentionally unused, as indicated by its leading underscore. A binding is required by the `using` syntax, so it cannot be omitted.
+`rs.stubGlobal()` returns a `Disposable` that restores that stub when the `using` block exits:
 
 ```ts
 {
@@ -124,29 +99,16 @@ The `_global` binding is intentionally unused, as indicated by its leading under
 
 - **Type:** `() => RstestUtilities`
 
-Restores all global variables that were changed using [`rs.stubGlobal`](#rsstubglobal) to their original values.
-
-- Call this after your test to clean up any global changes.
-- Automatically called before each test if the [`unstubGlobals`](/config/test/unstub-globals) config is enabled.
-
-**Example:**
+Restores all global properties changed by [`rs.stubGlobal`](#rsstubglobal) to their original descriptors (or deletes properties that did not exist). Automatically runs before each test when [`unstubGlobals`](/config/test/unstub-globals) is enabled.
 
 ```ts
 rs.stubGlobal('myGlobal', 123);
-// ... run some code
+// ... run code under stubbed global
 rs.unstubAllGlobals();
 expect(globalThis.myGlobal).toBeUndefined();
 ```
 
-When stubbing global variables in multiple tests, call `rs.unstubAllGlobals()` in an [`afterEach`](/api/runtime-api/test-api/hooks#aftereach) hook to restore them after every test:
-
-```ts
-import { afterEach } from '@rstest/core';
-
-afterEach(() => {
-  rs.unstubAllGlobals();
-});
-```
+To restore manually after every test instead of enabling [`unstubGlobals`](/config/test/unstub-globals), call `rs.unstubAllGlobals()` in [`afterEach`](/api/runtime-api/test-api/hooks#aftereach).
 
 ## rs.setConfig
 
@@ -155,7 +117,7 @@ afterEach(() => {
 - **Type:**
 
 ```ts
-type RuntimeConfig = {
+type RuntimeOptions = {
   testTimeout?: number;
   hookTimeout?: number;
   clearMocks?: boolean;
@@ -165,17 +127,15 @@ type RuntimeConfig = {
   retry?: number;
 };
 
-type SetConfig = (config: RuntimeConfig) => void;
+type SetConfig = (config: RuntimeOptions) => void;
 ```
 
-Dynamically updates the runtime configuration for the current test file. Useful for temporarily overriding test settings such as timeouts, concurrency, or mock behavior.
-
-**Example:**
+Updates the runtime configuration for the current test file.
 
 ```ts
 rs.setConfig({ testTimeout: 1000, retry: 2 });
-// ... run some code with the new config
-rs.resetConfig(); // Restore to default config
+// ... run tests with the updated config
+rs.resetConfig();
 ```
 
 ## rs.resetConfig
@@ -184,7 +144,7 @@ rs.resetConfig(); // Restore to default config
 
 - **Type:** `() => void`
 
-Resets the runtime configuration that was changed using [`rs.setConfig`](#rssetconfig) back to the default values.
+Resets runtime configuration fields modified by [`rs.setConfig`](#rssetconfig) back to their initial values for the test file.
 
 ## rs.getConfig
 
@@ -193,7 +153,7 @@ Resets the runtime configuration that was changed using [`rs.setConfig`](#rssetc
 - **Type:**
 
 ```ts
-type GetConfig = () => RuntimeConfig & {
+type GetConfig = () => RuntimeOptions & {
   expect: {
     poll: {
       interval: number;
@@ -203,13 +163,11 @@ type GetConfig = () => RuntimeConfig & {
 };
 ```
 
+Returns the active runtime configuration for the current test file.
+
 <ApiMeta addedVersion="0.12.0" />
 
-The return value also includes a copy of the resolved `expect.poll` configuration. Modifying this copy does not change the runtime configuration.
-
-Retrieves the current runtime configuration for the test file. Useful for inspecting or logging the current settings.
-
-**Example:**
+The return value also includes a copy of the resolved `expect.poll` configuration. Mutating this copy does not affect runtime behavior.
 
 ```ts
 const config = rs.getConfig();
@@ -234,12 +192,10 @@ type WaitFor = <T>(
 ) => Promise<T>;
 ```
 
-Retries `callback` until it succeeds (does not throw) or timeout is reached.
+Polls `callback` until it succeeds without throwing, or until `timeout` expires.
 
-- If `options` is a number, it is treated as `timeout`.
-- If timeout is reached, it throws the last error from the callback.
-
-**Example:**
+- Passing a number for `options` sets `timeout`.
+- On timeout, throws the last error from `callback` (or a timeout error if `callback` has not thrown yet).
 
 ```ts
 await rs.waitFor(
@@ -260,6 +216,9 @@ When [fake timers](/api/runtime-api/rstest/fake-timers) are enabled, `rs.waitFor
 - **Type:**
 
 ```ts
+type Falsy = false | 0 | 0n | '' | null | undefined;
+type Truthy<T> = Exclude<T, Falsy>;
+
 type WaitUntilOptions = {
   timeout?: number; // default: 1000
   interval?: number; // default: 50
@@ -268,17 +227,14 @@ type WaitUntilOptions = {
 type WaitUntil = <T>(
   callback: () => T | Promise<T>,
   options?: number | WaitUntilOptions,
-) => Promise<T>;
+) => Promise<Truthy<Awaited<T>>>;
 ```
 
-Calls `callback` repeatedly only while it returns `undefined` (no value) or any falsy value.
-It resolves when the callback returns a truthy value.
+Polls `callback` while it returns a falsy value and resolves with the first truthy return value.
 
-- If `options` is a number, it is treated as `timeout`.
-- If the callback throws, execution is interrupted immediately and the error is thrown.
-- If timeout is reached, it throws a timeout error.
-
-**Example:**
+- Passing a number for `options` sets `timeout`.
+- If `callback` throws, polling stops immediately and the error is rethrown.
+- On timeout, throws a timeout error.
 
 ```ts
 const serverReady = await rs.waitUntil(

@@ -1,0 +1,40 @@
+---
+description: Rstest 重新导出的 Chai assert API，支持 TDD 风格的断言写法。
+---
+
+# assert
+
+Rstest 重新导出了 [Chai 的 `assert` API](https://www.chaijs.com/api/assert/)，用于编写 TDD 风格的断言。你可以直接从 `@rstest/core` 导入 `assert`，或在启用 [globals](/config/test/globals) 后直接作为全局变量使用。
+
+- **类型：** `typeof import('chai').assert`
+
+## 示例 \{#example}
+
+```ts
+import { assert, test } from '@rstest/core';
+
+test('basic assertions', () => {
+  assert.equal(1 + 1, 2);
+  assert.strictEqual('rstest', 'rstest');
+  assert.deepEqual({ a: 1 }, { a: 1 });
+  assert.isTrue(Array.isArray([1, 2, 3]));
+  assert.throws(() => {
+    throw new Error('boom');
+  }, /boom/);
+});
+```
+
+## 常用方法 \{#common-methods}
+
+| 方法                                                                     | 说明                                  |
+| ------------------------------------------------------------------------ | ------------------------------------- |
+| `assert(expression, message?)`                                           | 当 `expression` 为假值时断言失败。    |
+| `assert.equal(actual, expected, message?)`                               | 断言非严格相等（`==`）。              |
+| `assert.strictEqual(actual, expected, message?)`                         | 断言严格相等（`===`）。               |
+| `assert.deepEqual(actual, expected, message?)`                           | 断言深度结构相等。                    |
+| `assert.isTrue(value, message?)` / `assert.isFalse(value, message?)`     | 断言严格等于布尔值 `true` / `false`。 |
+| `assert.isNull(value, message?)` / `assert.isUndefined(value, message?)` | 断言为 `null` / `undefined`。         |
+| `assert.include(haystack, needle, message?)`                             | 断言字符串、数组或对象包含 `needle`。 |
+| `assert.throws(fn, errorLike?, errMsgMatcher?, message?)`                | 断言 `fn` 抛出匹配的错误。            |
+
+完整的断言方法与参数说明，请参阅 [Chai Assert API](https://www.chaijs.com/api/assert/)。

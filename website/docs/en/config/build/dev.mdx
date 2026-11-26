@@ -3,23 +3,27 @@ description: Options for local development and debugging, such as writing tempor
 ---
 
 import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
- 
+
 # dev
 
 Options for local development.
 
 ## dev.writeToDisk <RsbuildDocBadge path="/config/dev/write-to-disk" text="dev.writeToDisk" />
 
+- **Type:** `boolean | ((filename: string) => boolean)`
+- **Default:** `false`
 - **CLI:** `--dev.writeToDisk`
 
-By default, Rstest does not write test temporary files to disk, and this configuration item may be required when you debug rstest outputs.
+Controls whether temporary test build files are written to disk. By default, Rstest keeps build outputs in memory; enable this when debugging generated test bundles.
 
-With `dev.writeToDisk: true`, Node.js workers read the build output directly from disk. This can reduce memory usage in the main process when test bundles are large.
+With `dev.writeToDisk: true`, Node.js workers read the build output directly from disk, which reduces main-process memory usage for large test bundles.
 
 ```ts title="rstest.config.ts"
-export default {
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
   dev: {
     writeToDisk: true,
   },
-};
+});
 ```

@@ -1,13 +1,13 @@
 ---
-description: 测试项目的名称。通过 projects 定义的所有项目名称必须唯一。
+description: 设置测试项目的名称，用于输出展示与项目过滤。
 ---
 
 # name
 
 - **类型：** `string`
-- **默认值：** `rstest`
+- **默认值：** `'rstest'`（单项目），在 [projects](/config/test/projects) 中默认取 `package.json` 的 `name` 或目录名
 
-测试项目的名称。
+设置测试项目的名称，用于 reporter 输出展示以及通过 [--project](/guide/basic/test-filter#根据项目名称过滤) 过滤项目。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -17,6 +17,6 @@ export default defineConfig({
 });
 ```
 
-通过 [projects](/config/test/projects) 定义的所有项目名称必须唯一；两个项目重名时，Rstest 会在启动时报错。可通过 [--project](/guide/basic/test-filter#根据项目名称过滤) 选项按名称过滤项目。
+通过 [projects](/config/test/projects) 定义的所有项目名称必须唯一；若存在重名，Rstest 会在启动时报错。
 
-如果 project 未提供名称，Rstest 将会使用当前项目的 `package.json` 中定义的 `name` 属性，如果不存在，则使用文件夹名称。
+当 `projects` 中的子项目未指定 `name` 时，Rstest 会读取该项目 `package.json` 中的 `name` 字段；若不存在，则使用其目录名。未配置 `projects` 的单项目运行时，默认为 `'rstest'`。

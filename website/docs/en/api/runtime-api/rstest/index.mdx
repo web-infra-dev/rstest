@@ -1,13 +1,13 @@
 ---
 title: Rstest Utility
-description: Rstest provides utility functions to help you out through its rs helper.
+description: Rstest provides test utilities for mocking, fake timers, and environment stubbing through the rs helper.
 ---
 
 # Rstest utility
 
-Rstest provides utility functions to help you out through its `rs` helper.
+Rstest provides test utilities for mocking, fake timers, and environment stubbing through the `rs` helper.
 
-You can import `rs` from `@rstest/core` directly.
+Import `rs` directly from `@rstest/core`:
 
 ```ts
 import { rs } from '@rstest/core';
@@ -16,7 +16,7 @@ const fn = rs.fn();
 fn.mockResolvedValue('foo');
 ```
 
-The longer `rstest` helper remains available as an alias.
+`rstest` is available as an alias for `rs`:
 
 ```ts
 import { rstest } from '@rstest/core';
@@ -25,4 +25,4 @@ const fn = rstest.fn();
 fn.mockResolvedValue('foo');
 ```
 
-Or, you can access it globally like `jest` (when [globals](/config/test/globals) configuration is enabled).
+When [globals](/config/test/globals) is enabled, both `rs` and `rstest` are available globally without importing.

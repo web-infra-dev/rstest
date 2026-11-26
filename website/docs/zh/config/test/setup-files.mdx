@@ -1,5 +1,5 @@
 ---
-description: 一组 setup 文件列表，通常用于配置或设置测试环境，它们将在每个测试文件执行前运行。
+description: 在每个测试文件执行前运行的 setup 模块路径，用于配置或初始化测试环境。
 ---
 
 # setupFiles
@@ -7,7 +7,7 @@ description: 一组 setup 文件列表，通常用于配置或设置测试环境
 - **类型：** `string | string[]`
 - **默认值：** `[]`
 
-一组 setup 文件列表，通常用于配置或设置测试环境，它们将在每个测试文件执行前运行。
+在每个测试文件执行前运行的 setup 模块路径，用于配置或初始化测试环境。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

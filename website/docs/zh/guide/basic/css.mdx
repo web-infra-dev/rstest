@@ -53,7 +53,7 @@ CSS Modules 常用 `.module.css`、`.module.less` 或 `.module.scss` 作为文�
 
 ### 添加 CSS 预处理器支持
 
-需要编译预处理器样式时，请启用对应的 Rsbuild plugin。下面以 Less 和 Sass 为例；如果使用其他预处理器，请先查看 [Rsbuild plugin 列表](https://rsbuild.rs/plugins/list/) 是否有对应的 plugin，再按相同方式注册。只需安装测试实际用到的 plugin。
+需要编译预处理器样式时，请启用对应的 Rsbuild plugin。下面以 Less 和 Sass 为例；如果使用其他预处理器，请先查看 [Rsbuild plugin 列表](https://rsbuild.rs/zh/plugins/list/) 是否有对应的 plugin，再按相同方式注册。只需安装测试实际用到的 plugin。
 
 [@rsbuild/plugin-less](https://github.com/web-infra-dev/rsbuild/tree/main/packages/plugin-less) 用于编译 `.less` 和 `.module.less` 文件：
 
@@ -81,10 +81,10 @@ export default defineConfig({
 });
 ```
 
-如果项目通过 [`@rstest/adapter-rsbuild`](/integration/rsbuild) 复用 Rsbuild 配置，请把这些 plugin 配置在 `rsbuild.config.ts` 中，不要在 `rstest.config.ts` 中重复配置。
+如果项目通过 [@rstest/adapter-rsbuild](/integration/rsbuild) 复用 Rsbuild 配置，请把这些 plugin 配置在 `rsbuild.config.ts` 中，不要在 `rstest.config.ts` 中重复配置。
 
 :::warning
-如果项目使用 [`@rstest/adapter-rspack`](/integration/rspack)，上面的 Rsbuild plugin 和 `output.cssModules` 示例不适用。该 adapter 使用 `rspack.config.ts` 中的 CSS 规则，请在 Rspack 配置中设置 Less、Sass 和 CSS Modules。
+如果项目使用 [@rstest/adapter-rspack](/integration/rspack)，上面的 Rsbuild plugin 和 `output.cssModules` 示例不适用。该 adapter 使用 `rspack.config.ts` 中的 CSS 规则，请在 Rspack 配置中设置 Less、Sass 和 CSS Modules。
 :::
 
 ### Browser mode

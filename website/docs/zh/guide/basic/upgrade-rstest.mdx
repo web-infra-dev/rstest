@@ -1,72 +1,60 @@
 ---
-description: 本章节介绍如何将项目中的 Rstest 依赖升级到最新版本。
+description: 使用 Taze 将项目中的 @rstest/* 及相关 Rsbuild 依赖升级到最新版本。
 ---
 
 # 升级 Rstest
 
-本章节介绍如何将项目中的 Rstest 依赖升级到最新版本。
+使用 [Taze](https://github.com/antfu-collective/taze) 更新 `package.json` 中的 Rstest 相关依赖。
 
 :::info
-
-Rstest 仍处于 0.x 版本，API 可能会频繁变化。我们建议升级到最新版本以使用新功能和已修复的 bug。
-
+Rstest 仍处于 `0.x` 阶段，minor 版本可能包含不兼容变更。跨 minor 版本升级前建议先查看对应的发布说明。
 :::
 
 ## 使用 Taze
 
-我们推荐使用 [Taze](https://github.com/antfu-collective/taze) 来升级 Rstest 版本。Taze 是一个用于更新 npm 依赖的 CLI 工具。
-
 ### 使用方法
 
-运行以下命令以升级所有名称中包含 `rstest` 和 `rsbuild` 的依赖项：
+升级所有包名包含 `rstest` 或 `rsbuild` 的依赖：
 
 ```bash
 npx taze major --include "/(rstest|rsbuild)/" -w
 ```
 
-:::tip
-
-Rstest 尚未达到 1.0.0 版本，因此你需要在更新时添加 `major` 参数。
-
+:::tip 为什么需要加 `major`
+Rstest 尚未发布 1.0.0，在 SemVer 中 `0.x` 的 minor 升级（如 `0.11` → `0.12`）会被视为破坏性更新。如果不加 `major`，`taze` 默认只会更新同一 minor 范围内的 patch 版本。
 :::
 
-结果将类似于：
+输出示例：
 
 ```bash
-rstest-example - 1 patch
+rstest-example - 1 minor
 
   devDependencies
-    @rstest/core    ~29d  ^0.6.0  →  ^0.6.6  ~5d
+    @rstest/core    ~14d  ^0.11.0  →  ^0.12.6  ~1d
 
 ℹ changes written to package.json, run pnpm i to install updates.
 ```
 
-你可以调整 `include` 模式以匹配特定包，例如，仅升级 `@rstest` 范围内的包：
+写入完成后，运行包管理器的安装命令（如 `pnpm install` 或 `npm install`）完成依赖安装。
+
+如果只想升级 `@rstest` 命名空间下的包，可以收窄 `include` 匹配模式：
 
 ```bash
-npx taze --include /@rstest/ -w
+npx taze major --include "/@rstest/" -w
 ```
 
 ### 选项
 
-以下是一些使用 taze 选项的示例。
-
-- 在 monorepo 中，你可以添加 `-r` 选项以递归升级：
+- 在 monorepo 中递归升级所有子包（`-r`）：
 
 ```bash
-npx taze --include /(rstest|rsbuild)/ -w -r
+npx taze major --include "/(rstest|rsbuild)/" -w -r
 ```
 
-- 添加 `-l` 选项以升级锁定版本：
+- 升级锁定的版本号（`-l`）：
 
 ```bash
-npx taze --include /(rstest|rsbuild)/ -w -l
+npx taze major --include "/(rstest|rsbuild)/" -w -l
 ```
 
-- 升级到 major 版本：
-
-```bash
-npx taze major --include /(rstest|rsbuild)/ -w
-```
-
-> 更多选项请参考 [taze 文档](https://github.com/antfu-collective/taze)。
+更多选项详见 [Taze 文档](https://github.com/antfu-collective/taze)。

@@ -1,5 +1,5 @@
 ---
-description: 默认情况下，当未找到测试用例时，Rstest 会将测试标记为失败。你可以将 passWithNoTests 设置为 true 来允许测试在未找到测试用例时通过。
+description: 当未找到测试文件或测试用例时，允许测试通过并正常退出。
 ---
 
 # passWithNoTests
@@ -8,9 +8,11 @@ description: 默认情况下，当未找到测试用例时，Rstest 会将测试
 - **默认值：** `false`
 - **CLI：** `--passWithNoTests`
 
-标记测试通过当未找到测试用例时。
+当未找到测试文件或测试用例时，允许 Rstest 通过。
 
-默认情况下，当未找到测试用例时，Rstest 会将测试标记为失败。你可以将 `passWithNoTests` 设置为 `true` 来允许测试在未找到测试用例时通过。
+默认情况下，如果没有匹配到任何测试文件，Rstest 会以退出码 `1` 结束；如果某个测试文件或 suite 中没有任何测试，也会将其标记为失败。设置 `passWithNoTests: true` 后，未匹配到测试文件时会以退出码 `0` 退出，空的测试文件和 suite 也会标记为通过。
+
+使用 `--changed` 运行时，除非显式设为 `false`，否则 `passWithNoTests` 默认为 `true`。
 
 import { Tab, Tabs } from '@theme';
 

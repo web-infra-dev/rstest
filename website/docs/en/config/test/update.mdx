@@ -1,5 +1,5 @@
 ---
-description: When update is enabled, Rstest will update all changed snapshots and delete obsolete ones.
+description: Update changed snapshots and remove obsolete ones during test runs.
 overviewHeaders: []
 ---
 
@@ -9,11 +9,11 @@ overviewHeaders: []
 - **Default:** `false`
 - **CLI:** `-u`, `--update`
 
-Update snapshot.
+Update all changed snapshots, write missing snapshots, and delete obsolete snapshots during the test run. In Browser Mode, this also replaces mismatched screenshot references for [`toMatchScreenshot`](/api/runtime-api/browser-mode/assertion#toMatchScreenshot).
 
-When `update` is enabled, Rstest will update all changed snapshots and delete obsolete ones.
+By default (`false`), existing changed snapshots fail and obsolete snapshots are kept. Missing snapshots (including missing screenshot references) are still created automatically during local runs, whereas in CI environments missing snapshots fail unless `update` is enabled.
 
-It should be noted that when you test in local, the newly added snapshot will be automatically updated regardless of whether the `update` configuration is enabled.
+In watch mode, you can also press `u` to trigger a snapshot update run.
 
 import { Tab, Tabs } from '@theme';
 

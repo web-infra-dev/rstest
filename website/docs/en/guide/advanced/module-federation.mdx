@@ -65,14 +65,14 @@ declare module 'remote/formatPrice' {
 
 The `federation()` plugin accepts the same options as the Module Federation build plugin: `remotes`, `shared`, `remoteType`, and so on. Two points matter for tests:
 
-- **Remote entry target.** Node and JSDOM tests run in Rstest's Node-based runner, so point them at a Node-targeted remote entry such as `remoteEntry.cjs`. Browser Mode consumes the browser build's `remoteEntry.js`.
-- **HTTP remotes.** A remote served over HTTP uses a URL such as `remote@http://localhost:3001/remoteEntry.cjs` with `remoteType: 'script'`. Start the server before tests run; see [Serve remotes with `globalSetup`](#serve-remotes-with-globalsetup).
+- **Remote entry target:** Node and JSDOM tests run in Rstest's Node-based runner, so point them at a Node-targeted remote entry such as `remoteEntry.cjs`. Browser Mode consumes the browser build's `remoteEntry.js`.
+- **HTTP remotes:** A remote served over HTTP uses a URL such as `remote@http://localhost:3001/remoteEntry.cjs` with `remoteType: 'script'`. Start the server before tests run; see [Serve remotes with `globalSetup`](#serve-remotes-with-globalsetup).
 
 ### The plugin and the `federation` option
 
-The [`federation`](/config/test/federation) config option is only a runtime compatibility switch inside Rstest. It installs the shims that let a federation runtime load chunks inside Rstest's Node worker, and it configures nothing about Module Federation itself: no remotes, no exposes, no shared modules.
+The [`federation`](/config/test/federation) config option is only a runtime compatibility switch inside Rstest. It installs the shims that let a federation runtime load chunks inside Rstest's Node worker, and does not configure remotes, exposes, or shared modules.
 
-The `federation()` plugin does the actual configuration and, for Node-based test environments, turns that switch on for you. You do not need to set `federation: true` again when using the plugin in Node or JSDOM tests. Browser Mode is different; see [Browser mode](#browser-mode).
+The `federation()` plugin does the actual configuration and, for Node-based test environments, turns `federation: true` on automatically. In [Browser mode](#browser-mode), the plugin switches to the web federation runtime instead of Node shims, so you do not need to set `federation: true` in either environment.
 
 ## Serve remotes with `globalSetup`
 

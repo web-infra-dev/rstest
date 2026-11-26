@@ -9,9 +9,9 @@ overviewHeaders: []
 - **Default:** `false`
 - **CLI:** `--globals`
 
-Provide global Rstest APIs for test files, such as `expect`, `test`, `describe`, etc.
+Inject Rstest APIs (such as `expect`, `test`, and `describe`) into the global scope of test files instead of requiring imports from `@rstest/core`.
 
-By default, Rstest does not provide global APIs. If you prefer to use the APIs globally like Jest, you can add `globals: true` in the config or pass the `--globals` option to CLI.
+By default, Rstest does not register global APIs. Set `globals: true` in config or pass `--globals` on the CLI to enable them (similar to Jest).
 
 import { Tab, Tabs } from '@theme';
 

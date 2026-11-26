@@ -1,5 +1,5 @@
 ---
-description: 隐藏已跳过的测试文件的日志，以减少测试输出中的噪声。当跳过大量测试文件时（例如启用过滤器运行测试时），此功能尤其有用。
+description: 隐藏已跳过的测试文件日志。
 ---
 
 # hideSkippedTestFiles
@@ -8,7 +8,9 @@ description: 隐藏已跳过的测试文件的日志，以减少测试输出中�
 - **默认值：** `false`
 - **CLI：** `--hideSkippedTestFiles`
 
-隐藏已跳过的测试文件的日志，以减少测试输出中的噪声。当跳过大量测试文件时（例如启用过滤器运行测试时），此功能尤其有用。
+隐藏已跳过的测试文件日志。当过滤条件或文件级跳过导致输出中出现大量跳过文件时尤其有用。
+
+底部的汇总统计仍会包含被跳过的测试文件数量。
 
 import { Tab, Tabs } from '@theme';
 
@@ -31,25 +33,21 @@ export default defineConfig({
 
 ## 示例
 
-默认情况下，Rstest 会显示所有测试文件的日志。
+默认情况下，Rstest 会输出所有测试文件，包括被跳过的文件：
 
 ```bash
- ✓ test/index.test.ts (1) 1ms
-  ✓ Index > should add two numbers correctly (0ms)
- - test/all-skipped.test.ts (2) 1ms
+ ✓ test/index.test.ts (1)
+ - test/all-skipped.test.ts (2)
 
  Test Files 1 passed | 1 skipped
       Tests 1 passed | 2 skipped (3)
    Duration 93ms (build 50ms, tests 43ms)
 ```
 
-当你将 `hideSkippedTestFiles` 设置为 `true` 时，Rstest 将在测试运行完成后隐藏所有被跳过的测试文件的日志。
-
-输出将如下所示：
+设置 `hideSkippedTestFiles: true` 后，文件列表中不再显示被跳过的文件：
 
 ```bash
- ✓ test/index.test.ts (1) 1ms
-  ✓ Index > should add two numbers correctly (0ms)
+ ✓ test/index.test.ts (1)
 
  Test Files 1 passed | 1 skipped
       Tests 1 passed | 2 skipped (3)

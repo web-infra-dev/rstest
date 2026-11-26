@@ -7,15 +7,17 @@ description: Configure which reporters to use for test result output.
 - **Type:**
 
 ```ts
-type ReporterConfig =
+type ReporterItem =
+  | Reporter
   | BuiltInReporterNames
   | (string & {})
-  | [name: string, options: Record<string, unknown>]
-  | Reporter;
-type Reporters = ReporterConfig | ReporterConfig[];
-```
+  | ReporterWithOptions
+  | [string]
+  | [string, Record<string, unknown>];
 
-- **Reporter options reference:** Reporter option types are defined in [`packages/core/src/types/reporter.ts`](https://github.com/web-infra-dev/rstest/blob/main/packages/core/src/types/reporter.ts)
+type Reporters =
+  Reporter | BuiltInReporterNames | (string & {}) | ReporterItem[];
+```
 
 - **Default:**
 
@@ -29,17 +31,17 @@ process.env.GITHUB_ACTIONS === 'true'
 
 Configure which reporters to use for test result output.
 
-Built-in reporter names include `default`, `dot`, `verbose`, `md`, `github-actions`, `junit`, `json`, and `blob`.
+Built-in reporter names: `default`, `dot`, `verbose`, `md`, `github-actions`, `junit`, `json`, and `blob`.
+
+This is a global option set in the root config and cannot be overridden per project in [`projects`](/config/test/projects).
 
 :::info AI agent environments
-If you haven't explicitly configured any reporters (no `reporters` in config and no `--reporters` flags), Rstest defaults to `['md']` and outputs AI agent-friendly markdown to stdout.
+When no `reporters` are configured (neither in config nor via `--reporters`), Rstest defaults to `['md']` in AI agent environments and writes agent-friendly Markdown to stdout.
 :::
 
-### Usage
+## Usage
 
-#### Basic example
-
-You can specify reporters in the `rstest.config.ts` file or via the CLI.
+### Basic example
 
 import { Tab, Tabs } from '@theme';
 
@@ -61,14 +63,24 @@ export default defineConfig({
 });
 ```
 
-</Tab>
+  </Tab>
 </Tabs>
 
-#### Multiple reporters
+### Multiple reporters
 
-You can use multiple reporters to output test results in different formats simultaneously. This is useful when you want both console output and a file report for CI/CD pipelines.
+Pass an array to combine console output with file reports for CI/CD pipelines:
 
-```ts title=rstest.config.ts
+<Tabs defaultValue='rstest.config.ts'>
+  <Tab label="CLI">
+
+```bash
+npx rstest --reporters=default --reporters=junit
+```
+
+  </Tab>
+  <Tab label="rstest.config.ts">
+
+```ts
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -76,42 +88,30 @@ export default defineConfig({
 });
 ```
 
-#### Configuring reporters with options
+  </Tab>
+</Tabs>
 
-Many reporters support configuration options. Pass them as a tuple `[reporterName, options]`:
+### Configuring reporters with options
 
-```ts title=rstest.config.ts
+Pass `[reporterName, options]` inside the `reporters` array to configure a reporter. See the [Reporters guide](/guide/basic/reporters) for each built-in reporter's available options:
+
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   reporters: [
-    ['default', { verbose: true }],
-    ['github-actions', { verbose: true }],
+    ['default', { summary: false }],
+    ['github-actions', { summary: { maxCharsPerField: 1000 } }],
     ['junit', { outputPath: './test-results.xml' }],
   ],
 });
 ```
 
-#### Using custom reporters
+### Custom reporters
 
-You can use a custom reporter module by passing its module specifier, or a tuple with options. The module must default export a reporter class. Rstest constructs it with the options (an empty object for the string form) and a context containing `rootPath` and the resolved `config`. The module can be JavaScript or TypeScript; `.ts` and `.mts` modules load directly on Node runtimes with type stripping enabled (Node 22.18+ or 24):
+Pass a module specifier (or `[specifier, options]`) whose default export is a class implementing `Reporter`, or pass an already constructed `Reporter` object directly (reporter classes cannot be passed directly). See the [Reporter API reference](/api/javascript-api/reporter) for the `Reporter` interface, constructor signature, and TypeScript support.
 
-```ts title=rstest.config.ts
-import { defineConfig } from '@rstest/core';
+## Related documentation
 
-export default defineConfig({
-  reporters: './custom-reporter.js',
-});
-
-// To pass options:
-export const configWithOptions = defineConfig({
-  reporters: [['./custom-reporter.js', { outputPath: './report.json' }]],
-});
-```
-
-You can also pass an already constructed object that implements the `Reporter` interface. Reporter classes cannot be passed directly.
-
-### Related documentation
-
-- [Reporters guide](/guide/basic/reporters) - Usage examples and built-in reporter details
-- [Reporter API reference](/api/javascript-api/reporter) - Custom reporter implementation
+- [Reporters guide](/guide/basic/reporters) — usage examples and output formats for built-in reporters
+- [Reporter API reference](/api/javascript-api/reporter) — custom reporter implementation

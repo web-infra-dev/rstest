@@ -1,19 +1,19 @@
 ---
-description: Snapshot Testing is a powerful testing method used to capture and compare serialized representations of component output.
+description: Capture and compare serialized outputs across test runs with Rstest snapshot testing.
 ---
 
 # Snapshot testing
 
-Snapshot Testing is a powerful testing method used to capture and compare serialized representations of component output. When your UI or data structures change, snapshot testing helps you detect these changes promptly.
+Snapshot testing serializes a value and compares it against a stored reference on subsequent runs. When an intentional change alters the output, you update the snapshot; unexpected diffs fail the test.
 
 ## Basic usage
 
-Rstest provides a simple snapshot testing API that allows you to easily create and use snapshots.
-
 ### Creating snapshots
 
+Use `toMatchSnapshot()` to save and verify a value in an external `.snap` file:
+
 ```ts
-import { test, expect } from '@rstest/core';
+import { expect, test } from '@rstest/core';
 
 test('component snapshot', () => {
   const user = { name: 'Alice', age: 25 };
@@ -21,153 +21,136 @@ test('component snapshot', () => {
 });
 ```
 
+By default, Rstest writes snapshots into a `.snap` file starting with `// Rstest Snapshot v1`:
+
+```js
+// Rstest Snapshot v1
+
+exports[`component snapshot 1`] = `
+{
+  "age": 25,
+  "name": "Alice",
+}
+`;
+```
+
 ### Inline snapshots
 
-For simple values, you can use inline snapshots:
+For short outputs, `toMatchInlineSnapshot()` stores the serialized value directly inside the test file:
 
 ```ts
+import { expect, test } from '@rstest/core';
+
 test('inline snapshot', () => {
   const message = 'Hello World';
-  expect(message).toMatchInlineSnapshot('"Hello World"');
+  expect(message).toMatchInlineSnapshot(`"Hello World"`);
+});
+```
+
+### Error snapshots
+
+Use `toThrowErrorMatchingSnapshot()` or `toThrowErrorMatchingInlineSnapshot()` to snapshot the error thrown by a function (or a rejected promise via `rejects`):
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('error snapshot', () => {
+  const fail = () => {
+    throw new Error('Invalid input');
+  };
+  expect(fail).toThrowErrorMatchingInlineSnapshot(`[Error: Invalid input]`);
+});
+```
+
+### Property matchers
+
+When an object contains dynamic values such as IDs or timestamps, pass a property matcher object as the first argument to `toMatchSnapshot()` or `toMatchInlineSnapshot()`:
+
+```ts
+import { expect, test } from '@rstest/core';
+
+test('dynamic fields', () => {
+  const user = { id: Math.random(), name: 'Alice', createdAt: new Date() };
+  expect(user).toMatchSnapshot({
+    id: expect.any(Number),
+    createdAt: expect.any(Date),
+  });
 });
 ```
 
 ### File snapshots
 
-By default, Rstest stores all snapshots for the current test in `.snap` files with the format `exports['testName index'] = ${snapshotContent}`.
-
-You can also use the `toMatchFileSnapshot` method to store snapshots in separate files, which makes them more readable.
+Use `toMatchFileSnapshot(filepath)` to store large or syntax-highlighted outputs (such as HTML, CSS, or JSON) in a dedicated file. Unlike `toMatchSnapshot()`, `toMatchFileSnapshot()` is asynchronous and must be awaited:
 
 ```ts
+import { expect, test } from '@rstest/core';
+
 test('file snapshot', async () => {
   const result = renderHTML(h('div', { class: 'foo' }));
   await expect(result).toMatchFileSnapshot('./basic.output.html');
 });
 ```
 
+:::note
+Snapshot matchers do not support `.not`. Calling `expect(value).not.toMatchSnapshot()` (or any other snapshot matcher with `.not`) throws an error.
+:::
+
 ### Configuration options
 
-Rstest provides various snapshot-related configuration options that allow you to customize snapshot behavior.
-
-- [update](/config/test/update): Whether to update snapshots
-- [snapshotFormat](/config/test/snapshot-format): Snapshot formatting options
-- [resolveSnapshotPath](/config/test/resolve-snapshot-path): Custom snapshot file path resolution function
+- [update](/config/test/update): Controls whether changed and obsolete snapshots are updated (default: `false`).
+- [snapshotFormat](/config/test/snapshot-format): `pretty-format` options for snapshot serialization (default: `{ printShadowRoot: false }`).
+- [resolveSnapshotPath](/config/test/resolve-snapshot-path): Customizes where `.snap` files are stored.
 
 ## Updating snapshots
 
-When test runs encounter snapshot mismatches, Rstest will mark the test as failed and output difference information.
-
-If these changes are expected, you can update snapshots using the command line argument `-u` or the configuration option `update`.
-
-import { Tab, Tabs } from '@theme';
-
-<Tabs>
-  <Tab label="CLI">
-  ```bash
-  npx rstest -u
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  update: true,
-});
-```
-  </Tab>
-</Tabs>
+By default (`update: false`), new snapshots are written locally (disabled when `process.env.CI` is set) and mismatches fail. Update changed snapshots and remove obsolete ones with `npx rstest -u`, `update: true`, or pressing `u` in interactive watch mode; see [update](/config/test/update).
 
 ## Serialization output
 
-Rstest supports adding custom serialization tools for snapshot testing via the [addSnapshotSerializer](/api/runtime-api/test-api/expect#expectaddsnapshotserializer) method to handle specific types of data structures.
-
-This is especially useful when your snapshots contain local paths, sensitive data, or other non-serializable objects.
+Register custom snapshot serializers with [expect.addSnapshotSerializer](/api/runtime-api/test-api/expect#expectaddsnapshotserializer) to normalize dynamic paths, mask secrets, or format custom types:
 
 ```ts
+import { expect, test } from '@rstest/core';
+
 expect.addSnapshotSerializer({
   test: (val) => typeof val === 'string' && val.startsWith('secret:'),
-  print: (val) => '***MASKED***',
+  print: () => '***MASKED***',
 });
-expect('secret:123').toMatchSnapshot(); // Secret information in snapshot output will be masked
+
+test('masked secret', () => {
+  expect('secret:123').toMatchSnapshot();
+});
 ```
 
-Using [path-serializer](https://www.npmjs.com/package/path-serializer) can convert local paths to paths relative to the project root, which is very useful in cross-platform testing.
+For snapshots containing file system paths, [path-serializer](https://www.npmjs.com/package/path-serializer) normalizes absolute paths relative to your project root so snapshots stay portable across machines:
 
 ```ts
+import path from 'node:path';
+import { expect, test } from '@rstest/core';
 import { createSnapshotSerializer } from 'path-serializer';
 
 expect.addSnapshotSerializer(
   createSnapshotSerializer({
-    root: path.join(__dirname, '..'),
+    root: path.join(import.meta.dirname, '..'),
   }),
 );
 
 test('serialized snapshot', () => {
-  const filePath = path.join(__dirname, '../data/file.txt');
+  const filePath = path.join(import.meta.dirname, '../data/file.txt');
   expect({ filePath }).toMatchSnapshot();
-  // before: "/Users/aaa/Desktop/projects/rstest/examples/node/data/file.txt"
+  // before: "/path/to/repo/examples/node/data/file.txt"
   // after: "<ROOT>/examples/node/data/file.txt"
 });
 ```
 
 ## Snapshot output path
 
-Snapshot files are saved with the `.snap` extension by default, in the `__snapshots__` folder in the same directory as the test file.
-
-```
-src/
-├── components/
-│   ├── button.test.ts
-│   └── __snapshots__/
-│       └── button.test.ts.snap
-```
-
-You can customize snapshot file paths through the [resolveSnapshotPath](/config/test/resolve-snapshot-path) configuration option.
-
-```ts name='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  resolveSnapshotPath: (testPath, snapExtension) => {
-    // Store snapshots at the same level as test files
-    return `${testPath}${snapExtension}`;
-  },
-});
-```
+By default, `.snap` files live in a `__snapshots__` directory beside each test file. To store snapshots elsewhere, configure [resolveSnapshotPath](/config/test/resolve-snapshot-path).
 
 ## Best practices
 
-### Keep snapshots concise
-
-Snapshots should be readable and easy to understand, avoiding containing too much irrelevant information:
-
-```ts
-// ✅ Good practice - only include necessary information
-test('user info snapshot', () => {
-  const userInfo = {
-    name: 'Alice',
-    role: 'admin',
-    permissions: ['read', 'write'],
-  };
-  expect(userInfo).toMatchSnapshot();
-});
-
-// ❌ Avoid - includes too much irrelevant information
-test('complete user object snapshot', () => {
-  const fullUser = {
-    ...user,
-    lastLogin: new Date(),
-    sessionId: 'abc123',
-    userAgent: 'Mozilla/5.0...',
-  };
-  expect(fullUser).toMatchSnapshot();
-});
-```
-
-### Use descriptive snapshot names
-
-When using multiple snapshots, provide descriptive names for each snapshot:
+- **Keep snapshots focused**: Serialize only fields relevant to the behavior under test, and handle volatile fields (timestamps, random IDs) with [property matchers](#property-matchers) or custom serializers.
+- **Name multiple snapshots**: Pass a descriptive label when a single test asserts multiple snapshots:
 
 ```ts
 test('component state changes', () => {
@@ -180,10 +163,4 @@ test('component state changes', () => {
 });
 ```
 
-### Regularly review snapshots
-
-As code evolves, snapshots may become outdated. Regularly reviewing and updating snapshots is necessary:
-
-- Update relevant snapshots when refactoring UI
-- Delete snapshots that are no longer needed
-- Reasonably use inline snapshots for small-scale testing
+- **Review diffs before updating**: Inspect snapshot diffs before running `-u`, prefer inline snapshots for small values, and remove obsolete snapshots when refactoring tests.

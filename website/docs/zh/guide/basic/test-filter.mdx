@@ -1,10 +1,10 @@
 ---
-description: Rstest 提供了多种灵活的方式来过滤和选择要运行的测试文件和测试用例。你可以通过配置文件、命令行参数、测试 API 等方式精准控制测试范围。
+description: 通过 CLI 参数、配置选项、watch 快捷键或测试 API 筛选要运行的测试文件、project 和测试用例。
 ---
 
 # 过滤测试
 
-Rstest 提供了多种灵活的方式来过滤和选择要运行的测试文件和测试用例。你可以通过配置文件、命令行参数、测试 API 等方式精准控制测试范围。
+Rstest 支持通过命令行参数、配置选项、watch 快捷键或测试 API 修饰符来筛选要运行的测试文件、project 和测试用例。
 
 ## 根据文件名过滤
 
@@ -14,98 +14,76 @@ Rstest 提供了多种灵活的方式来过滤和选择要运行的测试文件�
 rstest
 ```
 
-精确匹配测试文件路径。Shell 会去掉一层引号，因此需要两层引号：
+位置参数支持子字符串（不区分大小写）、相对或绝对文件路径以及目录路径（传入多个参数时匹配其中任意一个）：
+
+```bash
+rstest foo
+rstest test/foo.test.ts test/bar.test.ts
+rstest packages/core
+```
+
+用引号包裹参数可启用完整路径精确匹配（例如只运行 `foo.test.ts` 而不匹配 `foo.test.tsx`）。Shell 会去掉一层引号，因此需要两层：
 
 ```bash
 rstest '"test/foo.test.ts"'
 ```
 
-使用 `--include` 传入 glob 模式，并加上引号，防止 shell 展开：
+Rstest 不会将位置参数解析为 glob 模式。需要 glob 匹配时请使用 `--include`，并加上引号防止 shell 提前展开：
 
 ```bash
 rstest --include "test/**/*.test.ts"
 ```
 
-位置参数默认使用不区分大小写的子字符串匹配。运行路径中包含 `foo` 的测试文件，如 `foo.test.ts`、`foo/index.test.ts`、`foo-bar/index.test.ts` 等：
-
-```bash
-rstest foo
-```
-
-你也可以指定多个文件筛选条件：
-
-```bash
-rstest test/foo.test.ts test/bar.test.ts
-```
-
-### 根据文件路径过滤
-
-Rstest 不会将位置参数解析为 glob 模式。不带引号的模式可能被 shell 展开，但不同 shell 的行为不同；需要 glob 匹配时请使用 `--include`。
-
-此种方式也适用于根据文件路径过滤。
-
-文件路径可以是绝对路径，也可以是相对于 Rstest 根目录的路径。
-
-```bash
-# 根据绝对路径过滤
-rstest /Users/userName/Desktop/projects/rstest/packages/core/tests/index.test.ts
-
-# 根据相对路径过滤
-rstest packages/core/tests/index.test.ts
-
-# 根据 project 目录过滤
-rstest packages/core
-```
-
 ### include/exclude
 
-传入 `rstest foo` 等位置参数时，Rstest 会在 [include](/config/test/include) 和 [exclude](/config/test/exclude) 配置的基础上进一步筛选文件。
-你可以通过 `include` 和 `exclude` 选项修改测试文件的范围。
-
-如，匹配 `test/a` 目录下的名为 `index` 的测试文件：
+位置参数会在 [`include`](/config/test/include) 和 [`exclude`](/config/test/exclude) 选出的文件范围基础上进一步筛选。你也可以通过 CLI 覆盖 `include` 和 `exclude`：
 
 ```bash
+# 匹配 test/a 目录下路径包含 index 的测试文件
 rstest index --include "test/a/*.test.ts"
-```
 
-匹配 `test/a` 和 `test/b` 目录下的测试文件：
-
-```bash
+# 匹配 test/a 或 test/b 目录下的测试文件
 rstest --include "test/a/*.test.ts" --include "test/b/*.test.ts"
+
+# 排除指定目录
+rstest --exclude "test/legacy/**"
 ```
+
+默认情况下，未匹配到任何测试文件时 Rstest 会以失败退出。传入 `--passWithNoTests`（或在配置中开启 [`passWithNoTests`](/config/test/pass-with-no-tests)）可在无匹配文件时以退出码 `0` 通过。
 
 ## 根据测试名称过滤
 
-如果你只想运行某些测试用例，可以使用 `--testNamePattern`（简写为 `-t`）选项。它会运行名称与给定模式匹配的测试。
+使用 `--testNamePattern`（简写为 `-t`）或配置项 [`testNamePattern`](/config/test/test-name-pattern)，可以只运行名称匹配给定字符串或正则表达式的测试。
 
 ### 按关键字匹配
 
-这是最简单的方法。它将运行完整名称包含给定关键字的测试用例或测试套件。
-
-例如，只运行名称包含 "bar" 的测试用例：
+传入关键字即可运行名称包含该关键字的测试用例或测试套件。当套件名称匹配时，该套件内的所有测试都会运行：
 
 ```bash
 rstest -t bar
 ```
 
-如果套件名称匹配，则其中的所有测试都将被运行。
-
-你还可以提供多个由空格分隔的关键字。这将匹配完整名称中出现所有关键字的测试用例。例如，要运行套件路径中出现 `'suite-bar'` 且测试名称中包含 `'test-baz'` 的测试：
+Rstest 会将 `-t` / `testNamePattern` 编译为单个 `RegExp`。当模式中不包含 `>` 时，Rstest 会用单个空格拼接外层到内层的套件名和测试用例名（例如 `suite-foo suite-bar test-baz`）。因此，包含空格的字符串匹配的是完整名称中**连续出现**的这段字符：
 
 ```bash
+# 匹配 "suite-foo > suite-bar > test-baz"，
+# 不会匹配 "suite-foo > suite-bar > suite-bar1 > test-baz"
 rstest -t 'suite-bar test-baz'
+```
+
+如果需要跨嵌套层级匹配不相邻的关键字，请使用 `.*` 连接：
+
+```bash
+rstest -t 'suite-bar.*test-baz'
 ```
 
 ### 按完整测试名称匹配
 
-你也可以提供完整的测试名称来运行特定的测试用例。
+在终端输出中，Rstest 会使用 `>` 连接从外到内的测试套件名和测试用例名。当模式中包含 `>` 时，Rstest 会直接针对这条以 `>` 分隔的完整名称进行匹配。
 
-为了更好的输出可读性，Rstest 使用 `>` 来连接测试套件和测试用例的名称。完整的测试名称是测试套件从外到内的名称和测试用例名称的拼接，用 `>` 分隔。
+例如，对于以下测试文件及其输出：
 
-例如，参考以下测试结构及其输出：
-
-```ts
-// foo.test.ts
+```ts title="foo.test.ts"
 import { describe, test } from '@rstest/core';
 
 describe('suite-foo', () => {
@@ -131,7 +109,7 @@ describe('suite-foo', () => {
   ✓ suite-foo > suite-bar > suite-bar1 > test-baz
 ```
 
-如果希望只运行 `suite-bar` 中的 `test-baz` 测试用例，你可以使用：
+如果只运行 `suite-bar` 下直接包含的 `test-baz`：
 
 ```bash
 rstest foo.test.ts -t 'suite-foo > suite-bar > test-baz'
@@ -139,94 +117,78 @@ rstest foo.test.ts -t 'suite-foo > suite-bar > test-baz'
 
 ### 按正则表达式匹配
 
-当需要更精确地匹配测试名称时，你可以将模式视为一个正则表达式。这对于复杂的过滤场景非常有用。
-
-例如，如果你想精确匹配 `suite-bar > test-baz`，而不是任何包含此字符串的测试，可以使用正则表达式的起始符 `^` 和结束符 `$`：
+因为模式会按正则表达式求值，可以使用起止锚点 `^` 和 `$` 精确匹配完整测试名称，避免命中包含该子串的其他测试：
 
 ```bash
-rstest foo.test.ts -t '^suite-bar > test-baz$'
+rstest foo.test.ts -t '^suite-foo > suite-bar > test-baz$'
 ```
+
+也可以在 `rstest.config.ts` 中通过 [`testNamePattern`](/config/test/test-name-pattern) 直接传入 `RegExp`，例如用 `/^(?!.*slow).*$/` 排除名称中包含 `slow` 的测试。
 
 ## 根据项目名称过滤
 
-Rstest 支持通过 [projects](/config/test/projects) 配置来定义多个测试项目，你可以通过 `--project` 选项来过滤运行特定项目。
+在通过 [`projects`](/config/test/projects) 配置了多个测试项目的工作区中，使用 `--project` 按项目 [`name`](/config/test/name) 筛选要运行的项目。
 
-如，匹配[名称](/config/test/name)为 `@test/a` 或 `@test/b` 的项目：
+匹配指定的项目名称：
 
 ```bash
 rstest --project '@test/a' --project '@test/b'
 ```
 
-你也可以使用通配符来匹配项目名称：
+使用 `*` 通配符匹配项目名称：
 
 ```bash
 rstest --project '@test/*'
 ```
 
-你也可以通过取反来排除某些项目：
+使用前缀 `!` 排除指定项目：
 
 ```bash
 rstest --project '!@test/a'
 ```
 
+## 失败重跑、变更检测与分片 \{#failed-tests-changes-and-shards}
+
+- **重跑失败的测试文件**：传入 `-f` 或 `--onlyFailures`（详见 [`onlyFailures`](/config/test/only-failures)），仅重新运行上一次完整运行中失败的测试文件。
+- **运行源文件关联的测试**：传入 `--related`（或 `--findRelatedTests`）和源文件路径，仅运行依赖这些源文件的测试；详见[运行相关测试](/guide/basic/cli#运行相关测试)。
+- **运行 Git 变更相关的测试**：传入 `--changed`，运行受本地或指定提交范围内 Git 变更影响的测试；详见[运行变更相关测试](/guide/basic/cli#运行变更相关测试)。
+- **在 CI 中分片执行**：传入 `--shard <index>/<count>` 将测试文件拆分到多个并行任务中；详见[运行分片](/guide/basic/cli#sharding-tests)。
+- **在 watch 模式下交互过滤**：在 Node watch 模式中，按 `t` 设置测试名称过滤模式，按 `p` 设置文件过滤条件，按 `f` 重跑失败文件，按 `a` 清除当前过滤条件并重跑全部测试；详见 [CLI 快捷键](/guide/basic/cli#cli-快捷键)。
+
 ## 组合过滤
 
-所有过滤方式都可以组合使用。例如：
+文件、项目和测试名称过滤条件可以组合使用：
 
 ```bash
 rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePattern login
 ```
 
-此时，rstest 会只运行 `test` 目录下所有 `.test.ts` 文件中名称包含 login 的测试用例，同时排除 `test/legacy` 目录。
-
-## 常见用法
-
-- **只运行某个文件**：`rstest '"test/foo.test.ts"'`
-
-- **只运行某个目录下的测试**：`rstest --include "test/api/*.test.ts"`
-
-- **排除某些测试**：`rstest --exclude "test/legacy/**"`
-
-- **只运行名称包含 login 的测试**：`rstest -t login`
-
-- **组合过滤**：`rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePattern login`
+该命令会在 `test/` 目录下除 `test/legacy/` 之外的所有 `.test.ts` 文件中，只运行名称包含 `login` 的测试用例。
 
 ## 通过测试 API 过滤
 
-使用 `.only` 标记将仅运行某些测试套件或用例。
+在测试代码中，可以通过 [`test`](/api/runtime-api/test-api/test) 和 [`describe`](/api/runtime-api/test-api/describe) 的修饰符控制要执行的套件或用例：
 
-如，此时将仅运行 `suite A` 内的测试用例及 `case A`：
+- `.only`：仅运行当前文件内标记了 `.only` 的套件或测试用例（只调试单个文件时可配合 CLI 文件过滤使用）。
+- `.skip` / `.todo`：跳过套件或测试用例，或将其标记为待实现。
+- `.skipIf(condition)` / `.runIf(condition)`：根据布尔表达式按条件跳过或运行套件和测试用例。
+- `context.skip()`：在测试执行过程中动态跳过当前测试。
 
 ```ts
+import { describe, test } from '@rstest/core';
+
 describe.only('suite A', () => {
-  // ...
+  test('runs only this suite in the file', () => {});
 });
 
-describe('suite B', () => {
-  // ...
-});
+describe.skip('suite B', () => {});
+test.todo('pending case');
+test.skipIf(process.platform === 'win32')('POSIX only', () => {});
+test.runIf(Boolean(process.env.CI))('CI only', () => {});
 
-test.only('case A', () => {
-  // ...
-});
-
-test('case B', () => {
-  // ...
-});
-```
-
-:::note
-需要注意的是，`.only` 标记仅对当前测试文件生效。如果你希望仅执行某个特定文件内的特定用例，可使用 `根据文件名过滤` + `通过测试 API 过滤` 的组合方式。
-:::
-
-使用 `.skip` 或 `.todo` 标记将跳过某些测试套件或用例。
-
-```ts
-describe.skip('suite A', () => {
-  // ...
-});
-
-test.todo('case A', () => {
-  // ...
+test('skips dynamically', (context) => {
+  if (!process.env.API_TOKEN) {
+    context.skip();
+  }
 });
 ```

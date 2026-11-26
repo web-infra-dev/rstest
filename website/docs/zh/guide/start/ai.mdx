@@ -1,5 +1,5 @@
 ---
-description: 本章节介绍如何帮助 AI 更全面地了解 Rstest 的功能、配置与最佳实践，从而在日常开发和问题排查过程中提供更准确的帮助。
+description: 通过提示词、Agent Skills、llms.txt、Markdown 文档、Markdown 报告器和 AGENTS.md，让 Coding Agent 更准确地配置、运行和排查 Rstest 测试。
 ---
 
 import { Prompt } from '@rspress/core/theme';
@@ -7,7 +7,7 @@ import { PackageManagerTabs } from '@theme';
 
 # AI
 
-为了帮助 AI 更全面地了解 Rstest 的功能、配置与最佳实践，从而在日常开发和问题排查过程中提供更准确的帮助，Rstest 提供了以下能力：
+Rstest 提供面向 Coding Agent 的提示词、Agent Skills、纯文本文档和 Markdown 报告器，用于辅助日常测试配置、迁移与问题排查：
 
 - [Agent prompt](#agent-prompt)
 - [Agent Skills](#agent-skills)
@@ -44,22 +44,22 @@ https://rstest.rs/guide/start/agent-migrate.md`}
 
 ## Agent Skills
 
-Agent Skills 是可安装到 Agent 中的领域知识包，能够让 Agent 在特定场景下更准确、更专业地给出建议或执行操作。
+Agent Skills 是可安装到 Agent 中的领域知识包，用于指导 Coding Agent 完成 Rstest 相关工作流。
 
-我们在 [rstackjs/agent-skills](https://github.com/rstackjs/agent-skills) 仓库中为 Rstack 生态提供了许多 Skills，其中关于 Rstest 的 Skills 包括：
+[rstackjs/agent-skills](https://github.com/rstackjs/agent-skills) 仓库包含以下与 Rstest 相关的 Skills：
 
 - [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest)：将 Jest、Vitest 或 Playwright Test 项目迁移到 Rstest；Playwright E2E 测试使用 `@rstest/playwright`。
-- [rstest-best-practices](https://github.com/rstackjs/agent-skills#rstest-best-practices)：Rstest 相关的最佳实践。
-- [rstest-debugging](https://github.com/rstackjs/agent-skills#rstest-debugging)：系统化 Debug Rstest 问题，包括性能回归。适用于 Rstest 比预期更慢、比 Jest 或 Vitest 更慢，或需要在尝试配置或代码改动前判断瓶颈是在构建启动还是测试执行中的场景。
+- [rstest-best-practices](https://github.com/rstackjs/agent-skills#rstest-best-practices)：Rstest 配置与测试编写的最佳实践。
+- [rstest-debugging](https://github.com/rstackjs/agent-skills#rstest-debugging)：系统化排查 Rstest 问题，包括性能回归。适用于 Rstest 比预期慢、比 Jest 或 Vitest 慢，或需要在改动配置或代码前先定位瓶颈是在构建启动还是测试执行阶段的场景。
 
-在支持 Skills 的 Coding Agent 中，可以通过以下命令使用 [skills](https://www.npmjs.com/package/skills) 包安装指定的 Skill：
+在支持 Skills 的 Coding Agent 中，可以通过 [skills](https://www.npmjs.com/package/skills) 安装指定 Skill：
 
 <PackageManagerTabs
   command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
   dlx
 />
 
-安装完成后，用自然语言输入相关提示词即可触发对应 Skill，例如：
+安装完成后，用自然语言即可触发对应 Skill，例如：
 
 ```
 帮我把这个 Playwright Test 项目迁移到 @rstest/playwright
@@ -67,62 +67,42 @@ Agent Skills 是可安装到 Agent 中的领域知识包，能够让 Agent 在�
 
 ## llms.txt
 
-[llms.txt](https://llmstxt.org/) 是一种帮助 LLM 发现和使用项目文档的标准规范。Rstest 遵循该规范，发布了以下两个文件：
+[llms.txt](https://llmstxt.org/) 是帮助 LLM 发现和读取项目文档的标准规范。Rstest 发布了以下两个文件：
 
-- [llms.txt](https://rstest.rs/llms.txt)：结构化索引文件，包含所有文档页面的标题、链接与简要描述。
+- [llms.txt](https://rstest.rs/llms.txt)：结构化索引文件，包含所有文档页面的标题、链接和简要说明。
 
 ```
 https://rstest.rs/llms.txt
 ```
 
-- [llms-full.txt](https://rstest.rs/llms-full.txt)：完整内容文件，将所有文档页面的内容合并为单个文件。
+- [llms-full.txt](https://rstest.rs/llms-full.txt)：完整内容文件，将所有文档页面合并为单个文件。
 
 ```
 https://rstest.rs/llms-full.txt
 ```
 
-你可以根据使用场景选择合适的文件：
+可根据上下文窗口预算选择：
 
-- `llms.txt` 体积较小、消耗 token 少，适合让 AI 按需获取具体页面。
-- `llms-full.txt` 包含全量文档内容，无需 AI 逐一跟随链接，适合需要 AI 全面了解 Rstest 的场景，但会消耗更多 token，建议在支持大上下文窗口的 AI 工具中使用。
+- `llms.txt` 体积小、消耗 token 少，适合让 Agent 按需获取具体页面。
+- `llms-full.txt` 将全部文档合并在单个文件中，无需 Agent 逐一跳转链接，但 token 消耗更高。
 
 ## Markdown 文档
 
-Rstest 文档的每个页面都提供对应的 `.md` 纯文本版本，可直接作为上下文提供给 AI。你可以在文档任意页面的标题下方点击「复制 Markdown」或「复制 Markdown 链接」按钮，获取该页面对应的 Markdown 文件内容或链接。
+Rstest 文档的每个页面都提供对应的 `.md` 纯文本版本。在任意文档页面标题下方点击「复制 Markdown」或「复制 Markdown 链接」，即可将具体章节作为上下文提供给 AI：
 
 ```
 https://rstest.rs/guide/start/index.md
 ```
 
-将 Markdown 链接或内容提供给 AI，即可让其精确了解某一具体章节的内容，适合在针对性问题排查或查阅特定内容时使用。
-
 ## Markdown 报告器
 
-当你希望 AI 直接消费测试结果时，可以使用 `md` 报告器。它会将测试结果输出为一份 markdown 文档到 stdout，相比带颜色的终端日志更容易被 LLM 解析，输出也更简洁，通常能减少 token 消耗。
+在 Agent 环境中未显式配置报告器时，Rstest 默认启用 `md` 报告器（`['md']`），向 stdout 输出精简的 Markdown 文档供 LLM 解析。设置 `RSTEST_NO_AGENT=1` 可关闭 Agent 环境检测并保留默认的控制台报告器。
 
-在 Agent 环境中，当你没有显式配置 reporters 时，Rstest 会默认使用 `md`。
-
-```bash
-npx rstest --reporters=md
-```
-
-你也可以在 `rstest.config.ts` 中配置它，并在本地或 CI 工作流中与其他报告器组合使用。
-
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  reporters: ['md'],
-});
-```
-
-更多介绍请参考 [Markdown 报告器](/guide/basic/reporters#markdown-报告器)。
+预设、CLI 参数与配置项详情见 [Markdown 报告器](/guide/basic/reporters#markdown-报告器)。
 
 ## AGENTS.md
 
-你可以在使用 Rstest 的项目根目录创建一个 `AGENTS.md` 文件。该文件遵循 [AGENTS.md](https://agents.md/) 规范，向 Agents 提供项目的关键信息。
-
-以下是可以在 `AGENTS.md` 中添加的 Rstest 相关内容示例：
+在项目根目录创建遵循 [AGENTS.md](https://agents.md/) 规范的 `AGENTS.md` 文件，向 Coding Agent 提供项目测试命令与文档链接：
 
 ```markdown wrapCode
 # AGENTS.md
@@ -141,4 +121,4 @@ You are an expert in JavaScript, Rspack, Rsbuild, and Rstest. You write maintain
 - Rstest: https://rstest.rs/llms.txt
 ```
 
-你也可以根据项目的实际情况进行修改，添加更多关于项目结构、整体架构等多方面的信息，以便 Agents 更好地理解你的项目。
+可以根据项目实际情况补充目录结构、约定和自定义脚本说明。

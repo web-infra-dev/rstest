@@ -1,5 +1,5 @@
 ---
-description: Disable interception of console logs. By default, Rstest intercepts the console log, which will help track log sources.
+description: Disable interception of console logs. By default, Rstest intercepts console calls to track log sources.
 ---
 
 # disableConsoleIntercept
@@ -8,9 +8,7 @@ description: Disable interception of console logs. By default, Rstest intercepts
 - **Default:** `false`
 - **CLI:** `--disableConsoleIntercept`
 
-Disable interception of console logs. By default, Rstest intercepts the console log, which will help track log sources.
-
-If you don't want Rstest to intercept console logs, you can set this configuration to `true`.
+Disable Rstest's console log interception. By default, Rstest intercepts `console` calls to associate logs with their test source.
 
 import { Tab, Tabs } from '@theme';
 
@@ -31,6 +29,4 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-It should be noted that when you disable interception of console logs, the [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace) configurations will not take effect. However, if [silent](/config/test/silent) is enabled, Rstest still keeps an internal interception path so `silent` can continue to control test log output.
-
-In browser mode, that internal path still calls the original `console.*` for DevTools.
+When `disableConsoleIntercept` is `true`, [onConsoleLog](/config/test/on-console-log) and [printConsoleTrace](/config/test/print-console-trace) do not take effect. If [silent](/config/test/silent) is also enabled, Rstest still keeps an internal interception path so `silent` can control test log output; in Browser Mode, that path still calls the original `console.*` for DevTools.

@@ -1,8 +1,9 @@
 ---
-description: 选择覆盖率收集方式，支持 istanbul 和 v8。
+description: 收集代码覆盖率并生成覆盖率报告，支持 istanbul 和 v8。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
+import { PackageManagerTabs, Tab, Tabs } from '@theme';
 
 # coverage
 
@@ -25,12 +26,44 @@ type CoverageOptions = {
   thresholds?: CoverageThresholds;
 };
 
-type CoverageReporter = string | [string, Record<string, unknown>] | ReportBase;
+type ReportWithOptions<Name extends keyof ReportOptions = keyof ReportOptions> =
+  Name extends keyof ReportOptions
+    ? [Name, Partial<ReportOptions[Name]>]
+    : [Name, Record<string, unknown>];
+
+type CoverageReporter =
+  | keyof ReportOptions
+  | ReportWithOptions
+  | ReportBase
+  | string
+  | [string, Record<string, unknown>];
 ```
 
-- **默认值：** `undefined`
+- **默认值：**
 
-收集测试覆盖率信息并生成覆盖率报告。
+```ts
+{
+  enabled: false,
+  provider: 'istanbul',
+  reporters: ['text', 'html', 'clover', 'json'],
+  reportsDirectory: './coverage',
+  clean: true,
+  reportOnFailure: false,
+  allowExternal: false,
+  exclude: [
+    '**/node_modules/**',
+    '**/__tests__/**',
+    '**/__mocks__/**',
+    '**/*.d.ts',
+    '**/*.{test,spec}.[jt]s',
+    '**/*.{test,spec}.[cm][jt]s',
+    '**/*.{test,spec}.[jt]sx',
+    '**/*.{test,spec}.[cm][jt]sx',
+  ],
+}
+```
+
+收集代码覆盖率并生成覆盖率报告。
 
 ```bash
 $ npx rstest --coverage
@@ -49,11 +82,9 @@ All files |     100 |      100 |     100 |     100 |
 
 - **类型：** `boolean`
 - **默认值：** `false`
-- **CLI：** `--coverage`, `--coverage=false`, `--no-coverage`
+- **CLI：** `--coverage`、`--coverage=false`、`--no-coverage`、`--coverage.enabled`
 
-启用或禁用测试覆盖率收集。
-
-import { Tab, Tabs } from '@theme';
+启用或禁用代码覆盖率收集。
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
@@ -80,7 +111,10 @@ export default defineConfig({
 - **默认值：** `'istanbul'`
 - **CLI：** `--coverage.provider <provider>`
 
-选择覆盖率收集方式。Rstest 同时支持 [istanbul](https://istanbul.js.org/) 和 `v8`。如果你更关注基于 SWC 插桩的转换性能和稳定的 Istanbul 语义，可以选择 `istanbul`；如果开启 coverage 后主要受内存压力影响，可以选择 `v8`，它通常有更低的运行时内存占用，因为不会为每个执行模块注入覆盖率计数器。
+选择覆盖率收集方式：
+
+- `'istanbul'`：在 transform 阶段通过 SWC 插桩收集覆盖率，Istanbul 语义稳定；但已执行模块会保留覆盖率计数器，运行时内存占用相对较高。
+- `'v8'`：通过 Node.js inspector 或 Chromium 原生 coverage API 收集数据并重映射为 Istanbul 格式；运行时内存占用更低，适合受内存压力影响的大型测试套件。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -95,19 +129,15 @@ export default defineConfig({
 
 #### Istanbul provider
 
-[Istanbul](https://istanbul.js.org/) 是一个广泛使用的 JavaScript 代码覆盖率工具，它通过插桩来收集覆盖率信息。
-
-要启用 istanbul 覆盖率，需要先安装 `@rstest/coverage-istanbul`。
-
-import { PackageManagerTabs } from '@theme';
+安装 [@rstest/coverage-istanbul](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-istanbul) 以使用 [Istanbul](https://istanbul.js.org/) 插桩收集覆盖率：
 
 <PackageManagerTabs command="add @rstest/coverage-istanbul -D" />
 
-`@rstest/coverage-istanbul` 由 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 提供支持。Rstest 会在 transform 阶段通过 SWC 对源文件插桩，因此该 provider 具有较好的 transform 性能。但执行模块中会保留用于收集覆盖率的计数器，因此运行时内存占用可能更高。
+`@rstest/coverage-istanbul` 在 SWC 转译阶段使用 [swc-plugin-coverage-instrument](https://github.com/kwonoj/swc-plugin-coverage-instrument) 对源文件插桩。
 
 ##### 排除代码
 
-如果整个文件、一组生成文件或注入脚本都不应被插桩，请使用 `coverage.exclude`：
+如需跳过整个文件、一组生成文件或注入脚本，请使用 `coverage.exclude`（或在 CLI 中重复传入 `--coverage.exclude`）：
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -121,21 +151,7 @@ export default defineConfig({
 });
 ```
 
-也可以在临时执行时通过 CLI 传入相同的规则：
-
-```bash
-npx rstest run --coverage --coverage.exclude "**/src/injected-script.ts" --coverage.exclude "**/src/**/*.{worker,evaluate}.ts"
-```
-
-Istanbul ignore 注释更适合在一个仍需要收集覆盖率的文件中跳过很小的片段：
-
-```ts title='src/injected-script.ts'
-/* istanbul ignore file */
-
-export function createInjectedScript() {
-  return `globalThis.__APP_READY__ = true;`;
-}
-```
+对于仍需统计覆盖率的文件中的少量代码片段，可使用 Istanbul ignore 注释（`/* istanbul ignore file */`、`/* istanbul ignore next */`、`/* istanbul ignore if */`、`/* istanbul ignore else */`）：
 
 ```ts
 /* istanbul ignore next */
@@ -164,64 +180,36 @@ if (hasNativeFeature()) {
 
 - **Legacy decorators 和 metadata**：生成的语句和分支可能被计入源码覆盖率，即使所有源码分支都已测试，报告中的覆盖率仍可能偏低。参见 [SWC #5535](https://github.com/swc-project/swc/issues/5535)。
 - **TypeScript 运行时代码**：`enum`、`namespace` 和构造器参数属性可能引入生成代码的计数，包括位于第 `0` 行的记录。参见 [swc-plugin-coverage-instrument #300](https://github.com/kwonoj/swc-plugin-coverage-instrument/issues/300)。
-- **模块重载**：在 `rs.resetModules()` 后重新导入模块，可能重置其覆盖率计数器，丢失此前记录的执行情况。参见 [swc-plugin-coverage-instrument #295](https://github.com/kwonoj/swc-plugin-coverage-instrument/issues/295)。
-- **序列化函数**：将插桩后的函数序列化，再通过 `page.evaluate`、`Worker` 等方式在其他作用域或执行环境运行，可能因缺少覆盖率辅助函数而报错 `ReferenceError: cov_... is not defined`。
+- **模块重载**：在 `rs.resetModules()` 后重新导入模块，可能重置其覆盖率计数器并丢失此前记录的执行情况。参见 [swc-plugin-coverage-instrument #295](https://github.com/kwonoj/swc-plugin-coverage-instrument/issues/295)。
+- **序列化函数**：将插桩后的函数序列化到其他作用域或执行环境（如 `page.evaluate` 或 `Worker`）运行，可能因缺少覆盖率辅助函数而报错 `ReferenceError: cov_... is not defined`。
 
 #### V8 provider
 
 <ApiMeta addedVersion="0.10.2" />
 
-`v8` provider 基于 Node.js inspector 或 Chromium 原生 coverage API 收集数据，并重映射为 Istanbul 格式。相比 Istanbul 插桩，V8 coverage 通常有更低的运行时内存占用，因为执行模块中不需要额外的覆盖率计数器。它更适合 coverage 内存压力明显的大型测试套件。
-
-要启用 V8 覆盖率，需要先安装 [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8)。
+安装 [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8) 以收集原生 V8 覆盖率：
 
 <PackageManagerTabs command="add @rstest/coverage-v8 -D" />
 
-由于底层覆盖率数据来自 Node.js / Chromium V8 本身，重映射后的 branch 覆盖率和未覆盖行信息在不同引擎版本之间可能存在轻微差异。
+由于底层覆盖率数据直接来自 Node.js / Chromium V8，重映射后的分支覆盖率和未覆盖行细节在不同引擎版本间可能略有差异。
 
 你可以用 V8 覆盖率数据评估 Node.js 测试构建产物的利用率。具体用法见[查看构建产物的覆盖率](/guide/debug/debugging#inspect-bundle-coverage)。
 
 ##### Ignore hints
 
-`v8` provider 在将 V8 coverage 转换为 Istanbul 格式时会识别 ignore hints。hint 前缀可以使用以下任意一种形式：
+`v8` provider 支持 `istanbul`、`c8`、`v8` 和 `node:coverage` 前缀的忽略注释（`next`、`if`、`else`、`start`/`stop`、`file`）。建议在项目中统一使用同一种前缀：
 
 ```ts
-/* istanbul ignore next */
-/* c8 ignore next */
-/* v8 ignore next */
-/* node:coverage ignore next */
-```
-
-建议在同一个项目中保持前缀一致。支持的 hint 形式如下：
-
-```ts
-/* v8 ignore next */
-const value = optionalExpensivePath();
-
-/* v8 ignore if */
-if (process.env.NODE_ENV === 'test') {
-  setupTestOnlyState();
-}
-
-/* v8 ignore else */
-if (hasNativeFeature()) {
-  useNativeFeature();
-} else {
-  useFallback();
-}
-
 /* v8 ignore start */
 const generatedLookup = createGeneratedLookup();
 /* v8 ignore stop */
 ```
 
-`ignore file` 也会被识别，但它会在 source map 重映射前作用于生成后的 coverage entry。正常的 Rstest 输出中，一个生成 chunk 可能包含多个源文件，因此如果需要排除某个源文件或一组生成文件，请优先使用 `coverage.exclude`。
+`ignore file` 会在 source map 重映射前作用于生成后的 coverage entry；由于单个生成 chunk 可能包含多个源文件，跳过整个源文件请优先使用 `coverage.exclude`。
 
-`v8` provider 适用于 `node`、`jsdom` 和 `happy-dom` 测试环境。Browser Mode 的稳定支持范围仅限使用 Playwright provider 的 headless、非 watch Chromium 运行。Chromium coverage 从 page renderer 中实际执行且通过 HTTP(S) URL 标识的脚本收集，并通过 source map 重映射，无需对应用代码插桩。带 query 的脚本 URL、classic script 和 module script 均受支持。
+`v8` provider 适用于 `node`、`jsdom` 和 `happy-dom` 环境。Browser Mode 的稳定支持仅限使用 Playwright provider 的 headless、非 watch Chromium 运行：Chromium 从 HTTP(S) 脚本（支持 classic、module 脚本及带 query 的 URL）收集覆盖率，并通过 source map 重映射，无需对应用代码插桩。
 
-headed 和 watch Browser Mode coverage 仍为实验性能力。报告可能包含 container 或非活跃 runner frame 的执行数据，watch rebuild 也可能无法严格保持 script 与 source map 的版本配对。如果这些模式需要稳定的 coverage 语义，请使用默认的 `istanbul` provider。Firefox 和 WebKit 未暴露所需的原生 coverage API，也必须使用 `istanbul`。
-
-浏览器原生 V8 coverage 不会收集仅通过 `blob:`、`data:`、其他非 HTTP source URL 标识或没有 URL 的脚本，包括 anonymous `eval` 和 `new Function` 调用；也不会收集仅在独立 `Worker` 或 `SharedWorker` target 中运行的代码。如果这些脚本也必须计入 coverage，请使用 `istanbul`。
+headed 和 watch 模式下的 Browser Mode V8 覆盖率为实验性能力：报告可能包含容器或非活跃 runner frame 的执行数据，watch 重建也可能使脚本与 source map 配对不准确。Firefox 和 WebKit 未暴露原生覆盖率 API。浏览器原生 V8 覆盖率也不会收集 `blob:`、`data:`、其他非 HTTP 或匿名脚本（如 `eval`、`new Function`），以及仅在独立 `Worker` 或 `SharedWorker` 中运行的代码。上述场景请改用 `istanbul`。
 
 ### include
 
@@ -229,11 +217,11 @@ headed 和 watch Browser Mode coverage 仍为实验性能力。报告可能包�
 - **默认值：** `undefined`
 - **CLI：** `--coverage.include <pattern>`
 
-对匹配 glob 规则的文件进行测试覆盖率收集。重复传入 CLI 参数可以指定多个模式。
+指定要纳入覆盖率收集的 glob 模式列表。可重复传入 CLI 参数以指定多个模式。
 
-默认情况下，Rstest 会收集已测试文件的覆盖率。如果你希望在覆盖率报告中包含未测试的文件，可以使用 `include` 选项指定要包含的文件或模式。
+默认情况下，Rstest 只收集已测试文件的覆盖率；设置 `include` 后可将未测试的源文件纳入报告。
 
-需要注意的是，这里应使用标准 glob 语法。匹配单个扩展名时，请写 `src/**/*.ts`，不要写 `src/**/*.{ts}`。底层 glob 库会把单元素花括号按字面量处理，因此 `src/**/*.{ts}` 不会匹配 `.ts` 文件。
+请使用标准 glob 语法，匹配单个扩展名时写 `src/**/*.ts`，不要写 `src/**/*.{ts}`（底层 glob 库会把单元素花括号按字面量处理）。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -252,34 +240,14 @@ export default defineConfig({
 
 - **类型：** `boolean | string`
 - **默认值：** `undefined`
-- **CLI：** `--coverage.changed`, `--coverage.changed=<commit>`
+- **CLI：** `--coverage.changed`、`--coverage.changed=<commit>`
 
-只收集当前 Git 仓库中变更文件的覆盖率。你也可以传入 commit 或 branch，收集从该 ref 以来变更文件的覆盖率。
+只收集当前 Git 仓库中变更文件的覆盖率，或仅收集自指定 commit / branch ref 以来变更文件的覆盖率。
 
-这个选项既可以写在配置里，也可以通过 CLI 使用：
+`coverage.changed` 只过滤覆盖率报告范围，不改变执行的测试范围：
 
-- 当你希望在项目里长期保持一个默认行为时，使用 `rstest.config.ts` 中的 `coverage.changed`，例如在 CI 中。
-- 当你只想临时跑一次时，使用 `--coverage.changed`。
-
-`coverage.changed` 只控制覆盖率报告范围，不会改变要运行的测试。
-
-也就是说，下面两个命令的效果并不一样：
-
-```bash
-npx rstest run --changed
-npx rstest run --coverage.changed
-```
-
-- `--changed` 会改变测试选择范围，只运行与变更文件相关的测试。
-- `--coverage.changed` 会保持正常的测试选择范围，只把覆盖率报告限制在变更的源码文件上。
-
-#### 与 `--changed` 的关系
-
-- 当使用 [`--changed`](/guide/basic/cli#运行变更相关测试) 且没有配置 `coverage.changed` 时，覆盖率报告会继承 `--changed` 收集到的变更文件。
-- 如果 `--changed` 命中了 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，Rstest 会回退为运行完整测试套件。此时覆盖率默认也会回到完整范围，除非显式启用了 `coverage.changed`。
-- 如果你想用 `--changed` 缩小测试执行范围，但仍然保留完整覆盖率报告，可以在配置中将 `coverage.changed` 设为 `false`。
-
-常见用法如下：
+- `--changed` 仅运行与变更文件相关的测试。
+- `--coverage.changed` 运行正常的测试集，但覆盖率报告仅包含变更的源文件。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -292,29 +260,20 @@ export default defineConfig({
 });
 ```
 
-上面的配置不会改变测试执行范围，但会让覆盖率报告只包含相对 `origin/main` 有变更的文件。
-
-```ts title='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  coverage: {
-    enabled: true,
-    changed: 'HEAD~1',
-  },
-});
-```
-
 ```bash
+# 同时将测试和覆盖率限制在变更文件范围
 npx rstest run --changed --coverage
+
+# 运行全部测试，仅报告未提交变更或相对某 ref 变更文件的覆盖率
 npx rstest run --coverage.changed
 npx rstest run --coverage.changed=HEAD~1
-npx rstest run --coverage.changed=origin/main
 ```
 
-- `npx rstest run --changed --coverage` 会运行变更相关测试，并且默认把覆盖率也限制到同一批变更文件。
-- `npx rstest run --coverage.changed=HEAD~1` 会执行正常测试集，但只报告相对 `HEAD~1` 以来变更文件的覆盖率。
-- `npx rstest run --coverage.changed=origin/main` 适合在功能分支上使用：它仍然会执行正常测试集，但覆盖率报告只包含相对 `origin/main` 变更过的文件。
+#### 与 `--changed` 的关系
+
+- 使用 [`--changed`](/guide/basic/cli#运行变更相关测试) 且未配置 `coverage.changed` 时，覆盖率报告会继承 `--changed` 收集到的变更文件。
+- 如果 `--changed` 命中 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，Rstest 会运行完整测试套件，此时覆盖率默认也保持完整范围，除非显式启用了 `coverage.changed`。
+- 若希望用 `--changed` 缩小测试范围但保留完整覆盖率报告，可在配置中设置 `coverage.changed: false`。
 
 ### exclude
 
@@ -335,9 +294,9 @@ npx rstest run --coverage.changed=origin/main
 ];
 ```
 
-匹配 glob 规则的文件将从测试覆盖率收集中排除。自定义配置将与默认值合并。
+从覆盖率收集中排除的 glob 模式列表，自定义配置会与默认值合并。可重复传入 CLI 参数以指定多个模式。
 
-Rstest 默认不会排除名为 `test` 的目录。这样可以避免误排除路径中包含 `test` 片段的 package 或 workspace 源文件，例如 `packages/test/src/index.ts`。如果你希望从覆盖率中排除这些目录，可以显式添加 `test/**` 或 `**/test/**` 等规则。
+Rstest 默认不排除名为 `test` 的目录，以免误排除路径中含 `test` 片段的包或工作区源码（例如 `packages/test/src/index.ts`）。如需排除这类目录，请显式添加 `test/**` 或 `**/test/**`。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -356,18 +315,15 @@ export default defineConfig({
 - **默认值：** `['text', 'html', 'clover', 'json']`
 - **CLI：** `--coverage.reporters <reporter>`
 
-用于覆盖率收集的报告器。Rstest 使用标准 [Istanbul reporter API](https://istanbul.js.org/docs/advanced/alternative-reporters/)，而不是 Rstest 专属的 coverage reporter API。
+用于生成覆盖率报告的 reporter。Rstest 使用标准的 [Istanbul reporter API](https://istanbul.js.org/docs/advanced/alternative-reporters/)。
 
-每个 reporter 可以是字符串（reporter 名称）、包含 reporter 名称及其选项的元组，也可以是带有 `execute(context)` 方法且兼容 Istanbul 的 reporter 对象。
-
-CLI 仅支持传入报告器名称。如需指定多个报告器，可以重复使用该参数：
+每一项可以是 reporter 名称、`[name, options]` 元组，或带有 `execute(context)` 方法且兼容 Istanbul 的 reporter 对象。在 CLI 中可通过重复参数传入多个 reporter 名称：
 
 ```bash
 npx rstest run --coverage.reporters text --coverage.reporters=json
 ```
 
-- 有关可用报告器，可参考 [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/)。
-- 有关报告器选项的详细信息，可参考 [@types/istanbul-reports](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts)。
+可用的内置 reporter 名称详见 [Istanbul Reporters](https://istanbul.js.org/docs/advanced/alternative-reporters/)，各 reporter 的选项详见 [@types/istanbul-reports](https://github.com/DefinitelyTyped/DefinitelyTyped/blob/master/types/istanbul-reports/index.d.ts)。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -382,9 +338,7 @@ export default defineConfig({
 
 #### 自定义 coverage reporter
 
-自定义 coverage reporter 应遵循 Istanbul reporter 约定。reporter 包或文件会由 Rstest 的 coverage provider 加载（在可能的情况下会通过 [`istanbul-reports`](https://github.com/istanbuljs/istanbuljs/tree/main/packages/istanbul-reports) 创建），使用 `coverage.reporters` 中传入的选项创建实例，然后用 Istanbul report context 调用。
-
-例如，一个 ESM reporter 可以导出带有 `execute` 方法的 class。`context` 参数对应 `istanbul-lib-report` 中的 Istanbul `Context` 类型：
+自定义 coverage reporter 遵循 Istanbul reporter 约定：coverage provider 会加载对应的包或文件路径，用元组中的选项实例化，并传入 `istanbul-lib-report` 的 `Context` 调用：
 
 ```js title='custom-coverage-reporter.mjs'
 export default class CustomCoverageReporter {
@@ -394,14 +348,13 @@ export default class CustomCoverageReporter {
 
   /** @param {import('istanbul-lib-report').Context} context */
   execute(context) {
-    // Use the standard Istanbul report context.
     const summary = context.getTree('flat').getRoot().getCoverageSummary();
     console.log('Coverage summary:', summary.toJSON());
   }
 }
 ```
 
-然后在 `rstest.config.ts` 中通过包名或文件路径引用该 reporter：
+可以在 `rstest.config.ts` 中通过包名或文件路径引用，也可以直接传入带有 `execute(context)` 方法的内联 reporter 对象：
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -417,36 +370,13 @@ export default defineConfig({
 });
 ```
 
-如果在配置中直接创建 reporter，也可以传入兼容 Istanbul 的 reporter 对象：
-
-```ts title='rstest.config.ts'
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  coverage: {
-    enabled: true,
-    reporters: [
-      {
-        execute(context) {
-          const summary = context
-            .getTree('flat')
-            .getRoot()
-            .getCoverageSummary();
-          console.log(summary.toJSON());
-        },
-      },
-    ],
-  },
-});
-```
-
 ### reportsDirectory
 
 - **类型：** `string`
 - **默认值：** `'./coverage'`
 - **CLI：** `--coverage.reportsDirectory <dir>`
 
-存储覆盖率报告的目录。
+覆盖率报告的输出目录。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -465,10 +395,11 @@ export default defineConfig({
 - **默认值：** `false`
 - **CLI：** `--coverage.reportOnFailure`
 
-在测试失败时是否生成覆盖率报告并检查阈值。
+测试失败时是否仍然生成覆盖率报告并检查阈值。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
+
 export default defineConfig({
   coverage: {
     enabled: true,
@@ -485,9 +416,7 @@ export default defineConfig({
 - **默认值：** `false`
 - **CLI：** `--coverage.allowExternal`
 
-是否收集项目根目录之外的源文件的覆盖率。这在 monorepo 中非常有用，例如测试文件导入了来自同级工作区包的模块。
-
-默认情况下，Rstest 会从覆盖率报告中排除项目根目录之外的文件，这与 Jest 和 Vitest 的行为一致。
+是否收集项目根目录之外源文件的覆盖率（例如 monorepo 中测试导入了同级工作区包的源码）。默认情况下，Rstest 会排除项目根目录之外的文件。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -506,7 +435,7 @@ export default defineConfig({
 - **默认值：** `true`
 - **CLI：** `--coverage.clean`、`--coverage.clean=false`
 
-是否在运行测试之前清理覆盖率目录。
+运行测试前是否清空覆盖率输出目录。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -514,7 +443,7 @@ import { defineConfig } from '@rstest/core';
 export default defineConfig({
   coverage: {
     enabled: true,
-    clean: true,
+    clean: false,
   },
 });
 ```
@@ -531,17 +460,24 @@ type CoverageThreshold = {
   lines?: number;
 };
 
-type CoverageThresholds = CoverageThreshold & {
-  /** 为匹配的文件指定覆盖率阈值 */
-  [glob: string]: CoverageThreshold;
-};
+type CoverageThresholds =
+  | CoverageThreshold
+  | (CoverageThreshold &
+      Record<
+        string,
+        CoverageThreshold & {
+          /** 按单文件检查覆盖率阈值 */
+          perFile?: boolean;
+        }
+      >);
 ```
 
 - **默认值：** `undefined`
 
-设置最低代码覆盖率要求。你可以为语句、函数、分支和行覆盖率设置阈值。
+设置语句、函数、分支和行覆盖率的最低要求：
 
-当阈值设置为正数时，表示所需的最低百分比。当阈值设置为负数时，表示允许未覆盖的最大数量。
+- **正数**：所需的最低覆盖率百分比。
+- **负数**：允许未覆盖项的最大数量。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -559,18 +495,18 @@ export default defineConfig({
 });
 ```
 
-当代码覆盖率低于指定阈值时，测试将失败并输出如下错误信息：
+覆盖率未达到阈值时，测试会失败并输出未满足的项：
 
 ```bash
-Error: Coverage for statements 75% does not meet global threshold 80%
-Error: Coverage for functions 75% does not meet global threshold 80%
-Error: Coverage for branches 75% does not meet global threshold 80%
-Error: Uncovered lines 20 exceeds maximum global threshold allowed 10
+Error: coverage for statements 75% does not meet global threshold 80%
+Error: coverage for functions 75% does not meet global threshold 80%
+Error: coverage for branches 75% does not meet global threshold 80%
+Error: uncovered lines 20 exceeds maximum global threshold allowed 10
 ```
 
 #### glob 模式
 
-当指定 glob 模式时，Rstest 将根据匹配的文件模式进行代码覆盖率检查。如果指定的文件路径不存在，则返回错误。
+在全局阈值之外按 glob 模式设置阈值。如果指定的路径不存在，则会返回错误。
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
@@ -579,29 +515,23 @@ export default defineConfig({
   coverage: {
     enabled: true,
     thresholds: {
-      // 为匹配的文件指定覆盖率阈值
       'src/**': {
         statements: 100,
       },
       'node/**/*.js': {
         statements: 90,
       },
-      // 指定所有文件的总阈值
       statements: 80,
     },
   },
 });
 ```
 
-根据以上配置，rstest 将在以下情况下失败：
-
-- `src/**` 匹配到的文件的总语句覆盖率低于 100%。
-- `node/**/*.js` 匹配到的文件的总语句覆盖率低于 90%。
-- 全局的语句覆盖率低于 80%。
+按上述配置，若 `src/**` 的总语句覆盖率低于 100%、`node/**/*.js` 低于 90%，或全局低于 80%，Rstest 均会判定失败。
 
 #### 单文件检查
 
-Rstest 支持通过将 `perFile` 设置为 `true` 来为每个匹配文件分别检查阈值。
+在 glob 条目中设置 `perFile: true`，对每个匹配文件单独检查阈值：
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';

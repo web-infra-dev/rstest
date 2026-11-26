@@ -1,27 +1,27 @@
 ---
-description: Rstest Rspack adapter 的 API 和配置映射参考。
+description: Rstest Rspack 适配器的 API 和配置映射参考。
 ---
 
-# Rspack adapter 配置参考
+# Rspack 适配器配置参考
 
-安装、快速配置和重要注意事项请查看 [Rspack 集成概览](./)。本页包含完整的 adapter API、兼容性映射和调试方法。
+安装与注意事项请查看 [Rspack 集成概览](./)。本页包含完整的适配器 API、配置映射说明和调试方法。
 
 ## API
 
 ### `withRspackConfig(options)`
 
-返回一个配置函数，该函数加载 Rspack 配置并将其转换为 Rstest 配置。
+返回一个配置函数，用于加载 Rspack 配置文件并将其转换为 Rstest 配置。
 
 #### `cwd`
 
 - **类型：** `string`
 - **默认值：** `process.cwd()`
 
-用于解析 Rspack 配置文件的工作目录。
+用于解析 Rspack 配置文件和持久化缓存相对路径的工作目录。
 
-当你的 Rspack 配置文件位于不同的目录，或者你在 monorepo 中运行测试（此时 `process.cwd()` 不是你的配置目录）时，你可以指定 `cwd` 选项从不同的目录解析 Rspack 配置文件。
+当 Rspack 配置文件位于其他目录（例如 monorepo 中的某个子包）时，可通过 `cwd` 指定工作目录：
 
-```ts
+```ts title="rstest.config.ts"
 export default defineConfig({
   extends: withRspackConfig({
     cwd: './packages/my-app',
@@ -32,21 +32,24 @@ export default defineConfig({
 #### `configPath`
 
 - **类型：** `string`
-- **默认值：** `'./rspack.config.ts'`
+- **默认值：** `undefined`
 
-Rspack 配置文件的路径。
+Rspack 配置文件路径。相对路径基于 `cwd` 解析。
+
+未指定时，适配器会在 `cwd` 中按顺序查找 `rspack.config.{js,ts,mjs,mts,cjs,cts}`（优先 `.js`）。如果未找到配置文件或指定路径不存在，`withRspackConfig` 会静默返回 `{}`。
+
+成功加载配置文件后，该文件路径会被加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)；若启用了持久化缓存，还会加入 `performance.buildCache.buildDependencies`。
 
 #### `configName`
 
 - **类型：** `string`
 - **默认值：** `undefined`
 
-当 Rspack 配置文件使用[多配置](https://rspack.rs/config/other-options#name)时，选择指定名称的配置。设置为字符串以使用具有匹配 `name` 字段的配置。
+当 Rspack 配置导出数组时，按 `name` 字段选择对应配置，并设置 Rstest 的 `name`（`configName ?? config.name`）。若未找到匹配项会抛出错误；未指定 `configName` 时默认使用数组的第一项。
 
-如果你的 Rspack 配置导出了一个配置数组：
+假设你的 Rspack 配置导出了多个配置：
 
-```ts
-// rspack.config.ts
+```ts title="rspack.config.ts"
 export default [
   {
     name: 'client',
@@ -63,9 +66,9 @@ export default [
 ];
 ```
 
-你可以在 Rstest 配置中选择特定的配置：
+通过 `configName` 选择其中一项：
 
-```ts
+```ts title="rstest.config.ts"
 export default defineConfig({
   extends: withRspackConfig({
     configName: 'client',
@@ -73,9 +76,9 @@ export default defineConfig({
 });
 ```
 
-当你需要使用不同的配置独立测试应用程序的多个部分时，你可以定义多个 Rstest 项目：
+如果需要用不同 Rspack 配置独立测试多个目标，可以定义多个 Rstest `projects`：
 
-```ts
+```ts title="rstest.config.ts"
 export default defineConfig({
   projects: [
     {
@@ -95,12 +98,11 @@ export default defineConfig({
 - **类型：** `Record<string, unknown> | string[]`
 - **默认值：** `undefined`
 
-传递给 Rspack 配置函数的环境变量。当 `rspack.config.ts` 导出一个函数时，对应其 `env` 参数：
+当 Rspack 配置文件导出函数时，传递给该函数的 `env` 参数：
 
-```ts
-// rspack.config.ts
+```ts title="rspack.config.ts"
 export default (env) => {
-  console.log(env); // 接收来自适配器的值
+  console.log(env); // 接收传入的 `env` 值
   return {/* ... */};
 };
 ```
@@ -117,9 +119,9 @@ export default (env) => {
 - **类型：** `(config: RspackOptions) => RspackOptions`
 - **默认值：** `undefined`
 
-在将 Rspack 配置转换为 Rstest 配置之前对其进行修改：
+在将选中的 Rspack 配置转换为 Rstest 配置之前对其进行修改。回调函数必须返回 `RspackOptions` 对象：
 
-```ts
+```ts title="rstest.config.ts"
 export default defineConfig({
   extends: withRspackConfig({
     modifyRspackConfig: (rspackConfig) => {
@@ -130,80 +132,127 @@ export default defineConfig({
 });
 ```
 
+### `toRstestConfig(options)`
+
+将内存中的 `RspackOptions` 对象直接转换为 Rstest 配置，不从磁盘读取配置文件。
+
+```ts title="rstest.config.ts"
+import type { RspackOptions } from '@rspack/core';
+import { defineConfig } from '@rstest/core';
+import { toRstestConfig } from '@rstest/adapter-rspack';
+
+const rspackConfig: RspackOptions = {
+  target: 'web',
+  resolve: {
+    alias: {
+      '@': './src',
+    },
+  },
+};
+
+export default defineConfig({
+  extends: toRstestConfig({
+    rspackConfig,
+  }),
+});
+```
+
+#### `rspackConfig`
+
+- **类型：** `RspackOptions`
+
+要转换的单个 Rspack 配置对象。
+
+#### `configPath`
+
+- **类型：** `string`
+- **默认值：** `undefined`
+
+与 `rspackConfig` 关联的源配置文件路径。适配器不会读取该路径，仅将其规范化后加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers) 和持久化缓存的 `performance.buildCache.buildDependencies`。
+
+同时支持 `cwd`（用于解析相对的 `rspackConfig.context`，或在未设置 `context` 时作为默认缓存根目录）、`configName`（覆盖 `name`）和 `modifyRspackConfig`，详见 [`withRspackConfig`](#withrspackconfigoptions)。
+
 ## 配置映射
 
-`withRspackConfig` 不会将整份 Rspack 配置原样复制到 test compiler。它会根据行为所属的层级处理每个选项：有直接对应关系的概念会转换为 Rstest 配置，兼容的 compiler 选项会传给 Rspack，而与生成的 test build 冲突的设置仍由 Rstest 控制。
+适配器会根据选项所属的层级分别处理 Rspack 配置：有对应概念的选项转换为 Rstest 配置，兼容的编译器选项传给 Rspack，仅用于应用构建或与测试冲突的设置仍由 Rstest 控制。
 
-以下表格覆盖 Rspack 2.1 的全部 top-level 选项。部分选项会出现在不止一个表格中，因为其不同子项由不同层负责。例如，Rstest 需要理解 `resolve.alias`，而 `resolve.fallback` 必须交给 Rspack；类似地，Rstest 会根据 `cache` 派生自己的缓存，但不会复用其中每一个 persistent cache 调优选项。
+### 转换为 Rstest 选项
 
-部分 Rspack 选项在 Rstest 中有直接对应项。adapter 会在创建 compiler 前转换这些值，因为 Rstest 需要使用它们选择 test environment、解析 test module 或准备 build output。只有下表列出的 `resolve` 字段与 Rsbuild 共用；其他 Rspack resolver 选项由下一个表格中的流程处理。
+这些选项会在创建编译器之前完成转换，供 Rstest 选择测试环境、解析模块及配置构建缓存：
 
-| Rspack 选项                                                     | Rstest 等效项            | 说明                                                              |
-| --------------------------------------------------------------- | ------------------------ | ----------------------------------------------------------------- |
-| `name`                                                          | `name`                   | 配置标识符                                                        |
-| `resolve.alias`、`extensions`、`conditionNames` 和 `mainFields` | `resolve`                | 两端共用的 module resolution 选项                                 |
-| `resolve.tsConfig.configFile`                                   | `source.tsconfigPath`    | TypeScript 配置文件路径                                           |
-| `output.module`                                                 | `output.module`          | 输出模块类型                                                      |
-| `target`                                                        | `testEnvironment`        | `'node'`/`'async-node'` 映射为 `'node'`，其他映射为 `'happy-dom'` |
-| `cache`                                                         | `performance.buildCache` | 复用存储标识、version 和构建依赖                                  |
-| `context`                                                       | 持久化缓存路径           | 用于解析 Rspack 的相对缓存路径                                    |
-| `mode`                                                          | 持久化缓存标识           | 用于生成默认缓存名称；compiler mode 由 Rstest 控制                |
+| Rspack 选项                                                     | Rstest 等效项            | 说明                                                                                                                   |
+| --------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `name`                                                          | `name`                   | `configName` 优先级更高（`configName ?? config.name`）                                                                 |
+| `resolve.alias`、`extensions`、`conditionNames` 和 `mainFields` | `resolve`                | 两端共用的模块解析选项；`resolve.alias: false` 不会写入此处，而是转发给 `tools.rspack`                                 |
+| `resolve.tsConfig`                                              | `source.tsconfigPath`    | 支持字符串路径或 `{ configFile }`；完整的 `resolve.tsConfig` 也会转发给 `tools.rspack`                                 |
+| `output.module`                                                 | `output.module`          | 输出模块格式                                                                                                           |
+| `target`                                                        | `testEnvironment`        | 若为 `'async-node'` 或以 `'node'` 开头（字符串或数组）则映射为 `'node'`，其余及未设置时映射为 `'happy-dom'`            |
+| `cache`                                                         | `performance.buildCache` | 复用持久化缓存的 `storage.directory`、`version` 和 `buildDependencies`；`false` 或 `{ type: 'memory' }` 映射为 `false` |
+| `context`                                                       | 持久化缓存路径           | 用于解析 `cache.storage.directory`、`cache.storage.location` 和 `cache.buildDependencies` 中的相对路径                 |
+| `mode`                                                          | 持久化缓存标识           | 参与生成默认缓存名称（`<name>-<mode>`，未设置时按 `'production'` 处理）；编译器 `mode` 由 Rstest 根据 `NODE_ENV` 控制  |
 
-其他选项仍会影响最终的 Rspack compilation，但不能安全地替换生成的 test 配置。adapter 会根据各选项的语义进行组合，例如追加 rules 和 plugins、合并 Rspack-only resolver 选项，并保留生成的 output path。Rstest 后续的 compiler hooks 仍可能恢复 test runtime 必需的值。
+### 与 Rstest 编译器钩子合并
 
-| Rspack 选项        | 行为                                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `module`           | 合并 module 选项并追加 rules                                                                                                                        |
-| `plugins`          | 移除 `HtmlRspackPlugin` 后追加 plugins                                                                                                              |
-| `output`           | 合并 output 选项并保留 Rstest 的 path；后续 hooks 仍控制 `iife`、`importFunctionName` 和 source map filename templates                              |
-| `resolve`          | 合并 `fallback`、`byDependency` 和 `tsConfig.references` 等 Rspack-only 选项；`alias: false` 会清除 aliases，Rstest 则保留必需的 Node/CommonJS 设置 |
-| `experiments`      | 合并 experiments，但 Rstest 会保留 `runtimeMode: 'webpack'` 并禁用 Rspack 的 async WebAssembly 处理                                                 |
-| `optimization`     | 合并 optimization 选项，但 Rstest 会保留自己的 test runtime chunk 和 `emitOnErrors` 行为                                                            |
-| `devtool`          | 保留 inline source map variants；Rstest 会将非 inline variants 归一化为 `'nosources-source-map'`                                                    |
-| `watchOptions`     | 合并 Rstest 以 watch mode 启动 compiler 时使用的 watch strategy 选项                                                                                |
-| `externalsPresets` | 合并兼容的 presets，然后保留 `node: false`，以便 Rstest 为每个 external request 指定正确类型                                                        |
-| `cache`            | 应用 memory 或禁用缓存配置；persistent cache 会根据上文所述的存储标识、version 和构建依赖重新生成                                                   |
+这些选项通过 `tools.rspack` 参与 Rspack 编译，同时 Rstest 会保留测试运行时所需的约束：
 
-下一组选项不会与 Rstest 控制的 build 结构重叠，因此 adapter 会通过 Rsbuild 的 `mergeConfig` 将它们传给 compiler。该过程使用 Rspack 的标准 merge 语义，并以生成的配置为合并基础。数组和嵌套对象会遵循 Rspack 的常规 merge 行为，而不是由 adapter 另行定义赋值规则。
+| Rspack 选项        | 行为                                                                                                                                                                                                          |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `module`           | 合并 `module` 选项，并在 Rstest 基础规则之后追加 `rules`                                                                                                                                                      |
+| `plugins`          | 过滤掉 `HtmlRspackPlugin` 后追加 `plugins`；同时适配器会移除 Rsbuild 内置的 CSS 插件（`rsbuild:css`、`rsbuild:less`、`rsbuild:sass`）                                                                         |
+| `output`           | 合并 `output` 选项，同时保留 Rstest 的 `output.path`；Rstest 仍会保留 `iife`、`importFunctionName` 和 `devtoolModuleFilenameTemplate`                                                                         |
+| `resolve`          | 合并 `fallback`、`byDependency`、`extensionAlias`、`preferRelative`、`tsConfig` 等 Rspack 专属选项；`alias: false` 会在编译器层清除别名，Rstest 仍保留 `.cjs`、`extensionAlias` 和 Node/CommonJS 默认解析规则 |
+| `experiments`      | 合并 `experiments`，但 Rstest 会保留 `runtimeMode: 'webpack'` 并禁用 `asyncWebAssembly`                                                                                                                       |
+| `optimization`     | 合并 `optimization`，但 Rstest 会保留共享的 `runtimeChunk` 和 `emitOnErrors: true`                                                                                                                            |
+| `devtool`          | 保留 inline 类型的 source map；非 inline 或未设置时由 Rstest 归一化为 `'nosources-source-map'`                                                                                                                |
+| `watchOptions`     | 合并 Rstest 在 watch 模式下使用的监听选项                                                                                                                                                                     |
+| `externalsPresets` | 合并兼容的 presets，随后由 Rstest 固定 `node: false` 以便按请求分配 external 类型                                                                                                                             |
+| `cache`            | 直接应用 `false` 或 `{ type: 'memory' }`；对于 `{ type: 'persistent' }`，Rstest 会重新生成持久化缓存配置并保留解析后的 `storage.location`                                                                     |
 
-| Rspack 选项             | 行为                                                                                                        |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `externals`             | 将用户 externals 与 Rstest 生成的 externals 合并，而不是将其覆盖                                            |
-| `externalsType`         | 为没有声明类型的用户 externals 设置默认类型；Rstest 生成的 externals 会为每个 request 单独指定类型          |
-| `infrastructureLogging` | 合并 compiler 和 plugin 的 infrastructure logging 选项                                                      |
-| `loader`                | 合并通过 loader context 暴露的自定义值                                                                      |
-| `ignoreWarnings`        | 将用户的 warning filters 追加到 Rstest 生成的 filters                                                       |
-| `resolveLoader`         | 合并 loader resolution 选项                                                                                 |
-| `amd`                   | 应用为 `require.amd` 和 `define.amd` 配置的值                                                               |
-| `incremental`           | 应用配置的 Rspack incremental build strategy；Rspack 可能会将 `'safe'` 等 preset 归一化为具体 compiler 选项 |
+:::warning
+由于适配器移除了 Rsbuild 内置的 CSS 插件（`rsbuild:css`、`rsbuild:less`、`rsbuild:sass`），使用此适配器时 `output.cssModules` 等 Rsbuild 专属 CSS 选项不可用，请在 Rspack 配置中处理 CSS 规则和 loader。
+:::
 
-其余选项描述 application build、multi-compiler 或 dev server 工作流，或者控制由 Rstest 自己展示的输出。应用这些选项可能替换生成的 test 结构，或产生没有可观察效果的配置，因此 adapter 会继续让 Rstest 控制对应行为。`extends` 是一个例外：Rspack CLI 会在加载配置时消费它，所以 adapter 收到的是已经完成 merge 的结果，而不是继续向 compiler 传递 `extends` 字段。
+### 通过 `mergeConfig` 透传
 
-| Rspack 选项       | 原因                                                   |
-| ----------------- | ------------------------------------------------------ |
-| `dependencies`    | Rstest 会选择一个配置，而不是运行 multi-compiler       |
-| `extends`         | Rspack CLI 会在转换前解析继承的配置                    |
-| `entry`           | Rstest 会根据测试文件生成入口                          |
-| `output.path`     | Rstest 控制输出目录                                    |
-| `context`         | Rstest 控制 compiler context；该选项仍用于解析缓存路径 |
-| `mode`            | Rstest 使用 development mode；该选项仍参与生成缓存标识 |
-| `node`            | Rstest 会保留每个 source module 的文件名和目录         |
-| `stats`           | Rstest 控制 compiler stats 提取和 reporter 输出        |
-| `bail`            | Rstest 控制 compilation error 处理                     |
-| `performance`     | application bundle 大小限制不适用于生成的 test bundle  |
-| `watch`           | Rstest 控制 compiler watch mode                        |
-| `devServer`       | Rstest 不使用 Rspack dev server                        |
-| `lazyCompilation` | Rstest 不使用 Rspack lazy compilation                  |
+这些选项不与 Rstest 的测试构建结构冲突，适配器会通过 Rsbuild 的 `mergeConfig` 将它们合并到基础 Rspack 配置中：
 
-Rspack 2.1 将原有的顶层 `snapshot` 选项移到了 `cache.snapshot`，因此它不再是顶层配置选项。Rspack persistent cache 会转换为 Rstest 生成的 build cache；`cache.snapshot`、`maxAge`、`portable` 和 `readonly` 等 Rspack-specific 调优字段不会复制到该生成缓存中。
+| Rspack 选项             | 行为                                                                                |
+| ----------------------- | ----------------------------------------------------------------------------------- |
+| `externals`             | 将用户 externals 与 Rstest 生成的 externals 合并                                    |
+| `externalsType`         | 为未声明类型的用户 externals 设置默认类型；Rstest 生成的 externals 会按请求指定类型 |
+| `infrastructureLogging` | 合并编译器和插件的 infrastructure logging 选项                                      |
+| `loader`                | 合并通过 loader context 暴露的自定义值                                              |
+| `ignoreWarnings`        | 将用户的警告过滤规则追加到 Rstest 生成的规则中                                      |
+| `resolveLoader`         | 合并 loader 解析选项                                                                |
+| `amd`                   | 应用配置的 `require.amd` 和 `define.amd` 值                                         |
+| `incremental`           | 应用配置的 Rspack 增量构建策略（Rspack 可能会将 `'safe'` 等预设展开为具体选项）     |
+
+### 由 Rstest 控制或忽略
+
+这些选项用于描述应用入口、多编译器编排、dev server 或由 Rstest 接管的输出，因此不会被转发：
+
+| Rspack 选项       | 原因                                                                                                               |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `dependencies`    | Rstest 仅转换单个配置，不运行多编译器                                                                              |
+| `extends`         | Rspack CLI 会在加载阶段先解析继承配置，再交给适配器转换                                                            |
+| `entry`           | Rstest 根据测试文件自动生成入口                                                                                    |
+| `output.path`     | Rstest 控制输出目录                                                                                                |
+| `context`         | Rstest 将编译器 `context` 设为项目根目录；Rspack 的 `context` 仅用于解析缓存路径                                   |
+| `mode`            | Rstest 根据 `NODE_ENV` 设置编译器 `mode`（`'production'` 或 `'development'`）；Rspack 的 `mode` 仅参与生成缓存名称 |
+| `node`            | Rstest 会保留每个源模块的文件名和目录                                                                              |
+| `stats`           | Rstest 控制编译器 stats 提取和 reporter 输出                                                                       |
+| `bail`            | Rstest 控制编译错误处理                                                                                            |
+| `performance`     | 应用产物体积限制不适用于测试构建产物                                                                               |
+| `watch`           | Rstest 控制编译器的 watch 模式                                                                                     |
+| `devServer`       | Rstest 不使用 Rspack dev server                                                                                    |
+| `lazyCompilation` | Rstest 不使用 Rspack lazy compilation                                                                              |
+| `snapshot`        | 顶层 `snapshot` 选项会被忽略                                                                                       |
+
+此外，`cache.snapshot`、`maxAge`、`portable` 和 `readonly` 等持久化缓存调优字段也不会复制到 Rstest 生成的构建缓存中。
 
 ## 调试配置
 
-设置 `DEBUG=rstest` 后，Rstest 会写入解析后的 Rstest、Rsbuild 和 Rspack 配置，并在命令输出中打印对应位置。检查生成的 Rspack 配置，可以确认哪些选项最终传给了 compiler：
-
-```bash
-DEBUG=rstest rstest
-```
+使用 `DEBUG=rstest` 运行测试可将最终解析的 Rstest、Rsbuild 与 Rspack 配置写入磁盘，详见[开启调试模式](/guide/debug/debugging#开启调试模式)。
 
 ## 相关文档
 

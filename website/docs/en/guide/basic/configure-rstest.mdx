@@ -1,21 +1,21 @@
 ---
-description: This chapter introduces how to configure Rstest and its underlying Rsbuild and Rspack.
+description: Learn how to configure Rstest and its underlying Rsbuild and Rspack build pipeline.
 ---
 
 # Configure Rstest
 
 ## Configuration file
 
-When you use the CLI of Rstest, Rstest will automatically read the configuration file in the root directory of the current project and resolve it in the following order:
+When you run the Rstest CLI, Rstest resolves the configuration file in the project root directory in the following order:
 
+- `rstest.config.mts`
 - `rstest.config.mjs`
 - `rstest.config.ts`
 - `rstest.config.js`
 - `rstest.config.cjs`
-- `rstest.config.mts`
 - `rstest.config.cts`
 
-We recommend using the `.mjs` or `.ts` format for the configuration file and importing the `defineConfig` utility function from `@rstest/core`. It provides friendly TypeScript type hints and autocompletion, which can help you avoid errors in the configuration.
+Use `.ts` or `.mts` with [`defineConfig`](/api/javascript-api/rstest-core#defineconfig) from `@rstest/core` for TypeScript type checking and autocompletion, or `.mjs` for JavaScript projects:
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -25,11 +25,21 @@ export default defineConfig({
 });
 ```
 
-If you are developing a non-TypeScript project, you can use the `.mjs` format for the configuration file.
+`defineConfig` also accepts a synchronous or asynchronous factory function when you need to compute configuration dynamically:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig(async () => ({
+  testTimeout: process.env.CI ? 10_000 : 5_000,
+}));
+```
+
+For multi-project workspaces and programmatic config composition, `@rstest/core` also exports [`defineProject`](/api/javascript-api/rstest-core#defineproject), [`mergeRstestConfig`](/api/javascript-api/rstest-core#mergerstestconfig), and [`mergeProjectConfig`](/api/javascript-api/rstest-core#mergeprojectconfig). `defineProject` also accepts both sync and async functions.
 
 ### Specify config file
 
-Rstest CLI uses the `--config` option to specify the config file, which can be set to a relative path or an absolute path.
+Use `--config` (or `-c`) to point Rstest to a relative or absolute config file path:
 
 ```json title="package.json"
 {
@@ -39,53 +49,39 @@ Rstest CLI uses the `--config` option to specify the config file, which can be s
 }
 ```
 
-You can also abbreviate the `--config` option to `-c`:
-
 ```bash
 rstest -c scripts/rstest.config.mjs
 ```
 
+- Use `-r, --root <root>` to override the project root directory (which sets where Rstest looks for config files and resolves `<rootDir>`).
+- Use `--config-loader <loader>` to choose how Rstest loads the config file: `auto` (default), `jiti`, or `native`. See [Rsbuild - Specify config loader](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader).
+
 ## Configure Rsbuild
 
-Rstest's build configuration inherits from Rsbuild. Therefore, in Rstest, you can use most of the Rsbuild configurations, such as:
+Rstest builds test files with Rsbuild and exposes most Rsbuild build options directly:
 
-- Using Rsbuild plugins through [plugins](/config/build/plugins);
-- Configuring module resolution behavior through [resolve](/config/build/resolve);
-- Configuring Rspack through [tools.rspack](/config/build/tools#toolsrspack);
-- Configuring builtin:swc-loader through [tools.swc](/config/build/tools#toolsswc).
+- Register Rsbuild plugins via [plugins](/config/build/plugins)
+- Read or modify the resolved Rstest project config from Rsbuild plugins via [Rstest plugin APIs](/config/build/plugins#get-rstest-config) (see [modify Rstest config](/config/build/plugins#modify-rstest-config))
+- Configure module resolution via [resolve](/config/build/resolve)
+- Customize Rspack via [tools.rspack](/config/build/tools#toolsrspack)
+- Customize `builtin:swc-loader` via [tools.swc](/config/build/tools#toolsswc)
 
-More configurations can be referred to [Build Configurations](/config/#build-configurations).
-
-### Read Rstest config in Rsbuild plugins \{#get-rstest-config}
-
-You can read the resolved Rstest config for the current Rsbuild environment through the API exposed by Rstest.
-
-See [Read Rstest config in Rsbuild plugins](/config/build/plugins#get-rstest-config) for usage and type definitions.
-
-### Modify Rstest config in Rsbuild plugins \{#modify-rstest-config}
-
-You can modify the current Rstest project config in Rsbuild plugins through the API exposed by Rstest.
-
-See [Modify Rstest config in Rsbuild plugins](/config/build/plugins#modify-rstest-config) for usage, type definitions, and limitations.
+See [Build configurations](/config/#build-configurations) for all supported options.
 
 ## Configure Rspack
 
-Rstest uses Rspack for building, so you can directly use Rspack's configuration options to configure Rstest's build behavior.
-
-More details can be referred to [Configure Rspack](https://rsbuild.rs/guide/configuration/rspack).
+Rstest uses Rspack under the hood, so you can pass Rspack configuration options through `tools.rspack`. See [Configure Rspack](https://rsbuild.rs/guide/configuration/rspack) for details.
 
 ## Configure SWC
 
-Rstest uses Rspack's [builtin:swc-loader](https://rspack.rs/guide/features/builtin-swc-loader) to transform JavaScript and TypeScript code by default, which is the Rust version of [swc-loader](https://github.com/swc-project/pkgs/tree/main/packages/swc-loader).
+Rstest transforms JavaScript and TypeScript with Rspack's [builtin:swc-loader](https://rspack.rs/guide/features/builtin-swc-loader) by default. Configure it with:
 
-Rstest exposes some options to configure `builtin:swc-loader`:
+- [tools.swc](/config/build/tools#toolsswc): options passed to `builtin:swc-loader`
+- [source.include](/config/build/source#sourceinclude): additional files to compile with SWC
+- [source.exclude](/config/build/source#sourceexclude): files to skip during SWC compilation
 
-- [tools.swc](/config/build/tools#toolsswc): Used to configure the options of `builtin:swc-loader`.
-- [source.include](/config/build/source#sourceinclude): Used to specify the files that need to be compiled by SWC.
-- [source.exclude](/config/build/source#sourceexclude): Used to exclude files that do not need to be compiled by SWC.
-
-```ts
-import { defineConfig } from '@rsbuild/core';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   tools: {
@@ -107,15 +103,13 @@ export default defineConfig({
 
 ### SWC plugin version
 
-Please note that SWC's plugins are still an experimental feature. Currently, SWC's Wasm plugins are not backward compatible, and the version of SWC plugins is strongly coupled with the `swc_core` version that Rspack depends on.
-
-This means that you need to choose SWC plugins that match the current `swc_core` version to make them work properly. If the SWC plugin version you use does not match the `swc_core` version that Rspack depends on, Rspack will throw errors during the build. Please refer to [Rspack FAQ - SWC plugin version mismatch](https://rspack.rs/errors/swc-plugin-version) for handling.
+SWC Wasm plugins are experimental and not backward compatible across `swc_core` versions. Use a plugin version that matches the `swc_core` version bundled with Rspack; otherwise, the build fails. See [Rspack FAQ - SWC plugin version mismatch](https://rspack.rs/errors/swc-plugin-version).
 
 ## Detect Rstest environment
 
-You can use `import.meta.env.RSTEST` or `process.env.RSTEST` to detect whether code is running under Rstest. Both values are `'true'` in every test environment, including browser mode.
+Use `import.meta.env.RSTEST` or `process.env.RSTEST` to check whether code is running under Rstest. Both values are `'true'` in every test environment, including Browser Mode.
 
-Prefer `import.meta.env.RSTEST` in browser-compatible ESM source code. Browser mode replaces these expressions at build time but does not add a global `process` object, so do not guard access with `typeof process !== 'undefined'`.
+Prefer `import.meta.env.RSTEST` in browser-compatible ESM source code. Browser Mode replaces these expressions at build time without defining a global `process` object, so do not guard access with `typeof process !== 'undefined'`.
 
 ```ts
 if (import.meta.env.RSTEST === 'true') {
@@ -123,9 +117,9 @@ if (import.meta.env.RSTEST === 'true') {
 }
 ```
 
-When building the source code for production, define the expressions you use as `false` in your build configuration (such as `rsbuild.config.ts`). This allows the bundler to eliminate the test-only branches as dead code.
+When building source code for production, define the expressions you check as `false` in your build configuration (such as `rsbuild.config.ts`) so the bundler eliminates test-only branches as dead code:
 
-```diff title=rsbuild.config.ts
+```diff title="rsbuild.config.ts"
 import { defineConfig } from '@rsbuild/core';
 
 export default defineConfig({
@@ -140,11 +134,11 @@ export default defineConfig({
 
 ### Detect Rstest in Rsbuild plugins
 
-If you are developing an Rsbuild plugin, see [Detect whether a plugin is running in Rstest](/config/build/plugins#detect-rstest-environment) to use `api.context.callerName` for environment-specific behavior.
+In Rsbuild plugins, check `api.context.callerName` for `'rstest'`. See [Detect whether a plugin is running in Rstest](/config/build/plugins#detect-rstest-environment).
 
 ## Configuration integration
 
-In large projects, you often already have existing build/toolchain configurations (aliases, global variables, plugins, etc.). Through [adapters](/guide/advanced/adapters) and the [extends](/config/test/extends) option, Rstest can transform and integrate these external configurations into your test setup, helping you avoid duplicate maintenance and keep configurations consistent.
+To reuse existing build configurations (aliases, globals, plugins, or framework presets) without duplicating them, use [adapters](/guide/advanced/adapters) with the [extends](/config/test/extends) option:
 
-- With `extends`, you can load a function (adapter) or object, and the returned configuration will be deeply merged with the current Rstest configuration.
-- This is suitable for reusing configurations from tools such as Rsbuild and Rspack, or presetting testing behavior for framework templates (for example, default test environments and setup scripts).
+- `extends` accepts an object, a function (adapter), or an array of entries, and deep-merges the resolved configuration into your Rstest config.
+- Use it to adapt configs from Rsbuild, Rslib, or Rspack, or to share preset test environments and setup files across projects.

@@ -1,20 +1,45 @@
 ---
-description: 本页面介绍 Rslint 内置的 Rstest rules。
+description: 在项目中使用 Rslint 内置的 Rstest 预设配置和规则。
 ---
 
 # Rslint
 
-[Rslint](https://rslint.rs/) 是一个兼容 ESLint 的 JavaScript 和 TypeScript linter。它内置的 `rstestPlugin` 提供了针对 Rstest 测试定义、断言、mock 和 snapshot 的 rules，可以帮助你发现常见问题。
+[Rslint](https://rslint.rs/) 是一个兼容 ESLint 的 JavaScript 和 TypeScript linter，内置的 `rstestPlugin` 用于检查 Rstest 测试定义、断言、mock 和 snapshot 中的常见问题。
 
-在项目中安装 [@rslint/core](https://github.com/web-infra-dev/rslint)，然后在 `rslint.config.ts` 中启用 recommended preset：
+先将 [@rslint/core](https://github.com/web-infra-dev/rslint) 安装为开发依赖：
 
 import { PackageManagerTabs } from '@theme';
 
 <PackageManagerTabs command="add @rslint/core -D" />
 
+## 预设配置
+
+`rstestPlugin.configs` 导出了四个预设配置：
+
+| 预设          | 说明                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `recommended` | 包含 17 条规则，检查测试结构、断言、mock 和 snapshot 中的常见问题                           |
+| `style`       | 包含 3 条代码风格规则（`prefer-to-be`、`prefer-to-contain`、`prefer-to-have-length`）       |
+| `all`         | 启用全部 Rstest 规则（多数规则默认为警告级别）                                              |
+| `env`         | 声明 Rstest 全局 API（`describe`、`test`、`it`、`expect`、`rs`、`rstest` 和生命周期钩子等） |
+
+如果在 Rstest 中开启了 [`globals: true`](/config/test/globals)，可以同时引入 `rstestPlugin.configs.env`，让 Rslint 识别无需显式导入的全局测试 API：
+
+```ts title="rslint.config.ts"
+import { defineConfig, rstestPlugin } from '@rslint/core';
+
+export default defineConfig([
+  {
+    ...rstestPlugin.configs.recommended,
+    ...rstestPlugin.configs.env,
+    files: ['**/*.{test,spec}.{js,jsx,ts,tsx,cjs,cts,mjs,mts}'],
+  },
+]);
+```
+
 ## 独立的测试文件
 
-如果测试文件使用 `*.test.ts` 或 `*.spec.ts` 这样的文件名，可以将 preset 限定到 test 和 spec 文件：
+如果测试代码位于独立的 `*.test.*` 或 `*.spec.*` 文件中，可以通过 `files` 将预设配置限定到测试文件：
 
 ```ts title="rslint.config.ts"
 import { defineConfig, rstestPlugin } from '@rslint/core';
@@ -27,11 +52,11 @@ export default defineConfig([
 ]);
 ```
 
-这个模式覆盖 `.js`、`.jsx`、`.ts`、`.tsx`、`.cjs`、`.cts`、`.mjs` 和 `.mts` 文件。recommended preset 本身没有声明 `files` 匹配模式。加上这个模式后，Rstest 专用 rules 只会检查测试文件，生产代码仍然可以由其他 Rslint 配置项负责。
+`rstestPlugin` 的预设配置默认不包含 `files` 匹配规则，加上 `files` 可以将 Rstest 规则限定在测试文件中，避免影响生产代码。
 
 ## In-source tests
 
-使用 [in-source testing](/config/test/include-source) 时，测试代码与生产代码写在同一个文件中，并通过 `import.meta.rstest` 使用测试 API。将 preset 应用到所有需要 lint 的文件，才能同时检查 in-source tests 和独立的测试文件：
+使用 [in-source testing](/config/test/include-source) 时，测试代码与生产代码写在同一个文件中，并通过 `import.meta.rstest` 访问测试 API。此时不要限制 `files`，将预设应用到所有待检查文件：
 
 ```ts title="rslint.config.ts"
 import { defineConfig, rstestPlugin } from '@rslint/core';
@@ -39,7 +64,7 @@ import { defineConfig, rstestPlugin } from '@rslint/core';
 export default defineConfig([rstestPlugin.configs.recommended]);
 ```
 
-对于 `import.meta.rstest`，不需要额外声明 Rslint globals。
+使用 `import.meta.rstest` 不需要额外配置全局声明。
 
 ## 运行 Rslint
 
@@ -47,14 +72,14 @@ export default defineConfig([rstestPlugin.configs.recommended]);
 
 <PackageManagerTabs command="exec rslint" />
 
-运行成功后，会输出类似下面的汇总信息：
+检查通过时会输出如下汇总信息：
 
 ```text
 start   Linting...
-success Lint passed in 92ms (1 file, 14 rules, 14 threads)
+success Lint passed in 92ms (1 file, 17 rules, 14 threads)
 ```
 
-如果 Rslint 发现问题，会输出 rule 名称、源码位置、代码片段和失败汇总信息：
+如果发现问题，Rslint 会输出规则名称、源码位置、代码片段和失败汇总信息：
 
 ```text
 start   Linting...
@@ -66,11 +91,11 @@ start   Linting...
   │ 9 │    expect(false).toBeFalsy();
   ╰────────────────────────────────
 
-error   Lint failed with 1 error in 31ms (1 file, 14 rules, 14 threads)
+error   Lint failed with 1 error in 31ms (1 file, 17 rules, 14 threads)
 ```
 
-也可以把这条命令加入 `package.json` 的 `scripts`，再通过 package manager 的 lint script 运行。
+也可以将 `rslint` 加入 `package.json` 的 `scripts` 中，通过包管理器的 lint 脚本运行。
 
 ## 查看 rules
 
-[Rslint 的 `rstestPlugin` preset](https://rslint.rs/api/presets/rstest-plugin) 介绍了配置方式和使用场景。要查看 recommended preset 包含哪些 rules，请打开 [Rstest rules 列表](https://rslint.rs/rules/?preset=rstestPlugin.configs.recommended)。
+有关预设配置的用法，请参考 [Rslint `rstestPlugin` 文档](https://rslint.rs/api/presets/rstest-plugin)；各条规则的说明与选项可查看 [Rstest 规则列表](https://rslint.rs/rules/?preset=rstestPlugin.configs.recommended)。

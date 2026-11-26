@@ -5,13 +5,9 @@ description: Rstest 中的 globalSetup 选项允许你运行 setup 和 teardown 
 # globalSetup
 
 - **类型：** `string | string[]`
-- **默认值：** `undefined`
+- **默认值：** `[]`
 
-Rstest 中的 `globalSetup` 选项允许你运行 setup 和 teardown 代码，这些代码会在所有测试之前和完成后执行。这对于以下场景很有用：
-
-- 启动和停止数据库
-- 初始化测试服务
-- 测试运行后清理资源
+在项目的所有测试开始前和结束后各执行一次 setup 与 teardown 代码，常用于启动数据库或测试服务，并在测试结束后清理资源。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -22,8 +18,6 @@ export default defineConfig({
 ```
 
 {/* cspell:ignore setupfiles */}
-
-<span id="与-setupfiles-的区别" />
 
 ## 与 setupFiles 的区别 \{#differences-from-setupfiles}
 
@@ -40,7 +34,7 @@ export default defineConfig({
 
 ## 全局设置文件格式
 
-你可以用两种格式编写全局设置文件：
+支持两种编写方式：
 
 ### 命名函数（推荐）
 
@@ -106,11 +100,11 @@ Browser provider hook（`modifyRstestConfig`）在测试发现阶段执行，早
 
 ## 多个全局设置文件
 
-当使用多个全局设置文件时：
+配置多个文件时：
 
-- 设置函数按提供的顺序顺序执行
-- teardown 函数按相反顺序执行（LIFO - 后进先出）
-- 如果任何设置失败，整个测试运行都会失败
+- setup 函数按配置顺序依次执行
+- teardown 函数按相反顺序执行（LIFO，后进先出）
+- 任一 setup 失败时，整个测试运行都会失败
 
 ## 示例：数据库设置
 
@@ -125,13 +119,13 @@ export async function setup() {
 
   dbConnection = client.db('test');
 
-  // 播种测试数据
+  // 写入初始测试数据
   await dbConnection.collection('users').insertMany([
     { name: 'John', email: 'john@example.com' },
     { name: 'Jane', email: 'jane@example.com' },
   ]);
 
-  console.log('✓ 数据库已连接并播种数据');
+  console.log('✓ 数据库已连接并写入初始数据');
 }
 
 export async function teardown() {

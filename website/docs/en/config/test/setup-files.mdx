@@ -1,5 +1,5 @@
 ---
-description: A list of paths to modules that run some code to configure or set up the testing environment, they will be run before each test file.
+description: Module paths that run before each test file to configure or set up the test environment.
 ---
 
 # setupFiles
@@ -7,7 +7,7 @@ description: A list of paths to modules that run some code to configure or set u
 - **Type:** `string | string[]`
 - **Default:** `[]`
 
-A list of paths to modules that run some code to configure or set up the testing environment, they will be run before each test file.
+Module paths that run before each test file to configure or set up the test environment.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

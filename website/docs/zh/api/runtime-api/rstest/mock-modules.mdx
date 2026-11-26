@@ -1,74 +1,54 @@
 ---
 title: Mock modules
-description: Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块的实现。
+description: Rstest 中用于 mock、spy、取消 mock 和重置 ESM 与 CommonJS 模块的 API 参考。
 ---
 
 # Mock modules
 
-Rstest 支持对模块进行 mock，这使得你可以在测试中替换模块的实现。
-
-Rstest 提供了 `rs`（别名 `rstest`）工具函数来进行模块的 mock 。你可以直接使用以下方法来 mock 模块：
+Rstest 在 `rs`（别名 `rstest`）上提供了用于 mock ESM 和 CommonJS 模块的 API。
 
 ## rs.mock
 
 - **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
 
-对第一个参数对应的模块进行 mock 替换。
+将 `moduleName` 指定的模块替换为 mock 实现，作用于 `import`（以及解析到同一打包模块的 `require()`）。
 
 :::tip 提升（Hoisting）
-`rs.mock` 会被提升到当前模块的顶部，所以即使在调用 `rs.mock('some_module')` 前执行了 `import fn from 'some_module'`，`some_module` 也会在一开始被 mock。
+`rs.mock` 会被提升到当前模块顶部，因此同一文件中的静态 `import` 也会拿到 mock 后的模块。
 :::
 
 ### 使用工厂函数
 
-如果第二个参数提供了一个工厂函数，则替换为工厂函数的返回值作为被 mock 的模块的实现。
-
-工厂函数必须是同步函数。如果需要保留部分原始实现，请在 mock factory 前通过 `with { rstest: 'importActual' }` 导入真实模块，并在返回对象中展开它。
-
-如果真实模块或它的依赖使用了 top-level `await`，不要在测试文件中静态导入被 mock 的模块。真实模块完成求值前，mock factory 可能已经执行。保留 `importActual` 属性导入，然后在真实模块加载完成后的异步测试中动态导入 mock 模块：
-
-```ts title="src/api.test.ts"
-import * as apiActual from './api' with { rstest: 'importActual' };
-
-rs.mock('./api', () => ({ ...apiActual, extra: true }));
-
-it('uses the real exports', async () => {
-  const api = await import('./api');
-  expect(api.answer()).toBe(42);
-});
-```
+传入工厂函数作为第二个参数时，模块会替换为该工厂函数的返回值。工厂函数必须是同步函数；如需保留部分原始导出，请参见 [使用 `importActual` 部分 mock](#使用-importactual-部分-mock)。
 
 #### 基础示例
 
 <div style={{ display: 'flex', gap: '1rem' }}>
   <div>
     ```ts title="src/sum.test.ts"
+    import { expect, rs } from '@rstest/core';
     import { sum } from './sum';
 
-    rs.mock('./sum', () => {
-      return {
-        sum: (a: number, b: number) => a + b + 100,
-      };
-    });
+    rs.mock('./sum', () => ({
+      sum: (a: number, b: number) => a + b + 100,
+    }));
 
-    expect(sum(1, 2)).toBe(103); // PASS
+    expect(sum(1, 2)).toBe(103);
     ```
 
-</div>
+  </div>
   <div>
     ```ts title="src/sum.ts"
     export const sum = (a: number, b: number) => a + b;
-
     ```
-
   </div>
 </div>
 
 #### Mock 虚拟模块
 
-Rstest 可以 mock 磁盘上不存在的模块，例如生成模块、原生模块，以及仅在其他运行时中可用的依赖。Node 和浏览器模式使用相同的配置：
+Rstest 可以 mock 磁盘上不存在的模块（如生成模块、原生模块），在 Node 模式和浏览器模式下配置方式相同：
 
-1. 声明模块，让 TypeScript 识别它的导出：
+1. 为 TypeScript 声明模块类型：
 
 ```ts title="src/types/native-runtime.d.ts"
 declare module 'native-runtime' {
@@ -76,7 +56,7 @@ declare module 'native-runtime' {
 }
 ```
 
-2. 将 specifier 映射到 `false`，让构建工具将其视为已解析但忽略的模块：
+2. 将该 specifier 映射为 `false`，使打包工具跳过磁盘解析：
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -90,7 +70,7 @@ export default defineConfig({
 });
 ```
 
-3. 使用 factory 提供运行时导出：
+3. 使用工厂函数（或匹配的 `__mocks__` 文件）提供运行时导出：
 
 ```ts title="src/native-runtime.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -100,63 +80,20 @@ rs.mock('native-runtime', () => ({
   platform: 'test',
 }));
 
-test('uses the virtual module', () => {
+test('使用虚拟模块', () => {
   expect(platform).toBe('test');
 });
 ```
 
-Rstest 不使用 Jest 的第三个 `{ virtual: true }` 参数。请在模块声明、alias、mock 调用和 import 中保持相同的 specifier。被测源码也可以间接导入这个虚拟模块。
+Rstest 不使用 Jest 的第三个 `{ virtual: true }` 参数。请在类型声明、alias、mock 调用和 import 中使用相同的 specifier；被测源码间接导入该虚拟模块时同样会被 mock。
 
-`rs.mock` 会被提升，因此支持静态 `import`。对于稍后执行的动态 `import()`，请先调用 `rs.doMock` 再导入。如果 `require()` 和 mock 解析到同一个打包模块，`require()` 也可以使用这个 mock。如果 `require()` 解析到单独的 CommonJS 入口，请使用 `rs.mockRequire` 或 `rs.doMockRequire`。
+`rs.mock` 会被提升，覆盖静态 `import`；动态 `import()` 需在导入前调用 `rs.doMock`，而解析到独立 CommonJS 入口的 `require()` 请使用 `rs.mockRequire` 或 `rs.doMockRequire`。由于映射为 `false` 的 alias 没有真实实现，请使用工厂函数或手写 mock，不要使用 `{ mock: true }`、`{ spy: true }` 或 `rs.importActual`。
 
-也可以通过 `__mocks__` 中匹配的手写 mock 提供实现，而不使用 factory。由于映射到 `false` 的 alias 没有真实实现，请使用 factory 或手写 mock，而不是 `{ mock: true }`、`{ spy: true }` 或 `rs.importActual`。
-
-#### 使用 `rs.fn()` 追踪调用
-
-使用 `rs.fn()` 创建可以追踪调用并配置返回值的 mock 函数：
-
-```ts title="src/api.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { fetchUser, fetchPosts } from './api';
-
-rs.mock('./api', () => ({
-  fetchUser: rs.fn().mockResolvedValue({ id: 1, name: 'John' }),
-  fetchPosts: rs.fn().mockResolvedValue([{ id: 1, title: 'Hello' }]),
-}));
-
-test('获取用户数据', async () => {
-  const user = await fetchUser(1);
-  expect(user).toEqual({ id: 1, name: 'John' });
-  expect(fetchUser).toHaveBeenCalledWith(1);
-});
-```
-
-#### 使用 `rs.mockObject()` 自动 mock
-
-使用 `rs.mockObject()` 自动 mock 对象的所有属性：
-
-```ts title="src/service.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { userService } from './userService';
-
-rs.mock('./userService', () => ({
-  // 自动 mock 所有方法，它们将返回 undefined 并追踪调用
-  userService: rs.mockObject({
-    getUser: () => {},
-    updateUser: () => {},
-    deleteUser: () => {},
-  }),
-}));
-
-test('服务方法被 mock', () => {
-  userService.getUser(1);
-  expect(userService.getUser).toHaveBeenCalledWith(1);
-});
-```
+可在工厂函数内结合 [`rs.fn()`](/api/runtime-api/rstest/mock-functions#rsfn) 或 [`rs.mockObject()`](/api/runtime-api/rstest/mock-functions#rsmockobject) 来追踪调用、配置返回值或自动 mock 对象。
 
 #### 使用 `importActual` 部分 mock
 
-使用 [import attributes](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with) `with { rstest: 'importActual' }` 加载原始模块，然后结合 `rs.mock` 保留部分原始实现：
+通过 [import attribute](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with) `with { rstest: 'importActual' }` 加载未 mock 的原始模块，并将其导出展开到工厂函数返回值中：
 
 ```ts title="src/utils.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -165,26 +102,38 @@ import { formatDate, parseDate } from './dateUtils';
 
 rs.mock('./dateUtils', () => ({
   ...dateUtils,
-  // 只 mock formatDate，保留其他
   formatDate: rs.fn().mockReturnValue('2024-01-01'),
 }));
 
 test('formatDate 被 mock，parseDate 保持原实现', () => {
   expect(formatDate(new Date())).toBe('2024-01-01');
-  // parseDate 使用原始实现
   expect(parseDate('2024-01-01')).toBeInstanceOf(Date);
+});
+```
+
+如果真实模块或其依赖使用了 top-level `await`，请不要在同一测试文件中静态导入被 mock 的模块——否则工厂函数可能在真实模块求值完成前执行。请保留 `importActual` 导入，并在异步测试中通过 `await import()` 动态导入被 mock 的模块：
+
+```ts title="src/api.test.ts"
+import { expect, it, rs } from '@rstest/core';
+import * as apiActual from './api' with { rstest: 'importActual' };
+
+rs.mock('./api', () => ({ ...apiActual, extra: true }));
+
+it('使用真实导出', async () => {
+  const api = await import('./api');
+  expect(api.answer()).toBe(42);
 });
 ```
 
 ### 使用 `__mocks__` 目录
 
-如果 `rs.mock` 调用时没有提供工厂函数或选项对象，则会先尝试解析 `__mocks__` 目录下的同名模块。如果没有找到手写 mock，Rstest 会回退到自动 mock 目标模块，等价于传入 `{ mock: true }`。
+调用 `rs.mock` 且不传第二个参数时，Rstest 会先在 `__mocks__` 目录中查找同名手写 mock；若未找到，则回退为自动 mock（等价于传入 `{ mock: true }`）。
 
 **解析规则：**
 
-1. **本地模块**：如果有一个 `__mocks__` 文件夹与正在 mock 的文件同级，其中包含一个与被 mock 的模块同名的文件，则 Rstest 将使用该文件作为 mock 的实现。
-2. **npm 依赖**：如果在根目录中有一个 `__mocks__` 文件夹，其中包含一个与被 mock 的模块同名的文件，则 Rstest 将使用该文件作为 mock 实现。
-3. **Node.js 内置模块**：如果在根目录中有一个 `__mocks__` 文件夹，其中包含一个与内置模块同名的文件（如 `__mocks__/fs.mjs`、`__mocks__/path.ts`），则 Rstest 将使用该文件。使用 `node:` 协议导入时将忽略 `node:` 前缀。
+1. **本地模块**：目标文件同级 `__mocks__` 目录下的同名文件。
+2. **npm 依赖**：项目根目录 `__mocks__` 目录下与包名同名的文件。
+3. **Node.js 内置模块**：项目根目录 `__mocks__` 目录下与内置模块同名的文件（如 `__mocks__/fs.mjs`、`__mocks__/path.ts`），会自动忽略 `node:` 前缀。
 
 **示例：**
 
@@ -201,11 +150,7 @@ test('formatDate 被 mock，parseDate 保持原实现', () => {
 
 ```ts title="src/multiple.test.ts"
 import { rs } from '@rstest/core';
-
-// lodash 是来自 `__mocks__/lodash.js` 的默认导出
 import lodash from 'lodash';
-
-// multiple 是来自 `src/__mocks__/multiple.ts` 的命名导出
 import { multiple } from '../src/multiple';
 
 rs.mock('lodash');
@@ -214,25 +159,9 @@ rs.mock('../src/multiple');
 lodash.random(multiple(1, 2), multiple(3, 4));
 ```
 
-如果对应的手写 mock 文件不存在，Rstest 会改为自动 mock 原始模块：
-
-```ts title="src/math.test.ts"
-import { expect, rs, test } from '@rstest/core';
-import { add } from './math';
-
-rs.mock('./math');
-
-test('falls back to auto-mocking', () => {
-  expect(rs.isMockFunction(add)).toBe(true);
-  expect(add(1, 2)).toBeUndefined();
-});
-```
-
 ### 使用 `{ spy: true }` 选项 \{#with-spy-true-option}
 
-如果第二个参数提供了 `{ spy: true }`，模块将被自动 mock，但原始实现会被保留。所有导出都会被包装在 spy 函数中，这些函数会追踪调用同时仍然执行原始代码。
-
-这在你想要断言一个函数是否被正确调用而不想替换其实现时非常有用。
+将模块的所有导出包装为 spy 函数，同时保留原始实现。
 
 ```ts title="src/calculator.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -241,11 +170,9 @@ import { calculate } from './calculator';
 rs.mock('./calculator', { spy: true });
 
 test('保留真实实现并追踪调用', () => {
-  // 原始实现仍然有效
   const result = calculate(1, 2);
   expect(result).toBe(3);
 
-  // 因为 calculate 是被直接调用的，所以我们也可以断言调用情况
   expect(calculate).toHaveBeenCalledWith(1, 2);
   expect(calculate).toHaveReturnedWith(3);
 });
@@ -253,22 +180,20 @@ test('保留真实实现并追踪调用', () => {
 
 :::note 模块内部调用不会被追踪
 
-spy 包装的是模块的**导出**。当一个导出在同一模块内调用另一个导出时（例如 `calculate` 内部调用 `add`），该内部调用走的是模块的本地绑定而非被包装的导出，因此**不会**被追踪。请对你直接调用的导出（或从其他模块调用的导出）进行断言。这是 ESM module spying 的固有限制。
+spy 包装的是模块的**导出**。同一模块内某个导出直接调用另一个函数时，走的是模块内部绑定而非包装后的导出，因此不会被追踪。
 
 :::
 
 :::note ESM 和 CommonJS 模块
 
-- **ESM 模块**：所有命名导出都会被包装在 spy 函数中。
-- **CommonJS 模块**：除了包装导出外，还会自动添加一个 `default` 导出（指向模块本身），以保持 `import x from 'cjs-module'` 的行为。
+- **ESM 模块**：所有命名导出都会被包装为 spy 函数。
+- **CommonJS 模块**：除包装导出外，若不存在 `default` 导出，会自动添加指向模块对象的 `default` 导出，以保持 `import x from 'cjs-module'` 的行为。
 
 :::
 
 ### 使用 `{ mock: true }` 选项
 
-如果第二个参数提供了 `{ mock: true }`，模块将被自动 mock，所有函数导出都会被替换为 mock 函数。与 `{ spy: true }` 不同，原始实现**不会**被保留 —— mock 函数默认返回 `undefined`。当 `rs.mock('./module')` 找不到对应手写 mock 时，也会使用这个回退行为。
-
-这在你想要完全替换模块的行为并配置 mock 返回值或实现时非常有用。
+跳过 `__mocks__` 查找，直接自动 mock 模块，将所有导出的函数替换为默认返回 `undefined` 的 mock 函数。
 
 ```ts title="src/math.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -276,21 +201,16 @@ import { add, multiply } from './math';
 
 rs.mock('./math', { mock: true });
 
-test('mock functions return undefined by default', () => {
-  // Original implementation is NOT preserved
+test('mock 函数默认返回 undefined', () => {
   expect(add(1, 2)).toBeUndefined();
   expect(multiply(3, 4)).toBeUndefined();
-
-  // Functions are mock functions
   expect(rs.isMockFunction(add)).toBe(true);
 });
 
-test('can configure mock implementations', () => {
-  // Configure return values
+test('配置 mock 实现', () => {
   rs.mocked(add).mockReturnValue(100);
   expect(add(1, 2)).toBe(100);
 
-  // Configure implementations
   rs.mocked(multiply).mockImplementation((a, b) => a * b * 2);
   expect(multiply(3, 4)).toBe(24);
 });
@@ -298,36 +218,33 @@ test('can configure mock implementations', () => {
 
 ### 使用 `Promise<T>` 增强类型
 
-`rs.mock` 支持第一个参数传入一个 `Promise<T>`（通过动态 import），以获得更好的 IDE 类型提示。传入 `Promise<T>` 除对类型提示有增强外，对 mock 模块能力没有任何影响。
+第一个参数传入动态 `import()` 表达式（`Promise<T>`），可为工厂函数返回值提供 IDE 类型推导，不影响运行时行为：
 
 ```ts
-// 相比于 rs.mock('../src/b', ...)，类型得到增强
-rs.mock(import('../src/b'), () => {
-  return {
-    b: 222,
-  };
-});
+rs.mock(import('../src/b'), () => ({
+  b: 222,
+}));
 ```
 
 ## rs.doMock
 
 - **类型：** `<T = unknown>(moduleName: string | Promise<T>, factoryOrOptions?: (() => Partial<T>) | { spy: true } | { mock: true }) => void`
 
-与 `rs.mock` 类似，但它**不会被提升**到模块顶部。它会在被执行到时调用，这意味着如果在调用 `rs.doMock` 之前已经导入了模块，则该模块不会被 mock，而在调用 `rs.doMock` 之后导入的模块会被 mock。
+`rs.mock` 的非提升版本。仅在执行时生效，因此在此之前求值的导入保持原始模块，之后的动态 `import()` 会获得 mock 模块。
 
-支持与 `rs.mock` 相同的选项：工厂函数、`__mocks__` 目录、`{ spy: true }` 和 `{ mock: true }`。
+第二个参数支持与 `rs.mock` 相同的选项（工厂函数、`__mocks__` 回退、`{ spy: true }` 或 `{ mock: true }`）。
 
 ```ts title="src/sum.test.ts"
-import { rs } from '@rstest/core';
+import { expect, it, rs } from '@rstest/core';
 import { sum } from './sum';
 
-it('test', async () => {
-  // sum 在执行 doMock 之前导入，所以还没有被 mock
-  expect(sum(1, 2)).toBe(3); // PASS
+it('仅 mock 后续导入', async () => {
+  expect(sum(1, 2)).toBe(3);
+
   rs.doMock('./sum');
   const { sum: mockedSum } = await import('./sum');
-  // sum 在执行 doMock 之后导入，现在已经被 mock 了
-  expect(mockedSum(1, 2)).toBe(3); // FAILED
+
+  expect(mockedSum(1, 2)).toBeUndefined();
 });
 ```
 
@@ -335,18 +252,14 @@ it('test', async () => {
 
 - **类型：** `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
 
-用于 mock 通过 CommonJS `require()` 加载的模块。和 `rs.mock` 一样，这个 API 会被提升（hoisted）到当前模块顶部。
+mock 通过 CommonJS `require()` 加载的模块。与 `rs.mock` 一样，调用会被提升到当前模块顶部。
 
-当目标模块是通过 `require()` 消费时，应使用这个 API。
+:::tip 双入口包（ESM + CJS）
+当依赖同时提供 ESM 和 CommonJS 入口时：
 
-:::tip
-与 `rs.mock` 在 dual package（同时提供 ESM entry 与 CJS entry）场景的区别：
-
-- `rs.mock()` mock 的是 **ESM entry**（`import` 使用）
-- `rs.mockRequire()` mock 的是 **CJS entry**（`require()` 使用）
-
-如果你的代码路径走的是 `require()`，优先使用 `rs.mockRequire()`，避免 mock 到错误的 entry。
-:::
+- `rs.mock()` 作用于 **ESM 入口**（`import` 使用）。
+- `rs.mockRequire()` 作用于 **CJS 入口**（`require()` 使用）。
+  :::
 
 ```ts title="src/math.test.cjs"
 const { sum } = require('./math.cjs');
@@ -364,7 +277,7 @@ test('使用 require mock cjs 模块', () => {
 
 - **类型：** `<T = unknown>(moduleName: string, factoryOrOptions?: (() => T) | { spy: true } | { mock: true }) => void`
 
-与 `rs.mockRequire` 类似，但它**不会被提升**。只有在执行 `rs.doMockRequire` 之后，后续的 `require()` 才会应用 mock。
+`rs.mockRequire` 的非提升版本，仅对执行后的 `require()` 调用生效。
 
 ```ts title="src/math.test.cjs"
 test('doMockRequire 只影响后续 require 调用', () => {
@@ -384,9 +297,7 @@ test('doMockRequire 只影响后续 require 调用', () => {
 
 - **类型：** `(path: string) => void`
 
-取消通过 `require()` 加载模块的 mock 实现。和 `rs.mockRequire` 一样，这个调用会被提升到文件顶部。
-
-当你希望后续的 `require()` 重新加载原始 CommonJS 模块时，使用这个 API。
+移除通过 `require()` 加载模块的 mock。与 `rs.mockRequire` 一样，调用会被提升到文件顶部，使后续 `require()` 加载原始 CommonJS 模块。
 
 ```ts title="src/math.test.cjs"
 const { sum } = require('./math.cjs');
@@ -406,7 +317,7 @@ test('unmockRequire 恢复原始 CommonJS 模块', () => {
 
 - **类型：** `(path: string) => void`
 
-与 `rs.unmockRequire` 相同，但不会被提升。只有后续的 `require()` 调用才会重新加载原始模块。
+`rs.unmockRequire` 的非提升版本，仅影响执行后的 `require()` 调用。
 
 ```ts title="src/math.test.cjs"
 test('doUnmockRequire 只影响后续 require 调用', () => {
@@ -428,24 +339,19 @@ test('doUnmockRequire 只影响后续 require 调用', () => {
 
 - **类型：** `<T = unknown>(fn: () => T) => T`
 
-`rs.hoisted` 是一个辅助函数，允许你创建可以在提升函数（如 `rs.mock` 工厂函数）中访问的值。与 `rs.mock` 类似，`rs.hoisted` 也会被提升到模块的顶部，并在提升的作用域内提供对 `rs` 工具函数的访问。
-
-这在你需要创建应该在 mock 工厂函数和测试代码之间共享的 mock 函数或值时非常有用。
+将 `fn` 提升到模块顶部执行（作用域内可访问 `rs`）并返回其结果。用于在被提升的 `rs.mock` 工厂函数与测试断言之间共享 mock 函数或变量。
 
 ```ts title="src/sum.test.ts"
 import { expect, it, rs } from '@rstest/core';
 import { foo } from './sum';
 
-// 可以在 hoisted 函数中访问 `rs` 工具函数。
-const mocks = rs.hoisted(() => {
-  return {
-    hoistedFn: rs.fn(),
-  };
-});
+const mocks = rs.hoisted(() => ({
+  hoistedFn: rs.fn(),
+}));
 
-rs.mock('./sum', () => {
-  return { foo: mocks.hoistedFn };
-});
+rs.mock('./sum', () => ({
+  foo: mocks.hoistedFn,
+}));
 
 it('hoisted', () => {
   mocks.hoistedFn(42);
@@ -455,44 +361,28 @@ it('hoisted', () => {
 });
 ```
 
-在这个例子中，`rs.hoisted` 允许你使用 `rs.fn()` 创建一个 mock 函数，该函数可以同时在 `rs.mock` 工厂函数和测试断言中使用。如果没有 `rs.hoisted`，你将无法在 `rs.mock` 工厂函数被执行的作用域中访问 `rs` 工具函数。
-
-{/* ## TODO: rs.mocked */}
-
 ## rs.importActual
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-异步加载 ESM 模块的原始实现，即使该模块已经被 mock。异步测试代码需要绕过模块 mock 时，可以使用 `rs.importActual`。如果 CommonJS 模块通过 `require()` 加载，请使用 [`rs.requireActual`](#rsrequireactual)。
+异步加载 ESM 模块的原始实现，绕过已注册的 mock。对于通过 `require()` 加载的 CommonJS 模块，请使用 [`rs.requireActual`](#rsrequireactual)；在同步 `rs.mock` 工厂函数中进行部分 mock 时，请使用 `with { rstest: 'importActual' }`（参见 [使用 `importActual` 部分 mock](#使用-importactual-部分-mock)）。
 
 ```ts title="src/sum.test.ts"
+import { expect, it, rs } from '@rstest/core';
+
 rs.mock('./sum');
 
-it('test', async () => {
-  const actualModule = await rs.importActual('./sum');
+it('加载原始模块', async () => {
+  const actualModule = await rs.importActual<typeof import('./sum')>('./sum');
   expect(actualModule.sum(1, 2)).toBe(3);
 });
 ```
-
-如果要在同步的 `rs.mock` factory 中对 ESM 模块做部分 mock，可以为静态 import 添加 `with { rstest: 'importActual' }` [import attribute](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Statements/import/with)。这样会在文件执行时加载真实模块，让 factory 可以合并真实导出与覆盖实现：
-
-```ts title="src/api.test.ts"
-import * as apiActual from './api' with { rstest: 'importActual' };
-
-// Partially mock the './api' module
-rs.mock('./api', () => ({
-  ...apiActual,
-  fetchUser: rs.fn().mockResolvedValue({ id: 'mocked' }),
-}));
-```
-
-这种写法要求模块依赖图不含 top-level `await`。如果依赖图含有 top-level `await`，同时又静态导入了被 mock 的模块，factory 可能会在真实导出就绪前执行。保留真实模块的属性导入，并在异步测试中使用 `await import('./api')`，等真实模块加载完成后再导入 mock 模块。`rs.requireActual` 是同步 API，不能加载含 top-level `await` 的模块依赖图；异步代码中请使用 `rs.importActual`。
 
 ## rs.requireActual
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => T`
 
-同步加载 CommonJS 模块的原始实现，即使该模块已经被 mock。当代码通过 `require()` 使用模块，或者同步 mock factory 需要真实导出时，可以使用 `rs.requireActual`。如果 ESM 模块通过 `import` 加载，请使用 [`rs.importActual`](#rsimportactual)。
+同步加载 CommonJS 模块的原始实现，绕过已注册的 mock。若模块的依赖图使用了 top-level `await`，该方法会抛出错误，请改用异步的 [`rs.importActual`](#rsimportactual)。
 
 ```js title="src/math.test.cjs"
 const { expect, rs, test } = require('@rstest/core');
@@ -501,7 +391,7 @@ rs.mockRequire('./math.cjs', () => ({
   sum: () => 100,
 }));
 
-test('loads the original CommonJS module', () => {
+test('加载原始 CommonJS 模块', () => {
   const actualMath = rs.requireActual('./math.cjs');
 
   expect(rs.isMockFunction(actualMath.sum)).toBe(false);
@@ -513,15 +403,15 @@ test('loads the original CommonJS module', () => {
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => Promise<T>`
 
-异步获取模块的 mock 导出。如果需要同步加载 CommonJS 模块的 mock，请使用 [`rs.requireMock`](#rsrequiremock)。
+异步加载 ESM 模块的 mock 导出。如需同步加载 CommonJS 模块的 mock，请使用 [`rs.requireMock`](#rsrequiremock)。
 
-返回结果取决于模块的 mock 设置：
+解析顺序如下：
 
-- 已通过 `rs.mock` 或 `rs.doMock` 注册 mock 时，返回已注册的 mock，包括 factory 返回的导出、手动 mock 或自动 mock 的模块。
-- 未注册 mock，且参数是字符串字面量时，加载匹配的 `__mocks__` 文件（如果存在）。这种用法不需要先调用 `rs.mock`。
-- 两者都不存在时，返回的 Promise 会被拒绝，错误信息会指出找不到的模块。
+- 若已通过 `rs.mock` 或 `rs.doMock` 注册 mock，则返回该已注册的 mock（已注册的工厂函数优先于 `__mocks__`，且其导出函数保持原样，不会自动包装为 `rs.fn()`）。
+- 若未注册 mock 且 `path` 为字符串字面量，则加载匹配的 `__mocks__` 文件（若存在）。
+- 若两者均不存在，返回的 Promise 会以模块未找到错误 reject。
 
-已注册的 factory 优先于匹配的 `__mocks__` 文件。factory 中的函数会按原样返回，不会自动转换成 `rs.fn()`。如果需要自动 mock，请先通过 `rs.mock('./sum', { mock: true })` 注册，再加载模块。
+如需自动 mock 模块，请先调用 `rs.mock('./sum', { mock: true })` 注册。
 
 ```ts title="src/sum.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -530,7 +420,7 @@ rs.mock('./sum', () => ({
   sum: () => 100,
 }));
 
-test('loads the registered mock', async () => {
+test('加载已注册的 mock', async () => {
   const mocked = await rs.importMock<typeof import('./sum')>('./sum');
 
   expect(mocked.sum(1, 2)).toBe(100);
@@ -539,12 +429,12 @@ test('loads the registered mock', async () => {
 
 ### 变量路径
 
-在 Node 和 Browser 模式下，传入变量路径时，`rs.importMock` 会尝试查找已注册的 mock。可以先通过 `rs.mock` 或 `rs.doMock` 以字面量路径注册目标模块的 mock，再通过变量路径获取它。相对路径以调用 `rs.importMock` 的文件为基准解析。
+当 `path` 为变量时，`rs.importMock` 只会查找此前通过字面量路径注册的 mock（`rs.mock` 会被提升；`rs.doMock` 需在 `rs.importMock` 之前执行）。相对路径以调用所在文件为基准解析。变量路径不会在运行时查找未 mock 的模块或 `__mocks__` 文件。
 
 ```ts title="src/sum.test.ts"
 import { expect, rs, test } from '@rstest/core';
 
-test('loads an auto-mocked module through a variable', async () => {
+test('通过变量加载自动 mock 的模块', async () => {
   rs.doMock('./sum', { mock: true });
 
   const path = './sum';
@@ -555,17 +445,13 @@ test('loads an auto-mocked module through a variable', async () => {
 });
 ```
 
-`rs.mock` 会被提升；`rs.doMock` 则在执行时生效，因此需要在 `rs.importMock` 之前调用。变量路径只用于查找已注册的 mock，不会在运行时查找新的模块或 `__mocks__` 文件，即使这些文件已经存在于磁盘上。
-
 ## rs.requireMock
 
 - **类型：** `<T = Record<string, unknown>>(path: string) => T`
 
-同步获取 CommonJS 模块的 mock 导出。通过 `rs.mockRequire` 或 `rs.doMockRequire` 注册 mock，可以按 CommonJS 的规则解析目标模块。如果需要异步加载，请使用 [`rs.importMock`](#rsimportmock)。
+同步加载通过 `rs.mockRequire` 或 `rs.doMockRequire` 注册的 CommonJS 模块 mock（当 `path` 为字符串字面量时，也可直接加载匹配的 `__mocks__` 文件）。找不到对应 mock 时同步抛出错误。
 
-与 `rs.importMock` 一样，已注册的 mock 优先于匹配的 `__mocks__` 文件。字符串字面量可以直接加载手动 mock，无须提前注册。
-
-传入变量路径时，`rs.requireMock` 会尝试查找已注册的 mock，不会在运行时加载新的模块或查找 `__mocks__` 文件。相对路径以调用所在的文件为基准解析。找不到对应的 mock 时，`rs.requireMock` 会同步抛出模块不存在的错误。
+传入变量路径时，`rs.requireMock` 仅查找已注册的 mock（相对路径以调用文件为基准解析），不会在运行时查找 `__mocks__` 文件。
 
 ```js title="src/math.test.cjs"
 const { expect, rs, test } = require('@rstest/core');
@@ -574,7 +460,7 @@ rs.mockRequire('./math.cjs', () => ({
   sum: () => 100,
 }));
 
-test('loads the registered CommonJS mock', () => {
+test('加载已注册的 CommonJS mock', () => {
   const path = './math.cjs';
   const mockedMath = rs.requireMock(path);
 
@@ -582,36 +468,31 @@ test('loads the registered CommonJS mock', () => {
 });
 ```
 
-如果需要自动 mock，可以使用 `rs.mockRequire('./math.cjs', { mock: true })`。`rs.doMockRequire` 不会被提升，使用时需要在 `rs.requireMock` 之前调用。
-
 ## rs.unmock
 
 - **类型：** `(path: string) => void`
 
-取消指定模块的 mock 实现。之后所有对 `import` 的调用都将返回原始模块，即使它之前已被 mock。与 `rs.mock` 类似，此调用被提升到文件的顶部，因此它将仅取消在 `setupFiles` 中执行的模块 mock。
+取消指定模块的 mock，使后续 `import` 加载原始模块。与 `rs.mock` 一样，调用会被提升到文件顶部，可用于取消 `setupFiles` 或同文件更早提升的 `rs.mock` 注册的 mock。
 
 <div style={{ display: 'flex', gap: '1rem' }}>
   <div>
-    ```ts title="src/sum.test.ts"
-    import { rs } from '@rstest/core';
+    ```ts title="sum.test.ts"
+    import { expect, rs } from '@rstest/core';
     import { sum } from './src/sum';
 
     rs.unmock('./src/sum');
 
-    expect(sum(1, 2)).toBe(3); // PASS
+    expect(sum(1, 2)).toBe(3);
     ```
 
-</div>
+  </div>
   <div>
     ```ts title="rstest.setup.ts"
-    import { rs } from '@rstest/core'
-    ;
-    rs.mock('./src/sum', () => {
-      return {
-        sum: (a: number, b: number) => a + b + 100,
-      };
-    });
+    import { rs } from '@rstest/core';
 
+    rs.mock('./src/sum', () => ({
+      sum: (a: number, b: number) => a + b + 100,
+    }));
     ```
 
   </div>
@@ -621,14 +502,14 @@ test('loads the registered CommonJS mock', () => {
 
 - **类型：** `(path: string) => void`
 
-与 `rs.unmock` 相同，但不会被提升到文件顶部。模块的下一次导入将导入原始模块而不是 mock。这不会取消 mock 之前导入的模块。
+`rs.unmock` 的非提升版本，仅影响后续导入，不会撤销此前已导入的模块绑定。
 
 ## rs.resetModules
 
 - **类型：** `() => RstestUtilities`
 
-清除所有模块的缓存。这允许在重新导入时重新执行模块。这在隔离不同测试中共享的模块的状态时非常有用。
+清空模块缓存，使模块在下次 `import` 或 `require()` 时重新执行，用于隔离不同测试之间共享的模块状态。
 
 :::warning
-不会重置被 mock 的 modules。要清除 mock 的模块，请使用 [`rs.unmock`](#rsunmock)、[`rs.doUnmock`](#rsdounmock)、[`rs.unmockRequire`](#rsunmockrequire) 或 [`rs.doUnmockRequire`](#rsdounmockrequire)。
+不会清除已注册的模块 mock。如需恢复原始模块，请使用 [`rs.unmock`](#rsunmock)、[`rs.doUnmock`](#rsdounmock)、[`rs.unmockRequire`](#rsunmockrequire) 或 [`rs.doUnmockRequire`](#rsdounmockrequire)。
 :::

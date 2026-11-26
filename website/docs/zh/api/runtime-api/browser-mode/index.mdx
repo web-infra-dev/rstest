@@ -1,36 +1,27 @@
 ---
 title: Browser mode
-description: Browser Mode API 由 @rstest/browser 提供，目标是让你在浏览器测试中使用 Playwright 风格的 Locator 工作流。
+description: '@rstest/browser 提供的 Browser Mode 运行时 API，用于在浏览器测试中定位元素、触发交互并断言 DOM 状态。'
 ---
 
 # Browser mode
 
-Browser Mode API 由 [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) 提供，目标是让你在浏览器测试中使用 Playwright 风格的 Locator 工作流。
+[@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser) 提供 Browser Mode 运行时 API，支持 Playwright 风格的 `Locator` 工作流。
 
 ## 导出 API
 
-`@rstest/browser` 提供的是 Browser Mode 的运行时入口能力，核心职责是**定位元素并驱动交互**。
+- [`page`](/api/runtime-api/browser-mode/locator#page)：`BrowserPage` 入口，提供元素查询、DOM 转换、[`keyboard`](/api/runtime-api/browser-mode/keyboard) 键盘输入和 [`viewport`](/api/runtime-api/browser-mode/locator#pageviewport) 视口调整
+- [`Locator`](/api/runtime-api/browser-mode/locator)：用于链式查询与交互的核心类
+- [`BrowserPage`](/api/runtime-api/browser-mode/locator#browserpage)：`page` 的类型定义
+- [`setTestIdAttribute`](/api/runtime-api/browser-mode/locator#settestidattribute)：配置 `getByTestId()` 使用的属性名
 
-其中，`page` 提供查询和键盘输入，`Locator` 负责链式组合与动作执行，`BrowserPage` 用来描述 `page` 支持的 API，`setTestIdAttribute` 用于配置 test id 属性名。
-
-以下是 `@rstest/browser` 当前导出的 API：
-
-- [`page`](/api/runtime-api/browser-mode/locator#page) - `BrowserPage` 查询、DOM 转换和键盘入口
-- [`Locator`](/api/runtime-api/browser-mode/locator) - 链式查询与交互的核心类
-- [`BrowserPage`](/api/runtime-api/browser-mode/locator#browserpage) - `page` 的类型定义
-- [`setTestIdAttribute`](/api/runtime-api/browser-mode/locator#settestidattribute) - 配置 `getByTestId()` 使用的属性名
+`@rstest/browser` 同时导出 `LocatorClickOptions`、`LocatorGetByRoleOptions`、`BrowserKeyboard` 等选项和辅助类型。
 
 ## 断言 API
 
-断言入口是 `expect.element(locator)`。
+在 Browser Mode 测试中导入 `@rstest/browser` 后，`@rstest/core` 的 `expect` 会自动扩展以下能力：
 
-当你在 Browser Mode 测试里导入 `@rstest/browser`（例如 `import { page } from '@rstest/browser'`）时，`expect` 会自动具备 `element` 能力。
-
-它的职责是对 `Locator` 或 DOM `Element` 执行 web-first assertion（带自动等待），例如 `toBeVisible`、`toHaveText`。
-
-两者关系可以理解为：`@rstest/browser` 负责**找元素和操作元素**，`expect.element` 负责**验证元素状态**。
-
-- [`expect.element(target)`](/api/runtime-api/browser-mode/assertion) - 对 `Locator` 或 DOM `Element` 执行自动等待断言
+- [`expect.element(target)`](/api/runtime-api/browser-mode/assertion)：对 `Locator` 或 DOM `Element` 执行自动重试的 DOM 断言
+- [`toMatchScreenshot()`](/api/runtime-api/browser-mode/assertion#toMatchScreenshot)：对 `Locator` 或 `page` 执行视觉截图对比
 
 ## 示例：查询、交互与断言
 
@@ -44,8 +35,6 @@ test('submits form', async () => {
   await expect.element(page.getByText('Done')).toBeVisible();
 });
 ```
-
-这个例子里，`page` 先生成 `Locator`，`Locator` 执行 `fill/click`，最后 `expect.element(locator)` 对结果做可见性断言，形成完整测试闭环。
 
 ## 详细参考
 

@@ -18,7 +18,7 @@ type BuildCacheConfig =
   | boolean
   | {
       cacheDirectory?: string;
-      cacheDigest?: Array<string | undefined>;
+      cacheDigest?: (string | undefined)[];
       buildDependencies?: string[];
     };
 ```

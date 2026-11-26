@@ -10,13 +10,11 @@ Rstest 提供了一个轻量级的命令行工具，包含 [rstest watch](#rstes
 
 ## rstest -h
 
-`rstest -h` 可帮助你查看所有可用的 CLI 命令及选项：
+`rstest -h` 用于查看所有可用的 CLI 命令及选项：
 
 ```bash
 npx rstest -h
 ```
-
-输出如下：
 
 ```bash
 Usage:
@@ -39,7 +37,7 @@ Options:
 
 ## rstest [...filters]
 
-直接运行 `rstest` 命令将会在当前目录执行 Rstest 测试。
+直接运行 `rstest` 会在当前目录执行测试：
 
 ```bash
 $ npx rstest
@@ -51,15 +49,11 @@ $ npx rstest
     Duration 189 ms (build 22 ms, tests 167 ms)
 ```
 
-用成对的单引号或双引号包裹 filter，可精确匹配绝对路径或相对于 root 的路径；shell 会去掉一层引号，因此需要两层：
-
-```bash
-rstest run '"src/foo.test.ts"'
-```
+位置参数匹配、完整路径精确匹配及测试名称过滤详见[过滤测试](/guide/basic/test-filter)。
 
 ### Watch 模式
 
-如果你希望在文件更改时自动重新运行测试，可以使用 `--watch` 或 `rstest watch` 命令：
+如果希望在文件更改时自动重新运行测试，可以使用 `--watch` 或 `rstest watch` 命令：
 
 ```bash
 $ npx rstest --watch
@@ -67,19 +61,19 @@ $ npx rstest --watch
 
 ## rstest run
 
-`rstest run` 将会执行单次测试，该命令适用于 CI 环境或不需要一边修改一边执行测试的场景。
+`rstest run` 执行单次测试而不进入监听模式，适合 CI 环境或无需边改边测的场景。
 
 ### 运行相关测试
 
 <ApiMeta addedVersion="0.10.0" />
 
-当你希望把命令行位置参数视为源码文件，并只运行依赖这些源码的测试时，可以使用 `--related`：
+当需要把命令行位置参数视为源码文件，并只运行依赖这些源码的测试时，可以使用 `--related`：
 
 ```bash
 npx rstest run --related src/button.ts
 ```
 
-Rstest 会基于构建得到的 module graph 解析相关测试，因此同一套过滤逻辑同时适用于 Node mode 和 Browser Mode。你也可以使用兼容 Jest 的别名：
+Rstest 会基于构建得到的 module graph 解析相关测试，因此同一套过滤逻辑同时适用于 Node mode 和 Browser Mode。也可以使用兼容 Jest 的别名：
 
 ```bash
 npx rstest run --findRelatedTests src/button.ts
@@ -87,7 +81,7 @@ npx rstest run --findRelatedTests src/button.ts
 
 与请求源无关的文件出现编译错误时，`--related` 和 `--changed` 不会失败退出。如果测试文件自身编译失败，Rstest 无法分析它的依赖，可能漏选并打印警告。`passWithNoTests` 只允许选择结果为空。
 
-如果你只想查看受影响的测试文件，可以配合 `rstest list` 使用：
+如果只想查看受影响的测试文件，可以配合 `rstest list` 使用：
 
 ```bash
 npx rstest list --related src/button.ts --filesOnly
@@ -99,13 +93,13 @@ npx rstest list --related src/button.ts --filesOnly
 
 <ApiMeta addedVersion="0.10.0" />
 
-使用 `--changed` 可以从当前 Git 仓库收集变更文件，并运行这些文件相关的测试。默认会包含 unstaged、staged 和 untracked 文件，适合在本地提交前快速验证：
+使用 `--changed` 可以从当前 Git 仓库收集变更文件，并运行这些文件相关的测试。默认会包含 unstaged、staged 和 untracked 文件：
 
 ```bash
 npx rstest run --changed
 ```
 
-你也可以传入 commit 或 branch。Rstest 会包含该 ref 与 `HEAD` 之间的变更文件，以及本地 staged、unstaged 和 untracked 文件：
+也可以传入 commit 或 branch。Rstest 会包含该 ref 与 `HEAD` 之间的变更文件，以及本地 staged、unstaged 和 untracked 文件：
 
 ```bash
 npx rstest run --changed=HEAD~1
@@ -137,58 +131,55 @@ npx rstest list --changed --filesOnly
 
 ### 运行分片 \{#sharding-tests}
 
-使用 `--shard <index>/<count>` 将测试文件拆分为多个分片并行运行。`count` 表示总的分片数量，`index`（从 1 开始）表示要运行的分片。
+使用 `--shard <index>/<count>` 将测试文件拆分为多个分片并行运行。`count` 表示总的分片数量，`index`（从 1 开始）表示要运行的分片：
 
 ```bash
 # 将测试分成 3 个分片，运行第 1 个分片
 npx rstest run --shard 1/3
 ```
 
-这在 CI/CD 中尤其有用 —— 将测试套件拆分到多个 job 以减少整体测试时间，然后用 [`rstest merge-reports`](#rstest-merge-reports) 合并各分片的报告。
+在 CI/CD 中，可以将测试套件拆分到多个 job 以缩短整体运行时间，然后用 [`rstest merge-reports`](#rstest-merge-reports) 合并各分片的报告。
 
-测试文件会按相对于本次 Rstest 运行根目录的路径计算 SHA-1，并按 hash 排序，路径分隔符统一为 `/`。这样可以打散同一目录中的文件，并在多次运行或更换检出目录时保持分片结果一致。分片发生在测试文件扫描阶段，早于构建过程，以优化性能。请确保 `count` 和 `index` 的值有效（`1 <= index <= count`）。
+测试文件会按相对于本次 Rstest 运行根目录的路径计算 SHA-1，并按 hash 排序，路径分隔符统一为 `/`。这样可以打散同一目录中的文件，并在多次运行或更换检出目录时保持分片结果一致。分片发生在测试文件扫描阶段，早于构建过程。请确保 `1 <= index <= count`。
 
 文件会均匀分配到各个分片，余数从第一个分片开始，每片多分配一个文件。例如，10 个文件拆分为 3 个分片时，各片分别包含 4、3、3 个文件。
 
 ## rstest watch
 
-`rstest watch` 将会启动监听模式并执行测试，当测试或依赖文件修改时，将重新执行关联的测试文件。
+`rstest watch` 以监听模式运行测试，当测试文件或其依赖发生变化时重新执行受影响的测试文件。
 
 ## rstest list
 
-`rstest list` 将会打印所有匹配条件的测试列表。默认情况下，它将打印所有匹配条件的测试名称。
+`rstest list` 列出所有匹配的测试而不执行它们。默认情况下，输出每个匹配测试的完整名称：
 
 ```bash
 $ npx rstest list
 
-# 输出如下：
 a.test.ts > test a > test a-1
 a.test.ts > test a-2
 b.test.ts > test b > test b-1
 b.test.ts > test b-2
 ```
 
-`rstest list` 命令继承所有 `rstest` 过滤选项，你可以直接过滤文件或使用 `-t` 过滤指定的测试名称。
+`rstest list` 继承 `rstest` 的过滤选项（`-f, --onlyFailures` 除外），可以直接过滤文件或使用 `-t` 匹配测试名称：
 
 ```bash
 $ npx rstest list -t='test a'
 
-# 输出如下：
 a.test.ts > test a > test a-1
 a.test.ts > test a-2
 ```
 
-你可以使用 `--filesOnly` 使其仅打印测试文件：
+使用 `--filesOnly` 仅打印测试文件路径：
 
 ```bash
 $ npx rstest list --filesOnly
 
-# 输出如下：
 a.test.ts
 b.test.ts
 ```
 
-你可以使用 `--json` 使其以 JSON 格式打印测试或将结果保存到单独的文件中：
+使用 `--json` 以 JSON 格式输出测试，或将结果写入文件：
 
 ```bash
 $ npx rstest list --json
@@ -198,12 +189,11 @@ $ npx rstest list --json=./output.json
 
 在 Browser Mode 下，`rstest list` 会在每个选中的 browser instance 中求值测试文件，但不执行测试主体。使用 `--filesOnly` 时，每个匹配的文件会按选中的 instance 各列一次，且不会启动浏览器。一个项目选中多个 instance 时，`--json` 会用各自的 instance 项目名来区分，例如 `web (chromium)` 或 `web (firefox)`。
 
-您可以使用 `--includeSuites` 选项，在打印测试用例的同时输出测试套件信息：
+使用 `--includeSuites` 在输出测试用例的同时包含测试套件：
 
 ```bash
-$ npx rstest list
+$ npx rstest list --includeSuites
 
-# 输出如下：
 a.test.ts > test a
 a.test.ts > test a > test a-1
 a.test.ts > test a-2
@@ -212,24 +202,22 @@ b.test.ts > test b > test b-1
 b.test.ts > test b-2
 ```
 
-您可以使用 `--printLocation` 选项来打印测试的位置信息：
+使用 `--printLocation` 输出文件路径及行列位置信息：
 
 ```bash
-$ npx rstest list
+$ npx rstest list --printLocation
 
-# 输出如下：
 a.test.ts:4:5 > test a > test a-1
 a.test.ts:9:3 > test a-2
 b.test.ts:4:5 > test b > test b-1
 b.test.ts:9:3 > test b-2
 ```
 
-你可以使用 `--summary` 在列表输出后追加一段简要统计：
+使用 `--summary` 在列表输出后追加一段简要统计：
 
 ```bash
 $ npx rstest list --summary
 
-# 输出如下：
 a.test.ts > test a > test a-1
 a.test.ts > test a-2
 b.test.ts > test b > test b-1
@@ -243,13 +231,13 @@ c.test.ts > test c it skipIf
       Tests 8 matched
 ```
 
-当与 `--json` 一起使用时，`--summary` 会把 JSON 输出从数组切换为包含 `items` 和 `summary` 字段的对象。
+与 `--json` 一起使用时，`--summary` 会把 JSON 输出从数组切换为包含 `items` 和 `summary` 字段的对象。
 
 ## rstest merge-reports
 
 <ApiMeta addedVersion="0.9.3" />
 
-`rstest merge-reports` 将多个测试分片生成的 blob 报告合并为一个统一的报告。当使用 [`--shard`](#sharding-tests) 在多台 CI 机器上并行运行测试时，这非常有用。
+`rstest merge-reports` 将使用 [`--shard`](#sharding-tests) 在多台 CI 机器上并行运行生成的 blob 报告合并为统一报告。
 
 ### 工作流程
 
@@ -286,7 +274,7 @@ npx rstest merge-reports ./custom-reports-dir
 - 统一应用一次 `coverage.include`，补齐这些运行都未测试的文件
 - 基于统一结果生成覆盖率报告并检查阈值
 
-支持延迟最终处理的 coverage provider 会让使用 blob 报告器的运行有意跳过覆盖率报告生成和阈值检查。未使用 blob 报告器的运行会正常完成覆盖率最终处理，包括分片运行。旧版 provider 保持原有的单次运行最终处理行为。请通过配置或 `--coverage` 参数为 `merge-reports` 启用覆盖率，让合并 job 完成覆盖率最终处理。合并命令支持与 `rstest run` 相同的 `--coverage.*` 参数。只传给生成 blob 的运行的覆盖率参数不会写入 blob，因此请在配置文件中定义 `coverage.include`、`coverage.reporters` 和 `coverage.reportsDirectory` 等最终处理参数，或在执行 `merge-reports` 时再次传入。
+支持延迟最终处理的 coverage provider 会让使用 blob 报告器的运行跳过覆盖率报告生成和阈值检查。未使用 blob 报告器的运行会正常完成覆盖率最终处理，包括分片运行。旧版 provider 保持原有的单次运行最终处理行为。请通过配置或 `--coverage` 参数为 `merge-reports` 启用覆盖率，让合并 job 完成覆盖率最终处理。`merge-reports` 支持与 `rstest run` 相同的 `--coverage.*` 参数。只传给生成 blob 的运行的覆盖率参数不会写入 blob，因此请在配置文件中定义 `coverage.include`、`coverage.reporters` 和 `coverage.reportsDirectory` 等最终处理参数，或在执行 `merge-reports` 时再次传入。
 
 使用 `--cleanup` 在合并完成后删除 blob 报告输入。目录为空时也会一并删除。如果 `coverage.reportsDirectory` 是 blob 目录或其子目录，则会保留生成的覆盖率报告及其所在目录：
 
@@ -296,7 +284,7 @@ npx rstest merge-reports --cleanup
 
 ## rstest init
 
-`rstest init` 用于为支持的项目类型生成初始配置。
+`rstest init` 用于为支持的项目类型生成初始配置：
 
 ```bash
 npx rstest init
@@ -316,110 +304,107 @@ npx rstest init browser --yes
 
 ## CLI 选项
 
-Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参数。
+Rstest CLI 参数按命令注册，并不是所有命令共享同一套参数。
 
 ### 测试命令
 
 `rstest`、`rstest run` 和 `rstest watch` 共享同一组测试运行参数，其中 `--related`、`--findRelatedTests`、`--changed` 和 `--shard` 在 watch 模式下会被拒绝：
 
-| 参数                                | 说明                                                                                                                                                                     |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `--bail [number]`                   | 指定个数的测试失败后停止运行，详见 [bail](/config/test/bail)                                                                                                             |
-| `--browser, --browser.enabled`      | 在浏览器模式下运行测试，详见 [browser](/config/test/browser)                                                                                                             |
-| `--browser.headless`                | 在无头模式下运行浏览器（CI 环境默认：`true`），详见 [browser](/config/test/browser)                                                                                      |
-| `--browser.screenshotFailures`      | 为每个失败的浏览器测试保存截图，详见 [browser](/config/test/browser#screenshotfailures)                                                                                  |
-| `--browser.name <name>`             | 使用的浏览器：`chromium`、`firefox`、`webkit`（默认：`chromium`），详见 [browser](/config/test/browser)                                                                  |
-| `--browser.port <port>`             | 浏览器模式开发服务器的端口，详见 [browser](/config/test/browser)                                                                                                         |
-| `--browser.strictPort`              | 如果指定端口已被占用则退出，详见 [browser](/config/test/browser)                                                                                                         |
-| `--changed [commit]`                | 运行当前 Git 仓库中变更文件相关的测试，也可以指定从某个 commit 以来的变更                                                                                                |
-| `--clearMocks`                      | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clear-mocks)                                                                            |
-| `-c, --config <config>`             | 指定配置文件路径（相对或绝对路径），详见 [指定配置文件](/guide/basic/configure-rstest#指定配置文件)                                                                      |
-| `--config-loader <loader>`          | 指定配置加载器 （`auto` \| `jiti` \| `native`），详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader)                     |
-| `--coverage`                        | 启用代码覆盖率收集，详见 [coverage](/config/test/coverage)                                                                                                               |
-| `--coverage.allowExternal`          | 收集项目根目录之外文件的覆盖率，详见 [coverage.allowExternal](/config/test/coverage#allowexternal)                                                                       |
-| `--coverage.changed [commit]`       | 只收集当前 Git 仓库中变更文件的覆盖率，也可以指定从某个 commit 以来的变更                                                                                                |
-| `--coverage.clean`                  | 测试前清理覆盖率目录，详见 [coverage.clean](/config/test/coverage#clean)                                                                                                 |
-| `--coverage.enabled`                | 启用代码覆盖率收集，详见 [coverage.enabled](/config/test/coverage#enabled)                                                                                               |
-| `--coverage.exclude <pattern>`      | 指定需要排除覆盖率收集的文件，详见 [coverage.exclude](/config/test/coverage#exclude)                                                                                     |
-| `--coverage.include <pattern>`      | 指定需要收集覆盖率的文件，详见 [coverage.include](/config/test/coverage#include)                                                                                         |
-| `--coverage.provider <provider>`    | 选择覆盖率 provider（`istanbul` \| `v8`），详见 [coverage.provider](/config/test/coverage#provider)                                                                      |
-| `--coverage.reporters <reporter>`   | 指定一个或多个覆盖率报告器，详见 [coverage.reporters](/config/test/coverage#reporters)                                                                                   |
-| `--coverage.reportOnFailure`        | 测试失败时仍生成覆盖率报告，详见 [coverage.reportOnFailure](/config/test/coverage#reportonfailure)                                                                       |
-| `--coverage.reportsDirectory <dir>` | 指定覆盖率报告目录，详见 [coverage.reportsDirectory](/config/test/coverage#reportsdirectory)                                                                             |
-| `--dev.writeToDisk`                 | 将测试临时文件写入磁盘，详见 [dev.writeToDisk](/config/build/dev#devwritetodisk)                                                                                         |
-| `--detectAsyncLeaks`                | 检测测试结束后仍然存活的异步资源，详见 [detectAsyncLeaks](/config/test/detect-async-leaks)                                                                               |
-| `--disableConsoleIntercept`         | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disable-console-intercept)                                                                                |
-| `--exclude <exclude>`               | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                                                       |
-| `--findRelatedTests`                | `--related` 的 Jest 兼容别名                                                                                                                                             |
-| `--globals`                         | 提供全局 API，详见 [globals](/config/test/globals)                                                                                                                       |
-| `-h, --help`                        | 显示帮助信息                                                                                                                                                             |
-| `--hideSkippedTestFiles`            | 不展示跳过测试文件的日志，详见 [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                                              |
-| `--hideSkippedTests`                | 不展示跳过测试的日志，详见 [hideSkippedTests](/config/test/hide-skipped-tests)                                                                                           |
-| `--hookTimeout <value>`             | 设置单个测试 hook 的超时时间（毫秒），详见 [hookTimeout](/config/test/hook-timeout)                                                                                      |
-| `--teardownTimeout <value>`         | 设置运行结束后等待进程退出的时间（毫秒）。设为 0 可立即退出。详见 [teardownTimeout](/config/test/teardown-timeout)。                                                     |
-| `--include <include>`               | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                                               |
-| `--includeTaskLocation`             | 收集测试和 suite 的位置信息，详见 [includeTaskLocation](/config/test/include-task-location)                                                                              |
-| `--isolate`                         | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                                               |
-| `--logHeapUsage`                    | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                                                           |
-| `--maxConcurrency <value>`          | 最大并发测试数，详见 [maxConcurrency](/config/test/max-concurrency)                                                                                                      |
-| `-f, --onlyFailures`                | 仅重新运行上一次运行中失败的测试文件，详见 [onlyFailures](/config/test/only-failures)                                                                                    |
-| `--output.cleanDistPath`            | 测试开始前清理测试临时文件，详见 [output.cleanDistPath](/config/build/output#outputcleandistpath)                                                                        |
-| `--output.emitAssets`               | 输出导入的静态资源，详见 [output.emitAssets](/config/build/output#outputemitassets)                                                                                      |
-| `--output.module`                   | 以 ES module 格式输出 JavaScript 文件，详见 [output.module](/config/build/output#outputmodule)                                                                           |
-| `--passWithNoTests`                 | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/pass-with-no-tests)                                                                                  |
-| `--pool <type>`                     | `--pool.type` 的 shorthand，详见 [pool](/config/test/pool)                                                                                                               |
-| `--pool.execArgv <arg>`             | 传给 worker 进程的额外 Node.js execArgv（可重复传入），详见 [pool](/config/test/pool)                                                                                    |
-| `--pool.maxWorkers <value>`         | 最大 worker 数量或百分比，详见 [pool](/config/test/pool)                                                                                                                 |
-| `--pool.memoryLimit <limit>`        | worker 回收阈值：`forks` 在 `isolate: false` 时按 RSS 判断，VM pools 按 V8 堆用量判断，详见 [pool](/config/test/pool#poolmemorylimit)                                    |
-| `--pool.type <type>`                | 指定测试线程池类型，详见 [pool](/config/test/pool)                                                                                                                       |
-| `--printConsoleTrace`               | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/print-console-trace)                                                                                |
-| `--project <name>`                  | 仅运行指定项目的测试，详见 [根据项目名称过滤](/guide/basic/test-filter#根据项目名称过滤)                                                                                 |
-| `--related`                         | 将位置参数视为源码文件路径，只运行相关测试                                                                                                                               |
-| `--reporters, --reporter <name>`    | 指定一个或多个测试报告器，详见 [reporters](/config/test/reporters)                                                                                                       |
-| `--resetMocks`                      | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/reset-mocks)                                                                                                |
-| `--restoreMocks`                    | 每个测试前恢复被 spy 替换的对象方法，详见 [restoreMocks](/config/test/restore-mocks)                                                                                     |
-| `--retry <retry>`                   | 测试失败时重试次数，详见 [retry](/config/test/retry)                                                                                                                     |
-| `--repeats <repeats>`               | 单个测试的额外执行次数，详见 [repeats](/config/test/repeats)                                                                                                             |
-| `-r, --root <root>`                 | 指定项目根目录，详见 [root](/config/test/root)                                                                                                                           |
-| `--shard <index/count>`             | 将测试拆分为多个分片运行，详见 [测试分片](#sharding-tests)                                                                                                               |
-| `--silent [value]`                  | 静默被拦截的测试 console 输出，或用 `passed-only` 仅保留失败任务日志，详见 [silent](/config/test/silent)                                                                 |
-| `--slowTestThreshold <value>`       | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slow-test-threshold)                                                                         |
-| `--source.tsconfigPath <path>`      | 指定 tsconfig.json 文件路径，详见 [source.tsconfigPath](/config/build/source#sourcetsconfigpath)                                                                         |
-| `--testEnvironment <name>`          | 指定测试环境，详见 [testEnvironment](/config/test/test-environment)                                                                                                      |
-| `-t, --testNamePattern <value>`     | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/test-name-pattern)                                                                                         |
-| `--testTimeout <value>`             | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/test-timeout)                                                                                            |
-| `--trace`                           | 导出 Perfetto 兼容的性能 trace JSON 文件，并附带一份按耗时排序的 markdown 摘要（打印到终端并写入 trace 同目录），详见 [使用 --trace](/guide/debug/profiling#using-trace) |
-| `--unstubEnvs`                      | 每个测试前恢复被 `rs.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                                                          |
-| `--unstubGlobals`                   | 每个测试前恢复被 `rs.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                                                       |
-| `-u, --update`                      | 更新快照文件，详见 [update](/config/test/update)                                                                                                                         |
+| 参数                                | 说明                                                                                                                                                                           |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `--bail [number]`                   | 指定个数的测试失败后停止运行，详见 [bail](/config/test/bail)                                                                                                                   |
+| `--browser, --browser.enabled`      | 在浏览器模式下运行测试，详见 [browser](/config/test/browser)                                                                                                                   |
+| `--browser.headless`                | 在无头模式下运行浏览器（CI 环境默认：`true`），详见 [browser](/config/test/browser#headless)                                                                                   |
+| `--browser.instances <name>`        | 仅运行 `browserName` 匹配 `chromium`、`firefox` 或 `webkit` 的已配置浏览器实例；支持逗号分隔或重复传入（默认：所有已配置实例），详见 [browser](/config/test/browser#instances) |
+| `--browser.name <name>`             | （已废弃）指定单个浏览器，请改用 `--browser.instances`，详见 [browser（已废弃）](/config/test/browser#browser-deprecated)                                                      |
+| `--browser.port <port>`             | 浏览器模式开发服务器的端口，详见 [browser](/config/test/browser#port)                                                                                                          |
+| `--browser.providerOptions.*`       | 传给浏览器 provider 的额外选项，详见 [browser.providerOptions](/config/test/browser#provideroptions)                                                                           |
+| `--browser.screenshotFailures`      | 为每个失败的浏览器测试保存截图，详见 [browser](/config/test/browser#screenshotfailures)                                                                                        |
+| `--browser.strictPort`              | 如果指定端口已被占用则退出，详见 [browser](/config/test/browser#strictport)                                                                                                    |
+| `--changed [commit]`                | 运行当前 Git 仓库中变更文件相关的测试，也可以指定从某个 commit 以来的变更                                                                                                      |
+| `--clearMocks`                      | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clear-mocks)                                                                                  |
+| `-c, --config <config>`             | 指定配置文件路径（相对或绝对路径），详见 [指定配置文件](/guide/basic/configure-rstest#指定配置文件)                                                                            |
+| `--config-loader <loader>`          | 指定配置加载器（`auto` \| `jiti` \| `native`，默认：`'auto'`），详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader)            |
+| `--coverage`                        | 启用代码覆盖率收集，详见 [coverage](/config/test/coverage)                                                                                                                     |
+| `--coverage.allowExternal`          | 收集项目根目录之外文件的覆盖率，详见 [coverage.allowExternal](/config/test/coverage#allowexternal)                                                                             |
+| `--coverage.changed [commit]`       | 只收集当前 Git 仓库中变更文件的覆盖率，也可以指定从某个 commit 以来的变更                                                                                                      |
+| `--coverage.clean`                  | 测试前清理覆盖率目录，详见 [coverage.clean](/config/test/coverage#clean)                                                                                                       |
+| `--coverage.enabled`                | 启用代码覆盖率收集，详见 [coverage.enabled](/config/test/coverage#enabled)                                                                                                     |
+| `--coverage.exclude <pattern>`      | 指定需要排除覆盖率收集的文件，详见 [coverage.exclude](/config/test/coverage#exclude)                                                                                           |
+| `--coverage.include <pattern>`      | 指定需要收集覆盖率的文件，详见 [coverage.include](/config/test/coverage#include)                                                                                               |
+| `--coverage.provider <provider>`    | 选择覆盖率 provider（`istanbul` \| `v8`），详见 [coverage.provider](/config/test/coverage#provider)                                                                            |
+| `--coverage.reporters <reporter>`   | 指定一个或多个覆盖率报告器（可重复传入），详见 [coverage.reporters](/config/test/coverage#reporters)                                                                           |
+| `--coverage.reportOnFailure`        | 测试失败时仍生成覆盖率报告，详见 [coverage.reportOnFailure](/config/test/coverage#reportonfailure)                                                                             |
+| `--coverage.reportsDirectory <dir>` | 指定覆盖率报告目录，详见 [coverage.reportsDirectory](/config/test/coverage#reportsdirectory)                                                                                   |
+| `--detectAsyncLeaks`                | 检测测试结束后仍然存活的异步资源，详见 [detectAsyncLeaks](/config/test/detect-async-leaks)                                                                                     |
+| `--dev.writeToDisk`                 | 将测试临时文件写入磁盘，详见 [dev.writeToDisk](/config/build/dev#devwritetodisk)                                                                                               |
+| `--disableConsoleIntercept`         | 禁用 console 拦截，详见 [disableConsoleIntercept](/config/test/disable-console-intercept)                                                                                      |
+| `--exclude <exclude>`               | 排除指定文件，详见 [exclude](/config/test/exclude)                                                                                                                             |
+| `--federation`                      | 启用 Module Federation 兼容模式，详见 [federation](/config/test/federation)                                                                                                    |
+| `--findRelatedTests`                | `--related` 的 Jest 兼容别名                                                                                                                                                   |
+| `--globals`                         | 提供全局 API，详见 [globals](/config/test/globals)                                                                                                                             |
+| `-h, --help`                        | 显示帮助信息                                                                                                                                                                   |
+| `--hideSkippedTestFiles`            | 不展示跳过测试文件的日志，详见 [hideSkippedTestFiles](/config/test/hide-skipped-test-files)                                                                                    |
+| `--hideSkippedTests`                | 不展示跳过测试的日志，详见 [hideSkippedTests](/config/test/hide-skipped-tests)                                                                                                 |
+| `--hookTimeout <value>`             | 设置单个测试 hook 的超时时间（毫秒），详见 [hookTimeout](/config/test/hook-timeout)                                                                                            |
+| `--include <include>`               | 指定测试文件匹配模式，详见 [include](/config/test/include)                                                                                                                     |
+| `--includeTaskLocation`             | 收集测试和 suite 的位置信息，详见 [includeTaskLocation](/config/test/include-task-location)                                                                                    |
+| `--isolate`                         | 在隔离环境中运行测试，详见 [isolate](/config/test/isolate)                                                                                                                     |
+| `--logHeapUsage`                    | 打印每个测试的堆内存使用情况，详见 [logHeapUsage](/config/test/log-heap-usage)                                                                                                 |
+| `--maxConcurrency <value>`          | 最大并发测试数，详见 [maxConcurrency](/config/test/max-concurrency)                                                                                                            |
+| `-f, --onlyFailures`                | 仅重新运行上一次运行中失败的测试文件，详见 [onlyFailures](/config/test/only-failures)                                                                                          |
+| `--output.cleanDistPath`            | 测试开始前清理测试临时文件，详见 [output.cleanDistPath](/config/build/output#outputcleandistpath)                                                                              |
+| `--output.emitAssets`               | 输出导入的静态资源，详见 [output.emitAssets](/config/build/output#outputemitassets)                                                                                            |
+| `--output.module`                   | 以 ES module 格式输出 JavaScript 文件，详见 [output.module](/config/build/output#outputmodule)                                                                                 |
+| `--passWithNoTests`                 | 当未找到测试文件时允许测试通过，详见 [passWithNoTests](/config/test/pass-with-no-tests)                                                                                        |
+| `--pool <type>`                     | `--pool.type` 的简写，详见 [pool](/config/test/pool)                                                                                                                           |
+| `--pool.execArgv <arg>`             | 传给 worker 进程的额外 Node.js execArgv（可重复传入），详见 [pool](/config/test/pool)                                                                                          |
+| `--pool.maxWorkers <value>`         | 最大 worker 数量或百分比，详见 [pool](/config/test/pool)                                                                                                                       |
+| `--pool.memoryLimit <limit>`        | worker 回收阈值：`forks` 在 `isolate: false` 时按 RSS 判断，VM pools 按 V8 堆用量判断，详见 [pool](/config/test/pool#poolmemorylimit)                                          |
+| `--pool.type <type>`                | 指定测试线程池类型，详见 [pool](/config/test/pool)                                                                                                                             |
+| `--printConsoleTrace`               | 调用 console 方法时打印调用栈，详见 [printConsoleTrace](/config/test/print-console-trace)                                                                                      |
+| `--project <name>`                  | 仅运行指定项目的测试，详见 [根据项目名称过滤](/guide/basic/test-filter#根据项目名称过滤)                                                                                       |
+| `--related`                         | 将位置参数视为源码文件路径，只运行相关测试                                                                                                                                     |
+| `--repeats <repeats>`               | 单个测试的额外执行次数，详见 [repeats](/config/test/repeats)                                                                                                                   |
+| `--reporters, --reporter <name>`    | 指定一个或多个测试报告器，详见 [reporters](/config/test/reporters)                                                                                                             |
+| `--resetMocks`                      | 每个测试前自动重置 mock 状态，详见 [resetMocks](/config/test/reset-mocks)                                                                                                      |
+| `--restoreMocks`                    | 每个测试前恢复被 spy 替换的对象方法，详见 [restoreMocks](/config/test/restore-mocks)                                                                                           |
+| `--retry <retry>`                   | 测试失败时重试次数，详见 [retry](/config/test/retry)                                                                                                                           |
+| `-r, --root <root>`                 | 指定项目根目录，详见 [root](/config/test/root)                                                                                                                                 |
+| `--shard <index/count>`             | 将测试拆分为多个分片运行，详见 [测试分片](#sharding-tests)                                                                                                                     |
+| `--silent [value]`                  | 静默被拦截的测试 console 输出，或用 `passed-only` 仅保留失败任务日志，详见 [silent](/config/test/silent)                                                                       |
+| `--slowTestThreshold <value>`       | 设置测试或套件被视为慢的阈值（毫秒），详见 [slowTestThreshold](/config/test/slow-test-threshold)                                                                               |
+| `--source.tsconfigPath <path>`      | 指定 tsconfig.json 文件路径，详见 [source.tsconfigPath](/config/build/source#sourcetsconfigpath)                                                                               |
+| `--teardownTimeout <value>`         | 设置 `rstest run` 结束后等待进程退出的时间（毫秒）；`0` 立即退出，`Infinity` 不强制退出（默认：`10000`），详见 [teardownTimeout](/config/test/teardown-timeout)                |
+| `--testEnvironment <name>`          | 指定测试环境，详见 [testEnvironment](/config/test/test-environment)                                                                                                            |
+| `-t, --testNamePattern <value>`     | 仅运行名称匹配正则的测试，详见 [testNamePattern](/config/test/test-name-pattern)                                                                                               |
+| `--testTimeout <value>`             | 设置单个测试的超时时间（毫秒），详见 [testTimeout](/config/test/test-timeout)                                                                                                  |
+| `--trace`                           | 导出 Perfetto 兼容的性能 trace JSON 文件，并附带一份按耗时排序的 markdown 摘要（打印到终端并写入 trace 同目录），详见 [使用 --trace](/guide/debug/profiling#using-trace)       |
+| `--unstubEnvs`                      | 每个测试前恢复被 `rs.stubEnv` 修改的 `process.env`，详见 [unstubEnvs](/config/test/unstub-envs)                                                                                |
+| `--unstubGlobals`                   | 每个测试前恢复被 `rs.stubGlobal` 修改的全局变量，详见 [unstubGlobals](/config/test/unstub-globals)                                                                             |
+| `-u, --update`                      | 更新快照文件，详见 [update](/config/test/update)                                                                                                                               |
 
 `rstest` 默认命令还额外支持 `-w, --watch`，可直接切换到 watch 模式。
 
 ### rstest list
 
-`rstest list` 支持上面测试命令的过滤和配置参数，并额外提供：
+`rstest list` 支持上面测试命令的过滤和配置参数（`-f, --onlyFailures` 除外），并额外提供：
 
 | 参数                    | 说明                        |
 | ----------------------- | --------------------------- |
 | `--filesOnly`           | 仅输出匹配到的测试文件      |
-| `--json [boolean/path]` | 以 JSON 输出，或写入文件    |
 | `--includeSuites`       | 在输出中包含 suite          |
+| `--json [boolean/path]` | 以 JSON 输出，或写入文件    |
 | `--printLocation`       | 输出测试和 suite 的位置信息 |
 | `--summary`             | 在列表后输出简要统计        |
 
 ### rstest merge-reports
 
-`rstest merge-reports` 只注册一组更小的参数集合：
+`rstest merge-reports` 与[测试命令](#测试命令)共享 `-h/--help`、`-c/--config`、`--config-loader`、`-r/--root`、`--reporters`、`--coverage` 和 `--coverage.*` 参数，并额外提供：
 
-| 参数                       | 说明                                                                                                                                                 |
-| -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `-c, --config <config>`    | 指定配置文件路径（相对或绝对路径），详见 [指定配置文件](/guide/basic/configure-rstest#指定配置文件)                                                  |
-| `--config-loader <loader>` | 指定配置加载器 （`auto` \| `jiti` \| `native`），详见 [Rsbuild - 指定加载方式](https://rsbuild.rs/guide/configuration/rsbuild#specify-config-loader) |
-| `-r, --root <root>`        | 指定项目根目录，详见 [root](/config/test/root)                                                                                                       |
-| `--coverage`               | 合并完成后生成覆盖率报告，详见 [coverage](/config/test/coverage)                                                                                     |
-| `--reporters <name>`       | 指定在合并结果上运行的一个或多个报告器，详见 [reporters](/config/test/reporters)                                                                     |
-| `--cleanup`                | 合并完成后删除 blob 报告输入                                                                                                                         |
-| `-h, --help`               | 显示帮助信息                                                                                                                                         |
+| 参数        | 说明                         |
+| ----------- | ---------------------------- |
+| `--cleanup` | 合并完成后删除 blob 报告输入 |
 
 ### rstest init
 
@@ -427,12 +412,12 @@ Rstest CLI 参数是按命令注册的，并不是所有命令共享同一套参
 
 | 参数         | 说明                       |
 | ------------ | -------------------------- |
-| `--yes`      | 使用默认选项并跳过交互界面 |
 | `-h, --help` | 显示帮助信息               |
+| `--yes`      | 使用默认选项并跳过交互界面 |
 
 ### 布尔选项取反
 
-对于布尔类型的选项，你可以使用 `--no-<option>` 前缀来将其设置为 `false`。例如：
+对于布尔类型的选项，可以使用 `--no-<option>` 前缀将其设为 `false`：
 
 ```bash
 # 以下两种写法等价：
@@ -441,15 +426,13 @@ npx rstest --no-isolate
 
 # 更多示例：
 npx rstest --no-coverage      # 禁用覆盖率
-npx rstest --no-globals        # 禁用全局 API
-npx rstest --no-clearMocks     # 禁用自动清除 mock
+npx rstest --no-globals       # 禁用全局 API
+npx rstest --no-clearMocks    # 禁用自动清除 mock
 ```
 
 ## CLI 快捷键
 
-在 watch 模式下运行 Rstest 时，你可以使用键盘快捷键来执行各种便捷操作。
-
-所有快捷键：
+在交互式终端的 watch 模式下，按 `h` 可打印可用的键盘快捷键列表：
 
 ```bash
   Shortcuts:
@@ -458,11 +441,12 @@ npx rstest --no-clearMocks     # 禁用自动清除 mock
   u  update snapshot
   t  filter by a test name regex pattern
   p  filter by a filename regex pattern
-  q  quit process
   c  clear screen
-  h  show shortcuts help
+  q  quit process
 ```
 
+随时按 `h` 即可显示上述快捷键帮助。在纯 Browser Mode（无 Node 测试项目）的 watch 模式下，`t` 和 `p` 会以灰色提示显示，因为终端中的文件名和测试名过滤暂不支持 Browser Mode 重跑。
+
 :::note
-CLI 快捷键仅在 watch 模式下运行 Rstest（`rstest watch` 或 `rstest --watch`）且终端支持 TTY（交互模式）时可用。
+CLI 快捷键仅在 watch 模式下运行 Rstest（`rstest watch` 或 `rstest --watch`）且标准输入为交互式 TTY 时可用。
 :::

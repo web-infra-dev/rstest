@@ -22,7 +22,7 @@ export type RstestPoolOptions = {
    * Memory threshold used to recycle a worker after it finishes a test file.
    * This is a worker-recycling threshold, not a hard process RSS limit.
    * Values in `(0, 1]` are fractions of system memory; larger numbers are bytes,
-   * and strings may use `%`, `MB`, `MiB`, `GB`, or `GiB` suffixes.
+   * and strings may use `%`, `KB`, `KiB`, `MB`, `MiB`, `GB`, or `GiB` suffixes.
    * Uses RSS for `forks` with `isolate: false`, and V8 heap for VM pools.
    * Ignored by `threads` and isolated `forks`.
    * @default undefined (`system memory / maxWorkers` for VM pools)
@@ -55,7 +55,7 @@ Configure the worker pool Rstest uses to run tests, including isolation, concurr
 
 Start with the default `forks` pool. It introduces the fewest execution restrictions of the four pools and offers broader compatibility with Node.js APIs and native addons. The default [`isolate: true`](/config/test/isolate) also gives each test file a separate process, preventing process-level state from persisting between files and containing native crashes within the child process.
 
-If performance does not meet your expectations, first identify where the time is spent. The `rstest-debugging` skill can help; see [Profiling](/guide/debug/profiling) for installation and analysis guidance. If worker startup or module loading is the bottleneck, consider these options:
+If performance does not meet your expectations, first identify where the time is spent—see [Profiling](/guide/debug/profiling) for analysis guidance. If worker startup or module loading is the bottleneck, consider these options:
 
 | Scenario                                                              | Pool to try | Check before switching                                                               |
 | --------------------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------ |
@@ -77,16 +77,10 @@ Rstest saves these results in `node_modules/.cache/.rstest-results/results.json`
 
 All pools serialize environment options before sending them to workers, so functions are not supported in those options. See [`testEnvironment.options`](/config/test/test-environment#environment-options) for the requirements.
 
-### forks
-
-Creates Node.js child processes with `child_process.fork`. Each worker has separate process memory and process-level state. By default, every file gets a new process; with [`isolate: false`](/config/test/isolate), multiple files can reuse the same child process.
-
-With the default isolation setting, each file incurs process startup and initialization costs.
-
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
   ```bash
-  npx rstest --pool forks
+  npx rstest --pool threads
   ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -94,11 +88,18 @@ With the default isolation setting, each file incurs process startup and initial
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  pool: 'forks',
+  // 'forks' | 'threads' | 'vmForks' | 'vmThreads'
+  pool: 'threads',
 });
 ```
   </Tab>
 </Tabs>
+
+### forks
+
+Creates Node.js child processes with `child_process.fork`. Each worker has separate process memory and process-level state. By default, every file gets a new process; with [`isolate: false`](/config/test/isolate), multiple files can reuse the same child process.
+
+With the default isolation setting, each file incurs process startup and initialization costs.
 
 ### threads
 
@@ -114,45 +115,11 @@ Threads generally start faster than child processes, but have some Node.js API r
 
 See the [Node.js Worker documentation](https://nodejs.org/api/worker_threads.html#class-worker) for the full list of differences.
 
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-  ```bash
-  npx rstest --pool threads
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: 'threads',
-});
-```
-  </Tab>
-</Tabs>
-
 ### vmForks
 
 <ApiMeta addedVersion="0.12.0" />
 
 Reuses child processes and creates a fresh `vm.Context` for each test file, reducing repeated process startup. Process APIs such as `process.chdir()` remain available, but files in the same child process can share process-level state.
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-  ```bash
-  npx rstest --pool vmForks
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: 'vmForks',
-});
-```
-  </Tab>
-</Tabs>
 
 ### vmThreads
 
@@ -161,26 +128,6 @@ export default defineConfig({
 Reuses worker threads and creates a fresh `vm.Context` for each test file, reducing repeated thread startup. It provides the same VM isolation as `vmForks`, with the worker-thread restrictions described above.
 
 For the isolation scope and compatibility requirements of both VM pools, see [VM pool behavior](#vm-pool-behavior) at the end of this page.
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-  ```bash
-  npx rstest --pool vmThreads --pool.memoryLimit 256MB
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: {
-    type: 'vmThreads',
-    memoryLimit: '256MB',
-  },
-});
-```
-  </Tab>
-</Tabs>
 
 ## Configure worker concurrency and memory
 
