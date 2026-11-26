@@ -9,7 +9,7 @@ import {
 } from '../../utils';
 import { type BrowserExecutorLoadOptions, runBrowserDiscovery } from './loader';
 import { getUserRstestConfigPluginProjects } from '../config/modifyRstestConfig';
-import type { ProjectPlan } from '../execution/projectPlan';
+import { getProjectEntries, type ProjectPlan } from '../execution/projectPlan';
 import type { Rstest } from '../rstest';
 
 /**
@@ -40,6 +40,8 @@ export interface BrowserRunPlan {
   getExecutorRunOptions(
     projects: InternalProjectContext[],
   ): Omit<BrowserExecutorLoadOptions, 'filesOnly'>;
+  /** Select browser test entries matching `filters` (all when omitted). */
+  globBrowserTestEntries(filters?: string[]): Promise<string[]>;
 }
 
 interface BrowserRunPlanner extends BrowserRunPlan {
@@ -239,5 +241,13 @@ export function createBrowserRunPlanner({
     hasValidatedBrowserConfig: () => hasRunBrowserConfigHookDiscovery,
     getBrowserProjectsToRun,
     getExecutorRunOptions,
+    globBrowserTestEntries: async (filters?: string[]) => {
+      const entries = await Promise.all(
+        getBrowserProjectsToRun().map((project) =>
+          getProjectEntries({ context, project, fileFilters: filters }),
+        ),
+      );
+      return [...new Set(entries.flatMap((entry) => Object.values(entry)))];
+    },
   };
 }

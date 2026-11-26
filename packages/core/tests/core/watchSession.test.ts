@@ -768,21 +768,21 @@ describe('createWatchCycleDriver', () => {
 });
 
 describe('createWatchShortcutHandlers arming', () => {
-  const targetsOf = (cycles: string[]) => ({
-    node: {
-      runCycle: async () => {
+  const targetsOf = (cycles: string[]) => [
+    {
+      rerun: async () => {
         cycles.push('node');
       },
       globTestEntries: async () => ['/a.test.ts'],
       setFileFilters: () => {},
     },
-    browser: {
+    {
       rerun: async () => {
         cycles.push('browser');
       },
       globTestEntries: async () => ['/b.test.ts'],
     },
-  });
+  ];
 
   it('drops rerun keys until a cycle has finalized, then honors them', async () => {
     // Shortcuts install before the first cycle so the ready banner always has a
@@ -823,16 +823,16 @@ describe('createWatchShortcutHandlers arming', () => {
 
     const handlers = createWatchShortcutHandlers(
       context,
-      {
-        node: {
-          runCycle: async () => {
+      [
+        {
+          rerun: async () => {
             seen.push(context.snapshotManager.options.updateSnapshot);
             await parked;
           },
           globTestEntries: async () => [],
           setFileFilters: () => {},
         },
-      },
+      ],
       async () => {},
     );
 
@@ -870,9 +870,9 @@ describe('createWatchShortcutHandlers arming', () => {
     let nodeFileFilters: string[] | undefined;
     const handlers = createWatchShortcutHandlers(
       context,
-      {
-        node: {
-          runCycle: async (opts) => {
+      [
+        {
+          rerun: async (opts) => {
             cycles.push(`node:${opts?.fileFilters?.join(',') ?? 'all'}`);
           },
           globTestEntries: async (filters) =>
@@ -883,16 +883,16 @@ describe('createWatchShortcutHandlers arming', () => {
             nodeFileFilters = filters;
           },
         },
-        browser: {
-          rerun: async (paths) => {
-            cycles.push(`browser:${paths?.join(',') ?? 'all'}`);
+        {
+          rerun: async (opts) => {
+            cycles.push(`browser:${opts?.fileFilters?.join(',') ?? 'all'}`);
           },
           globTestEntries: async (filters) =>
             !filters?.length || filters.some((f) => f.includes('browser'))
               ? ['/browser.test.ts']
               : [],
         },
-      },
+      ],
       async () => {},
     );
 

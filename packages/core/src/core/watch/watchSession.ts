@@ -427,39 +427,29 @@ export function createWatchCycleDriver({
 }
 
 /**
- * The executors a watch session drives, in teardown order. `node`/`browser` are
- * present only when that side has tests to run, which is what decides which
- * executors a shortcut fans out to.
+ * One watch-mode execution target (node, browser, or any future runtime).
+ * Shortcut handlers drive targets uniformly in order without branching on
+ * runtime type.
  */
-export interface WatchSessionTargets {
-  node?: {
-    runCycle: (options?: WatchCycleOptions) => Promise<void>;
-    /** Select node entries for the `p` (file filter) shortcut. */
-    globTestEntries: (filters?: string[]) => Promise<string[]>;
-    /** Persist the node-only file selection for later invalidation cycles. */
-    setFileFilters: (fileFilters: string[] | undefined) => void;
-  };
-  browser?: {
-    /** Ask the browser host to schedule a cycle over these paths. */
-    rerun: (
-      testPaths?: string[],
-      updateSnapshot?: SnapshotUpdateState,
-    ) => Promise<void>;
-    /** Select browser entries for the `p`/`t` filter shortcuts. */
-    globTestEntries: (filters?: string[]) => Promise<string[]>;
-  };
+export interface WatchTarget {
+  /** Schedule or execute a cycle over the given scope/policy. */
+  rerun: (options?: WatchCycleOptions) => Promise<void>;
+  /** Select this target's test entries matching `filters` (all when omitted). */
+  globTestEntries: (filters?: string[]) => Promise<string[]>;
+  /** Persist this target's resolved file selection for later invalidation cycles. */
+  setFileFilters?: (fileFilters: string[] | undefined) => void;
 }
 
 /**
- * Build the watch-mode shortcut handlers — one implementation for every watch
- * shape: node-only, browser-only, and mixed.
+ * Build the watch-mode shortcut handlers — one runtime-agnostic implementation
+ * across every watch shape (node-only, browser-only, and mixed).
  *
  * Returns the handler bag rather than installing it, so the caller keeps
  * `setupCliShortcuts` — the single stdin owner — as its own injection point.
  */
 export function createWatchShortcutHandlers(
   context: Rstest,
-  { node, browser }: WatchSessionTargets,
+  targets: readonly WatchTarget[],
   close: () => Promise<void>,
   /**
    * Whether every executor of this run is past its first cycle. Shortcuts are
@@ -506,19 +496,26 @@ export function createWatchShortcutHandlers(
     }
   };
 
+  const fanOut = async (options?: WatchCycleOptions): Promise<void> => {
+    for (const target of targets) {
+      await target.rerun(options);
+    }
+  };
+
   const runFilteredTargets = async (
     filters: string[] | undefined,
     { persist }: { persist: boolean },
   ): Promise<void> => {
-    const [nodeEntries, browserEntries] = await Promise.all([
-      node ? node.globTestEntries(filters) : Promise.resolve([]),
-      browser ? browser.globTestEntries(filters) : Promise.resolve([]),
-    ]);
+    const entriesPerTarget = await Promise.all(
+      targets.map((target) => target.globTestEntries(filters)),
+    );
     if (persist) {
-      node?.setFileFilters(filters ? nodeEntries : undefined);
+      targets.forEach((target, index) => {
+        target.setFileFilters?.(filters ? entriesPerTarget[index] : undefined);
+      });
     }
 
-    if (!nodeEntries.length && !browserEntries.length) {
+    if (entriesPerTarget.every((entries) => entries.length === 0)) {
       logger.log(
         filters
           ? color.yellow(
@@ -529,22 +526,12 @@ export function createWatchShortcutHandlers(
       return;
     }
 
-    if (node && nodeEntries.length > 0) {
-      await node.runCycle({ fileFilters: nodeEntries });
+    for (const [index, target] of targets.entries()) {
+      const entries = entriesPerTarget[index]!;
+      if (entries.length > 0) {
+        await target.rerun(filters ? { fileFilters: entries } : undefined);
+      }
     }
-    if (browser && browserEntries.length > 0) {
-      await browser.rerun(filters ? browserEntries : undefined);
-    }
-  };
-
-  // Node cycle first, browser cycle second: each finalizes on its own, and that
-  // output order is the shape a mixed watch shortcut has always produced.
-  const fanOut = async (
-    options: WatchCycleOptions,
-    browserPaths?: string[],
-  ): Promise<void> => {
-    await node?.runCycle(options);
-    await browser?.rerun(browserPaths, options.updateSnapshot);
   };
 
   return {
@@ -554,11 +541,10 @@ export function createWatchShortcutHandlers(
       clearScreen();
       setTestNamePattern(undefined);
       context.fileFilters = undefined;
-      node?.setFileFilters(undefined);
-      if (node) {
-        await node.runCycle({ mode: 'all', trigger: 'run-all' });
+      for (const target of targets) {
+        target.setFileFilters?.(undefined);
+        await target.rerun({ mode: 'all', trigger: 'run-all' });
       }
-      await browser?.rerun();
     }),
     runWithTestNamePattern: whenArmed(async (pattern: string | undefined) => {
       clearScreen();
@@ -577,8 +563,7 @@ export function createWatchShortcutHandlers(
         return;
       }
 
-      await node?.runCycle();
-      await browser?.rerun();
+      await fanOut();
     }),
     runWithFileFilters: whenArmed(async (filters: string[] | undefined) => {
       clearScreen();
@@ -604,10 +589,11 @@ export function createWatchShortcutHandlers(
       }
 
       clearScreen();
-      await fanOut(
-        { fileFilters: failedTests, mode: 'all', trigger: 'run-failed' },
-        failedTests,
-      );
+      await fanOut({
+        fileFilters: failedTests,
+        mode: 'all',
+        trigger: 'run-failed',
+      });
     }),
     updateSnapshot: whenArmed(async () => {
       if (!snapshotManager.summary.unmatched) {
@@ -634,14 +620,11 @@ export function createWatchShortcutHandlers(
         snapshotManager.options.updateSnapshot = 'all';
       }
       try {
-        await fanOut(
-          {
-            fileFilters: unmatchedTests,
-            trigger: 'update-snapshot',
-            updateSnapshot: 'all',
-          },
-          unmatchedTests,
-        );
+        await fanOut({
+          fileFilters: unmatchedTests,
+          trigger: 'update-snapshot',
+          updateSnapshot: 'all',
+        });
       } finally {
         if (--updateSnapshotHolds === 0) {
           snapshotManager.options.updateSnapshot = updateSnapshotBeforeHold;

@@ -42,13 +42,12 @@ import {
 } from './environment/isBrowserProject';
 import { RunTimer } from './execution/runTimer';
 import { createTestPlanner } from './execution/planner';
-import { getProjectEntries } from './execution/projectPlan';
 import type { Rstest } from './rstest';
 import {
   createWatchCycleDriver,
   createWatchShortcutHandlers,
   createWatchTeardown,
-  type WatchSessionTargets,
+  type WatchTarget,
 } from './watch/watchSession';
 
 export async function runTests(context: Rstest): Promise<void> {
@@ -505,36 +504,39 @@ export async function runTests(context: Rstest): Promise<void> {
       ? await planner.globTestEntries(nodeFileFilterPatterns)
       : undefined;
   const browserTarget = browserExecutor;
-  const watchTargets: WatchSessionTargets = {
-    node: nodeExecutorToRun
-      ? {
-          runCycle: (options) =>
-            watchDriver.runCycle(nodeExecutorToRun, {
-              ...options,
-              fileFilters: options?.fileFilters ?? nodeFileFilters,
-            }),
-          globTestEntries: (filters) => planner.globTestEntries(filters),
-          setFileFilters: (fileFilters) => {
-            nodeFileFilterPatterns = undefined;
-            nodeFileFilters = fileFilters;
-          },
-        }
-      : undefined,
-    browser: browserTarget && {
-      rerun: (testPaths, updateSnapshot) =>
-        browserTarget.requestRerun(testPaths, updateSnapshot),
-      globTestEntries: async (filters) => {
-        const entries = await Promise.all(
-          planner
-            .getBrowserProjectsToRun()
-            .map((project) =>
-              getProjectEntries({ context, project, fileFilters: filters }),
-            ),
-        );
-        return [...new Set(entries.flatMap((entry) => Object.values(entry)))];
-      },
-    },
-  };
+  // Node first, browser second: each finalizes on its own, preserving mixed
+  // watch shortcut output order while keeping shortcut handlers runtime-agnostic.
+  const watchTargets: WatchTarget[] = [
+    ...(nodeExecutorToRun
+      ? [
+          {
+            rerun: (options) =>
+              watchDriver.runCycle(nodeExecutorToRun, {
+                ...options,
+                fileFilters: options?.fileFilters ?? nodeFileFilters,
+              }),
+            globTestEntries: (filters) => planner.globTestEntries(filters),
+            setFileFilters: (fileFilters) => {
+              nodeFileFilterPatterns = undefined;
+              nodeFileFilters = fileFilters;
+            },
+          } satisfies WatchTarget,
+        ]
+      : []),
+    ...(browserTarget
+      ? [
+          {
+            rerun: (options) =>
+              browserTarget.requestRerun(
+                options?.fileFilters,
+                options?.updateSnapshot,
+              ),
+            globTestEntries: (filters) =>
+              planner.globBrowserTestEntries(filters),
+          } satisfies WatchTarget,
+        ]
+      : []),
+  ];
 
   // One teardown for the `q` shortcut, the fatal-signal handler, and the
   // config-change restart hook. The browser side closes first: its runtime owns
