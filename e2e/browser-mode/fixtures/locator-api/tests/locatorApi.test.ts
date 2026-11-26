@@ -21,8 +21,11 @@ function createCounter(initial = 0) {
   return container;
 }
 
-test('locator + expect.element proxy works', async () => {
-  document.body.appendChild(createCounter(5));
+test('locator + expect.element proxy works', async ({ onTestFinished }) => {
+  const container = document.createElement('div');
+  document.body.append(container);
+  onTestFinished(() => container.remove());
+  container.appendChild(createCounter(5));
 
   const nameInput = document.createElement('input');
   nameInput.placeholder = 'Name';
@@ -30,7 +33,7 @@ test('locator + expect.element proxy works', async () => {
   const emailInput = document.createElement('input');
   emailInput.placeholder = 'Email';
 
-  document.body.append(nameInput, emailInput);
+  container.append(nameInput, emailInput);
 
   const sections = document.createElement('div');
   sections.innerHTML = `
@@ -43,7 +46,7 @@ test('locator + expect.element proxy works', async () => {
       <button>Save</button>
     </section>
   `;
-  document.body.append(sections);
+  container.append(sections);
 
   await expect.element(page.getByText('Count: 5')).toBeVisible();
   await page.getByRole('button', { name: 'Increment' }).click();
@@ -72,7 +75,7 @@ test('locator + expect.element proxy works', async () => {
     <li><span>Draft</span></li>
     <li><span>Draft</span><span>Locked</span></li>
   `;
-  document.body.append(draftItems);
+  container.append(draftItems);
   await expect
     .element(page.locator('li').filter({ hasNotText: 'Draft' }))
     .toHaveCount(1);
@@ -88,7 +91,7 @@ test('locator + expect.element proxy works', async () => {
   label.htmlFor = 'agree';
   label.textContent = 'Agree';
 
-  document.body.append(checkbox, label);
+  container.append(checkbox, label);
 
   await expect.element(page.getByLabel('Agree')).toBeUnchecked();
   await page.getByLabel('Agree').check();
@@ -112,14 +115,14 @@ test('locator + expect.element proxy works', async () => {
     <option value="a">A</option>
     <option value="b">B</option>
   `;
-  document.body.append(selectLabel, select);
+  container.append(selectLabel, select);
   await page.getByLabel('Choice').selectOption('b');
   await expect.element(page.getByLabel('Choice')).toHaveValue('b');
 
   // toBeAttached/toBeDetached
   const later = document.createElement('div');
   later.id = 'later';
-  setTimeout(() => document.body.appendChild(later), 50);
+  setTimeout(() => container.appendChild(later), 50);
   await expect.element(page.locator('#later')).toBeAttached();
   later.remove();
   await expect.element(page.locator('#later')).toBeDetached();
@@ -130,7 +133,7 @@ test('locator + expect.element proxy works', async () => {
   evBtn.addEventListener('custom', () => {
     evBtn.textContent = 'Event:OK';
   });
-  document.body.appendChild(evBtn);
+  container.appendChild(evBtn);
   await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
   await expect.element(page.getByText('Event:OK')).toBeVisible();
 
