@@ -56,29 +56,6 @@ globalThis.__rstest_dynamic_import__ =
   };
 //#endregion
 
-//#region suppress the federation runtime's chunk-handler caution
-// `@module-federation/node`'s runtime plugin warns whenever it sees a
-// `require` chunk handler, assuming a build it may fail to patch. rstest
-// picks `chunkLoading: 'require'` deliberately (chunks must resolve from the
-// in-memory assets, not fs) and the handler freeze below turns the patch
-// attempt into a guarded no-op, so the warning is pure noise for every
-// federation test file. Filter exactly that message; if its wording ever
-// changes this fails open and the warning simply shows again.
-if (!globalThis.__rstest_mf_caution_filtered__) {
-  globalThis.__rstest_mf_caution_filtered__ = true;
-  const rstestOriginalConsoleWarn = console.warn;
-  console.warn = function (...args) {
-    if (
-      typeof args[1] === 'string' &&
-      args[1].includes('build target is not set to "async-node"')
-    ) {
-      return;
-    }
-    rstestOriginalConsoleWarn.apply(this, args);
-  };
-}
-//#endregion
-
 rstestRequireHandlers.set = function (target, property, value) {
   if (property === 'f' && value && typeof value === 'object') {
     // The bundler assigns `__webpack_require__.f = {}` early, and later

@@ -4,6 +4,7 @@ import { getAssetText } from '../../utils/assetFiles';
 import { color } from '../../utils/logger';
 import { formatTestError } from '../util';
 import { applyRuntimeColors } from './color';
+import { createFederationConsole } from './federationConsole';
 import { setFederationDynamicImportOrigin } from './runtimeHooks';
 import { installForkTerminationPolicy, installGracefulExit } from './setup';
 import { isError } from '../../utils/isError';
@@ -108,10 +109,12 @@ const runGlobalSetup = async (data: {
     // Start tracking environment changes
     trackEnvChanges();
 
-    // `mockRuntimeCode.js` gates its Module Federation shims on this
-    // worker-wide flag, so it must be set before any setup code is evaluated.
     (globalThis as Record<string, unknown>).__rstest_federation__ =
-      data.federation === true;
+      data.federation;
+    if (data.federation) {
+      // This fork belongs to one project's global setup and teardown.
+      globalThis.console = createFederationConsole(globalThis.console);
+    }
 
     for (const entry of data.entries) {
       const { distPath, runtimeDistPath, testPath } = entry;
