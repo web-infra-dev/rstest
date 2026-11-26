@@ -2,6 +2,8 @@
 description: 了解 Rstest 如何处理模块副作用、sideEffects 声明和初始化导入，以及如何避免注册代码被优化移除。
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # 模块副作用 \{#module-side-effects}
 
 Rstest 使用 Rspack 打包测试代码，可以在构建阶段跳过未使用的模块，减少需要构建和执行的依赖。像 lazyBarrel 这样的优化能加快测试启动，但前提是被跳过的模块没有必须执行的初始化代码。
@@ -39,7 +41,7 @@ import './register-mocks';
 }
 ```
 
-当这个声明适用于注册模块，且启用相应优化时，即使源码写了 `import './register-mocks'`，这个导入仍可能被移除。`sideEffects` 是构建工具会信任的声明；文件中实际包含注册代码，并不意味着它一定会被保留。
+如果注册模块被声明为无副作用，并且导入不在 Rstest 的[直接导入保护](#direct-imports-in-test-and-setup-files)范围内，启用相应优化后，即使源码写了 `import './register-mocks'`，这个导入仍可能被移除。`sideEffects` 是构建工具会信任的声明；文件中实际包含注册代码，并不意味着它一定会被保留。
 
 详见 Rspack 的 [tree shaking 文档](https://rspack.rs/zh/guide/optimization/tree-shaking)。
 
@@ -82,9 +84,23 @@ test('sum', () => {
 
 详见 Rspack 的 [barrel 文件优化](https://rspack.rs/zh/guide/advanced/lazy-barrel)。
 
+## 测试和 setup 文件的直接导入 \{#direct-imports-in-test-and-setup-files}
+
+<ApiMeta addedVersion="0.12.6" />
+
+Rstest 会保留已发现的测试文件和配置的 [setupFiles](/config/test/setup-files) 入口中的直接 bare import，即使导入模块所属的包声明了 `sideEffects: false`：
+
+```ts title="test/setup.ts"
+import './support/register-mocks';
+```
+
+保护适用于本地模块和参与打包的第三方模块，只保留直接导入模块的执行，不会将模块的所有导出都标记为使用。因此，其他测试对同一模块的具名导入仍可参与 barrel 优化。
+
+这个范围由 Rstest 实际发现的测试文件和配置的 setup 入口决定，普通 helper 文件或名称中包含 `test` 的目录不会自动获得保护。例如，`test → bootstrap → helper → register-mocks` 中，直接导入只保证 `bootstrap` 被执行；如果后续模块被声明为无副作用，仍可能被跳过。需要保留这些间接初始化时，应正确声明相关模块的副作用。
+
 ## 声明需要执行的模块 \{#declare-modules-with-side-effects}
 
-只有初始化模块被错误地标记为无副作用时，才需要修正相关声明。未设置 `sideEffects` 不等于设置了 `sideEffects: false`，无需仅因为使用 Rstest 或把注册代码放在单独文件中，就额外添加副作用配置。
+对于上述直接导入保护范围之外的初始化模块，只有它们被错误地标记为无副作用时，才需要修正相关声明。未设置 `sideEffects` 不等于设置了 `sideEffects: false`，无需仅因为使用 Rstest 或把注册代码放在单独文件中，就额外添加副作用配置。
 
 ### 在 package.json 中声明 \{#declare-side-effects-for-a-package}
 
