@@ -25,7 +25,7 @@ export function Button({
 }) {
   // Full-pill flat buttons contrast crisply against the sharp 0px hairline grid.
   const classes = [
-    'group inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-[14.5px] font-medium transition-colors duration-150',
+    'group inline-flex h-10 items-center justify-center gap-2 rounded-full px-5 text-[15px] font-medium transition-colors duration-150',
     variant === 'primary'
       ? 'bg-brand text-on-brand hover:bg-[var(--rp-c-brand-dark)]'
       : 'border border-[var(--home-border-strong)] bg-[var(--home-bg)] text-fg hover:border-fg/35 hover:bg-[var(--home-surface-hover)]',
@@ -88,7 +88,7 @@ export function FeatureLink({
   return (
     <LinkComp
       href={href}
-      className="group/link inline-flex w-fit items-center gap-1.5 font-mono text-[13px] font-medium text-brand transition-colors hover:text-[var(--rp-c-brand-dark)]"
+      className="group/link inline-flex w-fit items-center gap-1.5 font-mono text-[14px] font-medium text-brand transition-colors hover:text-[var(--rp-c-brand-dark)]"
     >
       <span>{label}</span>
       <span
@@ -111,9 +111,11 @@ type InstallTab = (typeof INSTALL_TABS)[number];
 export function InstallCommand({
   prompt,
   args,
+  onCopy,
 }: {
   prompt: string;
   args: string;
+  onCopy?: () => void;
 }) {
   const lineOf = (tab: InstallTab) =>
     tab === 'prompt' ? prompt : `${tab} ${args}`;
@@ -135,6 +137,7 @@ export function InstallCommand({
   };
 
   const copy = () => {
+    onCopy?.();
     navigator.clipboard.writeText(line).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
@@ -143,7 +146,7 @@ export function InstallCommand({
 
   return (
     <div className="flex h-full w-full flex-col text-left">
-      <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-[var(--home-grid-line)] px-2 font-mono text-[12px]">
+      <div className="relative flex shrink-0 items-center justify-between gap-2 border-b border-[var(--home-grid-line)] px-3 font-mono text-[13px]">
         <div className="relative flex items-center">
           {INSTALL_TABS.map((name) => (
             <button
@@ -154,7 +157,7 @@ export function InstallCommand({
               type="button"
               aria-pressed={name === tab}
               onClick={() => select(name)}
-              className={`cursor-pointer bg-transparent! px-2 py-2 transition-colors sm:px-2.5 ${
+              className={`cursor-pointer bg-transparent! px-2.5 py-2.5 transition-colors sm:px-3 ${
                 name === tab
                   ? 'font-medium text-fg'
                   : 'text-fg-muted/75 hover:text-fg'
@@ -180,7 +183,7 @@ export function InstallCommand({
               ? 'Copied'
               : `Copy ${tab === 'prompt' ? 'prompt' : 'command'}`
           }
-          className={`flex shrink-0 cursor-pointer items-center gap-1.5 bg-transparent! px-2.5 py-1 transition-colors hover:bg-[var(--home-surface-hover)]! ${
+          className={`flex shrink-0 cursor-pointer items-center gap-1.5 bg-transparent! px-3 py-1.5 transition-colors hover:bg-[var(--home-surface-hover)]! ${
             copied ? 'text-brand' : 'text-fg-muted hover:text-fg'
           }`}
         >
@@ -206,7 +209,7 @@ export function InstallCommand({
           {copied ? 'copied' : 'copy'}
         </button>
       </div>
-      <div className="flex flex-1 items-center gap-3 px-4 py-2 font-mono text-[12.5px]/[1.5]">
+      <div className="flex flex-1 items-center gap-3.5 px-5 py-3 font-mono text-[14px]/[1.5]">
         <span className="font-medium text-brand select-none">
           {tab === 'prompt' ? '>' : '$'}
         </span>

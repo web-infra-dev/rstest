@@ -1,6 +1,6 @@
 import { useI18n, useLang } from '@rspress/core/runtime';
 import { Link } from '@rspress/core/theme-original';
-import type { ReactNode } from 'react';
+import { type MouseEvent, type ReactNode, useState } from 'react';
 import { useI18nUrl } from '../components/utils';
 import { AdaptersPatchFigure } from '../ui/AdaptersPatchFigure';
 import { BrowserStackFigure } from '../ui/BrowserStackFigure';
@@ -104,29 +104,25 @@ const RSTACK_TOOLS: RstackTool[] = [
 
 const HERO_ANCHORS: Record<
   'en' | 'zh',
-  { index: string; href: string; title: string; desc: string }[]
+  { href: string; title: string; desc: string }[]
 > = {
   en: [
     {
-      index: '02',
       href: '#pipeline',
       title: 'Rspack Pipeline',
       desc: 'Rust-fast compilation sharing Rsbuild plugins and config',
     },
     {
-      index: '03',
       href: '#browser',
       title: 'Real Browsers',
       desc: 'Chromium, Firefox, and WebKit with Locator assertions',
     },
     {
-      index: '04',
       href: '#adapters',
       title: 'Build Adapters',
       desc: 'Reuse Rsbuild, Rslib, Rspack, Lynx, and Modern.js configs',
     },
     {
-      index: '06',
       href: '#playwright',
       title: 'Playwright E2E',
       desc: 'Unit, component, and end-to-end tests in one runner',
@@ -134,35 +130,26 @@ const HERO_ANCHORS: Record<
   ],
   zh: [
     {
-      index: '02',
       href: '#pipeline',
       title: 'Rspack 构建链路',
       desc: '复用 Rsbuild 插件与配置，测试编译极速完成',
     },
     {
-      index: '03',
       href: '#browser',
       title: '真实浏览器 DOM',
       desc: '在 Chromium、Firefox 与 WebKit 中运行组件测试',
     },
     {
-      index: '04',
       href: '#adapters',
       title: '复用构建配置',
       desc: '通过适配器无缝复用 Rsbuild、Rslib、Rspack 等配置',
     },
     {
-      index: '06',
       href: '#playwright',
       title: '端到端同一 Runner',
       desc: '单元测试与 Playwright E2E 共享配置与报告流程',
     },
   ],
-};
-
-const ADAPTER_DESC = {
-  en: 'Reuse build config from Rsbuild, Rslib, Rspack, Lynx, and Modern.js projects through adapters',
-  zh: '通过适配器复用 Rsbuild、Rslib、Rspack、Lynx 和 Modern.js 项目的构建配置，无缝接入现有项目',
 };
 
 type Feature = { title: string; body: string; points: string[] };
@@ -172,9 +159,9 @@ const PIPELINE: Record<'en' | 'zh', Feature> = {
     title: 'Rspack speed, Rsbuild ecosystem',
     body: 'Tests are compiled by Rspack and share the config and plugin system of Rsbuild, ready out of the box and easy to extend',
     points: [
-      'Utilizes Rust-based Rspack and SWC for fast test compilation',
-      'Compatible with Rsbuild plugins, including official ones such as React and Sass',
-      'Supports Rsbuild and Rspack config options, configured the same way',
+      'Fast compilation powered by Rust-based Rspack and SWC',
+      'Compatible with Rsbuild plugins like React and Sass',
+      'Shares Rsbuild and Rspack config options directly',
     ],
   },
   zh: {
@@ -209,11 +196,6 @@ const ECOSYSTEM: Record<'en' | 'zh', Feature> = {
   },
 };
 
-const ECOSYSTEM_DESC = {
-  en: 'Covers the languages, frameworks, and runtimes of modern JavaScript projects',
-  zh: '覆盖现代 JavaScript 项目的语言、框架与运行环境',
-};
-
 const BROWSER: Record<'en' | 'zh', Feature> = {
   en: {
     title: 'Real browsers, real DOM',
@@ -240,7 +222,7 @@ const ADAPTER: Record<'en' | 'zh', Feature> = {
     title: 'Reuse your build config',
     body: 'Adapters extract and convert the config tests need, while Rstest keeps control of test entries and runtime',
     points: [
-      'Reuse plugins, aliases, and SWC options from your build config',
+      'Reuse plugins, aliases, and SWC options from build config',
       'Keep tests consistent with your project config',
       'No duplicate config to maintain',
     ],
@@ -284,7 +266,7 @@ const PLAYWRIGHT: Record<'en' | 'zh', Feature> = {
     points: [
       'Ready-to-use browser, context, page, and request fixtures',
       'Playwright-style assertions for pages and locators',
-      'Unit and E2E tests share one runner, config, and reporting workflow',
+      'Unit and E2E tests share one runner, config, and reporter',
     ],
   },
   zh: {
@@ -296,16 +278,6 @@ const PLAYWRIGHT: Record<'en' | 'zh', Feature> = {
       '单元测试与 E2E 测试共享 runner、配置与报告流程',
     ],
   },
-};
-
-const JEST_DESC = {
-  en: 'Compatible with Jest and Vitest APIs and CLI, with guides for a smooth migration',
-  zh: '兼容 Jest 与 Vitest 的 API 和 CLI，并提供迁移指南，平滑迁移现有项目',
-};
-
-const PLAYWRIGHT_DESC = {
-  en: 'Drive a local dev server, preview server, or deployed app with Playwright for end-to-end verification',
-  zh: '基于 Playwright 驱动本地开发服务、预览服务或线上应用，完成端到端验证',
 };
 
 const FOOTER_COLUMNS: Record<
@@ -409,12 +381,11 @@ const HERO_TITLE = {
 const AGENT_PROMPT =
   'Set up Rstest in this project: https://rstest.rs/guide/start/agent-install.md';
 
-const HERO_GRID_ROW_TRACKS =
-  'grid-rows-[repeat(8,66px)] sm:grid-rows-[repeat(8,74px)]';
-const HERO_GRID_ROWS = Array.from({ length: 8 }, (_, i) => i);
-const HERO_GRID_COL_CLASSES = Array.from({ length: 16 }, (_, i) => {
-  if (i >= 12) return 'hidden lg:block';
-  if (i >= 8) return 'hidden sm:block';
+const HERO_GRID_ROW_TRACKS = 'grid-rows-[repeat(7,92px)]';
+const HERO_GRID_ROWS = Array.from({ length: 7 }, (_, i) => i);
+const HERO_GRID_COL_CLASSES = Array.from({ length: 12 }, (_, i) => {
+  if (i >= 8) return 'hidden lg:block';
+  if (i >= 6) return 'hidden sm:block';
   return '';
 });
 
@@ -439,24 +410,22 @@ function HeroGridOverlay() {
         aria-hidden
         className={`pointer-events-none absolute inset-0 grid ${HERO_GRID_ROW_TRACKS}`}
       >
-        <div className="row-start-1 row-span-5 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:row-span-6 sm:grid-cols-12 lg:grid-cols-16">
+        <div className="row-start-1 row-span-4 grid grid-cols-6 divide-x divide-[var(--home-grid-line)] sm:row-span-5 sm:grid-cols-8 lg:grid-cols-12">
           <HeroGridColCells />
         </div>
-        <div className="row-start-6 row-span-2 hidden divide-x divide-[var(--home-grid-line)] sm:row-start-7 sm:row-span-1 sm:grid sm:grid-cols-12 lg:hidden">
+        <div className="row-start-5 row-span-2 hidden divide-x divide-[var(--home-grid-line)] sm:row-start-6 sm:row-span-1 sm:grid sm:grid-cols-8 lg:hidden">
           <div />
-          <div className="col-span-10" />
+          <div className="col-span-6" />
           <div />
         </div>
-        <div className="row-start-7 row-span-1 hidden grid-cols-16 divide-x divide-[var(--home-grid-line)] lg:grid">
+        <div className="row-start-6 row-span-1 hidden grid-cols-12 divide-x divide-[var(--home-grid-line)] lg:grid">
           <div />
           <div />
-          <div />
-          <div className="col-span-10" />
-          <div />
+          <div className="col-span-8" />
           <div />
           <div />
         </div>
-        <div className="row-start-8 row-span-1 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:grid-cols-12 lg:grid-cols-16">
+        <div className="row-start-7 row-span-1 grid grid-cols-6 divide-x divide-[var(--home-grid-line)] sm:grid-cols-8 lg:grid-cols-12">
           <HeroGridColCells />
         </div>
       </div>
@@ -480,7 +449,7 @@ function FeaturePoints({ points }: { points: string[] }) {
       {points.map((point) => (
         <li
           key={point}
-          className="flex items-start gap-2.5 text-[14.5px]/[1.55] text-fg"
+          className="flex items-start gap-2.5 text-[15px]/[1.55] text-fg"
         >
           <span
             aria-hidden
@@ -493,18 +462,28 @@ function FeaturePoints({ points }: { points: string[] }) {
   );
 }
 
+function scrollToAnchor(event: MouseEvent<HTMLAnchorElement>, href: string) {
+  const target = document.getElementById(href.slice(1));
+  if (!target) return;
+  event.preventDefault();
+  const reducedMotion = window.matchMedia(
+    '(prefers-reduced-motion: reduce)',
+  ).matches;
+  target.scrollIntoView({
+    behavior: reducedMotion ? 'auto' : 'smooth',
+    block: 'start',
+  });
+  history.replaceState(null, '', href);
+}
+
 function GridFeatureCell({
   id,
-  index,
-  description,
   feature,
   href,
   linkLabel,
   figure,
 }: {
-  id?: string;
-  index: string;
-  description: string;
+  id: string;
   feature: Feature;
   href: string;
   linkLabel: string;
@@ -513,30 +492,15 @@ function GridFeatureCell({
   return (
     <article id={id} className="flex scroll-mt-20 flex-col bg-[var(--home-bg)]">
       <div className="home-stage relative flex h-[268px] items-center justify-center overflow-hidden border-b border-[var(--home-border)] sm:h-[308px]">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute top-4 left-5 font-mono text-[11px] tracking-[0.14em] text-fg-subtle select-none"
-        >
-          FIG.{index}
-        </span>
         {figure}
       </div>
-      <div className="flex flex-1 flex-col p-6 sm:p-8 lg:p-9">
-        <div className="flex items-baseline gap-2.5 text-[13px]/[1.5] text-fg-muted lg:min-h-[2.5rem]">
-          <span className="shrink-0 font-mono text-[11.5px] font-medium tracking-[0.12em] text-brand">
-            {index}
-          </span>
-          <span className="text-[var(--home-border-strong)] select-none">
-            /
-          </span>
-          <span>{description}</span>
-        </div>
-        <h2 className="mt-3.5 text-[23px]/[1.2] font-semibold tracking-[-0.025em] text-fg sm:text-[26px]">
+      <div className="flex flex-1 flex-col px-6 py-6 sm:px-8 sm:py-7">
+        <h2 className="text-[24px]/[1.2] font-semibold tracking-[-0.025em] text-fg sm:text-[26px]">
           {feature.title}
         </h2>
-        <p className="mt-3 text-[15px]/[1.65] text-fg-muted">{feature.body}</p>
+        <p className="mt-3 text-[16px]/[1.6] text-fg-muted">{feature.body}</p>
         <FeaturePoints points={feature.points} />
-        <div className="mt-auto pt-7">
+        <div className="mt-auto pt-6">
           <FeatureLink href={href} label={linkLabel} LinkComp={Link} />
         </div>
       </div>
@@ -548,6 +512,7 @@ export function HomeLayout() {
   const t = useI18n<typeof import('i18n')>();
   const tUrl = useI18nUrl();
   const lang = useLang() === 'zh' ? 'zh' : 'en';
+  const [heroPulse, setHeroPulse] = useState(0);
 
   return (
     <main className="rstest-home relative isolate">
@@ -555,25 +520,29 @@ export function HomeLayout() {
         <section className="border-x border-[var(--home-border)]">
           <div className="relative overflow-hidden bg-[var(--home-bg)]">
             <HeroGridOverlay />
-            <HeroDitherMatrix />
+            <HeroDitherMatrix pulse={heroPulse} />
             <div
-              className={`relative z-10 grid grid-cols-8 text-center sm:grid-cols-12 lg:grid-cols-16 ${HERO_GRID_ROW_TRACKS}`}
+              className={`relative z-10 grid grid-cols-6 text-center sm:grid-cols-8 lg:grid-cols-12 ${HERO_GRID_ROW_TRACKS}`}
             >
-              <div className="col-span-8 row-start-2 row-span-4 flex flex-col items-center justify-center px-6 sm:col-span-12 sm:row-start-2 sm:row-span-5 sm:px-10 lg:col-span-16">
-                <h1 className="text-[42px]/[1.02] font-semibold tracking-[-0.055em] sm:text-[66px]/[1.0] lg:text-[76px]/[0.98]">
-                  <span className="block text-fg">
-                    {HERO_TITLE[lang][0]}
-                    <span className="text-brand">Rspack</span>
-                    {HERO_TITLE[lang][1]}
-                  </span>
-                  <span className="home-hero-sub mt-1.5 block">
-                    {HERO_TITLE[lang][2]}
-                  </span>
-                </h1>
-                <p className="mt-5 max-w-2xl text-[16px]/[1.55] text-fg-muted sm:mt-6 sm:text-[19px]/[1.55]">
-                  {t('slogan')}
-                </p>
-                <div className="mt-6 flex flex-wrap justify-center gap-3 sm:mt-8">
+              <div className="col-span-6 row-start-2 row-span-3 flex flex-col items-center justify-center px-6 sm:contents">
+                <div className="sm:col-span-8 sm:row-start-2 sm:row-span-2 sm:flex sm:items-center sm:justify-center sm:px-10 lg:col-span-12">
+                  <h1 className="text-[36px]/[1.05] font-semibold tracking-[-0.055em] sm:text-[66px]/[1.0] lg:text-[76px]/[0.98]">
+                    <span className="block text-fg">
+                      {HERO_TITLE[lang][0]}
+                      <span className="text-brand">Rspack</span>
+                      {HERO_TITLE[lang][1]}
+                    </span>
+                    <span className="home-hero-sub mt-1.5 block">
+                      {HERO_TITLE[lang][2]}
+                    </span>
+                  </h1>
+                </div>
+                <div className="mt-4 sm:col-span-8 sm:row-start-4 sm:row-span-1 sm:mt-0 sm:flex sm:items-center sm:justify-center sm:px-10 lg:col-span-12">
+                  <p className="max-w-2xl text-[15px]/[1.55] text-fg-muted sm:text-[19px]/[1.55]">
+                    {t('slogan')}
+                  </p>
+                </div>
+                <div className="mt-5 flex flex-wrap justify-center gap-3 sm:col-span-8 sm:row-start-5 sm:row-span-1 sm:mt-0 sm:items-center sm:px-10 lg:col-span-12">
                   <Button
                     href={tUrl('/guide/start/quick-start')}
                     LinkComp={Link}
@@ -601,10 +570,11 @@ export function HomeLayout() {
                   </Button>
                 </div>
               </div>
-              <div className="col-span-8 row-start-6 row-span-2 sm:col-start-2 sm:col-span-10 sm:row-start-7 sm:row-span-1 lg:col-start-4 lg:col-span-10">
+              <div className="col-span-6 row-start-5 row-span-2 sm:col-start-2 sm:col-span-6 sm:row-start-6 sm:row-span-1 lg:col-start-3 lg:col-span-8">
                 <InstallCommand
                   prompt={AGENT_PROMPT}
                   args="add @rstest/core -D"
+                  onCopy={() => setHeroPulse((n) => n + 1)}
                 />
               </div>
             </div>
@@ -615,21 +585,19 @@ export function HomeLayout() {
               <a
                 key={anchor.href}
                 href={anchor.href}
-                className="home-anchor group flex flex-col gap-1.5 px-6 py-5 lg:px-8 lg:py-6"
+                onClick={(event) => scrollToAnchor(event, anchor.href)}
+                className="home-anchor group flex flex-col gap-1.5 px-6 py-5 sm:px-8 sm:py-6"
               >
-                <div className="flex items-center justify-between font-mono text-[11px] text-brand">
-                  <span className="tracking-[0.12em]">{anchor.index}</span>
-                  <span
-                    aria-hidden
-                    className="transition-transform duration-150 group-hover:translate-x-0.5 group-hover:translate-y-0.5"
-                  >
-                    ↘
-                  </span>
-                </div>
-                <h2 className="mt-0.5 text-[14.5px]/[1.35] font-semibold tracking-[-0.015em] text-fg">
+                <span
+                  aria-hidden
+                  className="absolute top-4 right-4 font-mono text-[13px]/none text-brand transition-transform duration-150 group-hover:translate-x-0.5 group-hover:translate-y-0.5"
+                >
+                  ↘
+                </span>
+                <h2 className="pr-5 text-[15px]/[1.35] font-semibold tracking-[-0.015em] text-fg">
                   {anchor.title}
                 </h2>
-                <p className="text-[12.5px]/[1.55] text-fg-muted">
+                <p className="text-[14px]/[1.55] text-fg-muted">
                   {anchor.desc}
                 </p>
               </a>
@@ -644,8 +612,6 @@ export function HomeLayout() {
         <div className="grid grid-cols-1 gap-px border-x border-[var(--home-border)] bg-[var(--home-border)] lg:grid-cols-2">
           <GridFeatureCell
             id="ecosystem"
-            index="01"
-            description={ECOSYSTEM_DESC[lang]}
             feature={ECOSYSTEM[lang]}
             href={tUrl('/guide/start/features')}
             linkLabel={LEARN_MORE[lang]}
@@ -653,8 +619,6 @@ export function HomeLayout() {
           />
           <GridFeatureCell
             id="pipeline"
-            index="02"
-            description={t('productionAccurateTestingDesc')}
             feature={PIPELINE[lang]}
             href={tUrl('/guide/start/')}
             linkLabel={LEARN_MORE[lang]}
@@ -662,8 +626,6 @@ export function HomeLayout() {
           />
           <GridFeatureCell
             id="browser"
-            index="03"
-            description={t('realBrowserTestingDesc')}
             feature={BROWSER[lang]}
             href={tUrl('/guide/browser-testing/')}
             linkLabel={LEARN_MORE[lang]}
@@ -671,8 +633,6 @@ export function HomeLayout() {
           />
           <GridFeatureCell
             id="adapters"
-            index="04"
-            description={ADAPTER_DESC[lang]}
             feature={ADAPTER[lang]}
             href={tUrl('/guide/advanced/adapters')}
             linkLabel={LEARN_MORE[lang]}
@@ -680,8 +640,6 @@ export function HomeLayout() {
           />
           <GridFeatureCell
             id="jest"
-            index="05"
-            description={JEST_DESC[lang]}
             feature={JEST[lang]}
             href={tUrl('/guide/migration/jest')}
             linkLabel={LEARN_MORE[lang]}
@@ -689,8 +647,6 @@ export function HomeLayout() {
           />
           <GridFeatureCell
             id="playwright"
-            index="06"
-            description={PLAYWRIGHT_DESC[lang]}
             feature={PLAYWRIGHT[lang]}
             href={tUrl('/guide/basic/e2e-testing')}
             linkLabel={LEARN_MORE[lang]}
@@ -703,11 +659,11 @@ export function HomeLayout() {
 
       <section className="mx-auto w-full max-w-6xl px-4 sm:px-6">
         <div className="border-x border-[var(--home-border)]">
-          <div className="border-b border-[var(--home-border)] p-6 sm:p-8 lg:p-9">
-            <p className="font-mono text-[11.5px] font-medium tracking-[0.14em] text-brand uppercase">
-              07 / Rstack
+          <div className="border-b border-[var(--home-border)] px-6 py-6 sm:px-8 sm:py-7">
+            <p className="font-mono text-[14px] font-medium tracking-[0.04em] text-brand">
+              Rstack
             </p>
-            <h2 className="mt-3 max-w-3xl text-[24px]/[1.2] font-semibold tracking-[-0.03em] text-fg sm:text-[30px]">
+            <h2 className="mt-2.5 text-[24px]/[1.2] font-semibold tracking-[-0.03em] text-fg sm:text-[28px]">
               {RSTACK_DESC[lang]}
             </h2>
           </div>
@@ -723,37 +679,35 @@ export function HomeLayout() {
                   rel="noreferrer"
                   data-tool={tool.slug}
                   data-current={isCurrent ? 'true' : undefined}
-                  className="rstack-tool group flex flex-col px-6 py-6 lg:px-8 lg:py-7"
+                  className="rstack-tool group flex flex-col px-6 py-6 sm:px-8 sm:py-7"
                 >
-                  <div className="flex items-start justify-between gap-3">
-                    <img
-                      src={tool.logo}
-                      alt=""
-                      className="size-9 shrink-0 object-contain"
+                  {isCurrent ? (
+                    <span
+                      aria-hidden
+                      className="absolute top-5 right-5 size-1.5 rounded-full bg-brand"
                     />
-                    {isCurrent ? (
-                      <span
-                        aria-hidden
-                        className="mt-1.5 size-1.5 rounded-full bg-brand"
-                      />
-                    ) : (
-                      <span
-                        aria-hidden
-                        className="font-mono text-[13px] text-fg-subtle transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-fg"
-                      >
-                        ↗
-                      </span>
-                    )}
-                  </div>
+                  ) : (
+                    <span
+                      aria-hidden
+                      className="absolute top-4 right-4 font-mono text-[13px]/none text-fg-subtle transition-transform duration-150 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-fg"
+                    >
+                      ↗
+                    </span>
+                  )}
+                  <img
+                    src={tool.logo}
+                    alt=""
+                    className="size-9 shrink-0 object-contain"
+                  />
                   <div className="mt-5 flex flex-col gap-0.5">
                     <h3 className="text-[16px]/[1.3] font-semibold tracking-[-0.015em] text-fg">
                       {tool.name}
                     </h3>
-                    <span className="rstack-tool__domain font-mono text-[12px]/[1.5]">
+                    <span className="rstack-tool__domain font-mono text-[13px]/[1.5]">
                       {tool.domain}
                     </span>
                   </div>
-                  <p className="mt-2.5 text-[13px]/[1.55] text-fg-muted">
+                  <p className="mt-2.5 text-[14px]/[1.55] text-fg-muted">
                     {tool[lang]}
                   </p>
                 </a>
@@ -769,27 +723,27 @@ export function HomeLayout() {
         <div className="mx-auto w-full max-w-6xl px-4 sm:px-6">
           <div className="border-x border-[var(--home-border)]">
             <div className="grid grid-cols-1 gap-px bg-[var(--home-border)] sm:grid-cols-2 lg:grid-cols-4">
-              <div className="bg-[var(--home-bg)] px-6 py-10 lg:px-8 lg:py-12">
+              <div className="bg-[var(--home-bg)] px-6 py-8 sm:px-8 sm:py-10">
                 <a
                   href={tUrl('/')}
                   className="inline-flex items-center gap-2.5"
                   aria-label="Rstest"
                 >
                   <img src={FOOTER_LOGO} alt="" className="size-7" />
-                  <span className="text-[15px] font-semibold text-fg">
+                  <span className="text-[16px] font-semibold text-fg">
                     Rstest
                   </span>
                 </a>
-                <p className="mt-4 text-[13px]/[1.7] text-fg-muted">
+                <p className="mt-4 text-[14px]/[1.65] text-fg-muted">
                   {t('slogan')}
                 </p>
               </div>
               {FOOTER_COLUMNS[lang].map((column) => (
                 <div
                   key={column.title}
-                  className="bg-[var(--home-bg)] px-6 py-10 lg:px-8 lg:py-12"
+                  className="bg-[var(--home-bg)] px-6 py-8 sm:px-8 sm:py-10"
                 >
-                  <h3 className="font-mono text-[11.5px] font-medium tracking-[0.12em] text-fg uppercase">
+                  <h3 className="text-[14px] font-semibold text-fg">
                     {column.title}
                   </h3>
                   <ul className="mt-3.5 space-y-2.5">
@@ -802,7 +756,7 @@ export function HomeLayout() {
                             {...(isExternal
                               ? { target: '_blank', rel: 'noreferrer' }
                               : {})}
-                            className="text-[13px] text-fg-muted transition-colors hover:text-fg"
+                            className="text-[14px] text-fg-muted transition-colors hover:text-fg"
                           >
                             {link.label}
                           </a>
@@ -813,7 +767,7 @@ export function HomeLayout() {
                 </div>
               ))}
             </div>
-            <div className="flex flex-col gap-2 border-t border-[var(--home-border)] px-6 py-5 text-[12px] text-fg-subtle sm:flex-row sm:items-center sm:justify-between lg:px-8">
+            <div className="flex flex-col gap-2 border-t border-[var(--home-border)] px-6 py-5 text-[13px] text-fg-subtle sm:flex-row sm:items-center sm:justify-between sm:px-8">
               <p>© 2024-present ByteDance Inc.</p>
               <p>
                 {FOOTER_LICENSE[lang].prefix}

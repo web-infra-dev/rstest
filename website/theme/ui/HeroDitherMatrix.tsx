@@ -49,21 +49,23 @@ const LIGHT_PALETTE: Palette = [
 ];
 
 const BROWSER_KINDS: readonly BrowserKind[] = ['chromium', 'firefox', 'webkit'];
-const GRID_ROWS = 8;
+const GRID_ROWS = 7;
 const PIXEL_SIZE = 2;
 const FRAME_INTERVAL_MS = 33;
 const HOVER_DECAY_PER_SEC = 1.1;
+const BOOST_PEAK = 0.94;
 
 interface Slot {
   c: number;
   r: number;
   cx: number;
   cy: number;
-  inCenterClear: boolean;
+  inPromptClear: boolean;
   kind: GlyphKind;
   tone: Tone;
   phase: number;
   hoverBoost: number;
+  pulseDelay: number;
 }
 
 interface GridMetrics {
@@ -74,15 +76,15 @@ interface GridMetrics {
   cellH: number;
 }
 
-// Match the parent CSS grid tracks (8/12/16 cols x 8 rows) so every icon
+// Match the parent CSS grid tracks (6/8/12 cols x 7 rows) so every icon
 // centers cleanly inside its own 1px CSS cell.
 function getGridLayout(viewportWidth: number): {
   cols: number;
   clearMargin: number;
 } {
-  if (viewportWidth >= 1024) return { cols: 16, clearMargin: 3 };
-  if (viewportWidth >= 640) return { cols: 12, clearMargin: 1 };
-  return { cols: 8, clearMargin: 0 };
+  if (viewportWidth >= 1024) return { cols: 12, clearMargin: 2 };
+  if (viewportWidth >= 640) return { cols: 8, clearMargin: 1 };
+  return { cols: 6, clearMargin: 0 };
 }
 
 function createSlots(
@@ -94,11 +96,11 @@ function createSlots(
   const slots: Slot[] = [];
   for (let r = 0; r < GRID_ROWS; r++) {
     for (let c = 0; c < cols; c++) {
-      const inCenterClear =
-        c >= clearMargin &&
-        c < cols - clearMargin &&
-        r > 0 &&
-        r < GRID_ROWS - 1;
+      // Keep only the merged InstallCommand cavity clear so glyphs fill the rest of the Hero grid.
+      const inPromptClear =
+        clearMargin === 0
+          ? r === 4 || r === 5
+          : r === 5 && c >= clearMargin && c < cols - clearMargin;
       const hash = (((r + 1) * 73856093) ^ ((c + 1) * 19349663)) >>> 0;
       const browserKind =
         hash % 3 === 0
@@ -124,15 +126,32 @@ function createSlots(
         r,
         cx: (c + 0.5) * cellW,
         cy: (r + 0.5) * cellH,
-        inCenterClear,
+        inPromptClear,
         kind,
         tone,
         phase: (r * cols + c) * 0.65,
         hoverBoost: 0,
+        pulseDelay: 0,
       });
     }
   }
   return slots;
+}
+
+function stepSlot(slot: Slot, dt: number): boolean {
+  if (dt > 0) {
+    if (slot.pulseDelay > 0) {
+      slot.pulseDelay -= dt;
+      if (slot.pulseDelay <= 0) {
+        slot.pulseDelay = 0;
+        slot.hoverBoost = Math.max(slot.hoverBoost, BOOST_PEAK);
+      }
+    }
+    if (slot.hoverBoost > 0) {
+      slot.hoverBoost = Math.max(0, slot.hoverBoost - dt * HOVER_DECAY_PER_SEC);
+    }
+  }
+  return slot.pulseDelay > 0 || slot.hoverBoost > 0;
 }
 
 function resolveSlotVisual(
@@ -272,6 +291,7 @@ function applyBayerDither(
   for (let y = 0; y < height; y++) {
     const bayerRow = BAYER_8[y & 7]!;
     const rIdx = Math.min(GRID_ROWS - 1, Math.floor(y / cellH));
+    const dy = (y / height - 0.46) / 0.38;
 
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
@@ -286,21 +306,34 @@ function applyBayerDither(
           : rawTone;
       const rgba = palette[tone] ?? palette[TONE_ETCHED];
 
+      // Soften etched dots smoothly behind the centered Hero typography and CTA row without a hard cutout box.
+      const dx = (x / width - 0.5) / 0.38;
+      const t = Math.max(0, Math.min(1, (Math.hypot(dx, dy) - 0.55) / 0.65));
+      const fade = t * t * (3 - 2 * t);
+      const minScale = tone === TONE_ETCHED ? 0.1 : 0.45;
+
       dst[idx] = rgba[0];
       dst[idx + 1] = rgba[1];
       dst[idx + 2] = rgba[2];
-      dst[idx + 3] = rgba[3];
+      dst[idx + 3] = Math.round(rgba[3] * (minScale + (1 - minScale) * fade));
     }
   }
 }
 
 /**
  * Low-saturation Bayer-dithered test & browser icon matrix rendered statically
- * at rest and animated on pointer hover. Columns stay a multiple of 4 so cells
- * align with the page's 25% / 50% / 75% architectural rails.
+ * at rest and animated on pointer hover or copy pulse. Desktop/tablet columns
+ * stay a multiple of 4 to align with the 25% / 50% / 75% architectural rails.
  */
-export function HeroDitherMatrix() {
+export function HeroDitherMatrix({ pulse = 0 }: { pulse?: number }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const triggerPulseRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (pulse > 0) {
+      triggerPulseRef.current?.();
+    }
+  }, [pulse]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -322,7 +355,7 @@ export function HeroDitherMatrix() {
     let grid: GridMetrics = {
       width: 0,
       height: 0,
-      cols: 16,
+      cols: 12,
       cellW: 0,
       cellH: 0,
     };
@@ -368,14 +401,8 @@ export function HeroDitherMatrix() {
       let hasActive = false;
 
       for (const slot of slots) {
-        if (slot.inCenterClear) continue;
-        if (dt > 0 && slot.hoverBoost > 0) {
-          slot.hoverBoost = Math.max(
-            0,
-            slot.hoverBoost - dt * HOVER_DECAY_PER_SEC,
-          );
-        }
-        if (slot.hoverBoost > 0) {
+        if (slot.inPromptClear) continue;
+        if (stepSlot(slot, dt)) {
           hasActive = true;
         }
 
@@ -429,6 +456,22 @@ export function HeroDitherMatrix() {
       rafId = requestAnimationFrame(tick);
     };
 
+    // Ripple outward from the prompt box when the user copies a command.
+    triggerPulseRef.current = () => {
+      if (reducedMotion || slots.length === 0) return;
+      const originC = grid.cols / 2;
+      const originR = 5.5;
+      for (const slot of slots) {
+        if (slot.inPromptClear) continue;
+        const dist = Math.hypot(
+          (slot.c + 0.5 - originC) / originC,
+          (slot.r + 0.5 - originR) / originR,
+        );
+        slot.pulseDelay = 0.001 + dist * 0.28;
+      }
+      startLoop();
+    };
+
     const onPointerMove = (event: PointerEvent) => {
       if (reducedMotion || grid.cellW === 0 || grid.cellH === 0) return;
       const rect = host.getBoundingClientRect();
@@ -440,14 +483,14 @@ export function HeroDitherMatrix() {
       const r = Math.floor(ly / grid.cellH);
       const cellKey = r * grid.cols + c;
       const slot = slots[cellKey];
-      if (!slot || slot.inCenterClear) {
+      if (!slot || slot.inPromptClear) {
         lastCellKey = -1;
         return;
       }
       // Avoid resetting the spinner while the pointer jitters inside the same active cell.
       if (cellKey === lastCellKey && slot.hoverBoost > 0.35) return;
       lastCellKey = cellKey;
-      slot.hoverBoost = 0.94;
+      slot.hoverBoost = BOOST_PEAK;
       startLoop();
     };
 
@@ -476,6 +519,7 @@ export function HeroDitherMatrix() {
     drawFrame(0);
 
     return () => {
+      triggerPulseRef.current = null;
       cancelAnimationFrame(rafId);
       resizeObserver.disconnect();
       themeObserver.disconnect();
