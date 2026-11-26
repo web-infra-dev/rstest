@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -110,6 +111,162 @@ describe('browser mode - headed watch', () => {
 
         cli.resetStd();
         fs.update(file, (content) => content.replace(failing, passing));
+        await cli.waitForStdout('Test Files 1 passed');
+        await panel.waitFor({ state: 'hidden' });
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'shows screenshot originals side by side and highlights changes in the actual image',
+    async () => {
+      const fixturesTargetPath = path.join(
+        __dirname,
+        'fixtures/fixtures-test-screenshot-comparison',
+      );
+      const { fs } = await prepareFixtures({
+        fixturesPath: path.join(__dirname, 'fixtures/browser-react'),
+        fixturesTargetPath,
+      });
+      const file = path.join(
+        fixturesTargetPath,
+        'tests/testingLibraryDom.test.tsx',
+      );
+      fs.update(
+        file,
+        () => `import { page } from '@rstest/browser';
+import { expect, it } from '@rstest/core';
+
+it('compares a swatch', async () => {
+  document.body.innerHTML = '<div id="swatch" style="width: 128px; height: 600px; background: red"></div>';
+  await expect(page.locator('#swatch')).toMatchScreenshot('swatch');
+});`,
+      );
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: ['-c', 'rstest.rerun.config.mts'],
+      });
+      try {
+        await cli.waitForStdout('Test Files 1 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+        cli.resetStd();
+        fs.update(file, (source) =>
+          source.replace('background: red', 'background: blue'),
+        );
+        const page = await getBrowserUiPage();
+        const panel = page.getByRole('region', { name: 'Failure details' });
+        const expected = panel.getByRole('img', {
+          name: 'Expected screenshot',
+        });
+        const actual = panel.getByRole('img', { name: 'Actual screenshot' });
+        await actual.waitFor();
+        const highlight = panel.getByRole('checkbox', {
+          name: 'Highlight changes',
+        });
+        const directory = path.join(
+          path.dirname(file),
+          '__screenshots__',
+          path.basename(file),
+        );
+        const base = `swatch-chromium-${process.platform}`;
+        const imageSrc = async (filename: string) =>
+          `data:image/png;base64,${await readFile(path.join(directory, filename), 'base64')}`;
+        const reference = await imageSrc(`${base}.png`);
+        const capture = await imageSrc(`__failures__/${base}.actual.png`);
+        const regions = await imageSrc(`__failures__/${base}.regions.png`);
+        const pixels = await imageSrc(`__failures__/${base}.diff.png`);
+        expect(await highlight.isChecked()).toBe(false);
+        expect(await expected.getAttribute('src')).toBe(reference);
+        expect(await actual.getAttribute('src')).toBe(capture);
+        const left = await expected.boundingBox();
+        const right = await actual.boundingBox();
+        expect(left!.x + left!.width).toBeLessThanOrEqual(right!.x);
+        expect(left!.y).toBe(right!.y);
+
+        const comparison = panel.getByRole('region', {
+          name: 'Screenshot comparison',
+        });
+        const header = comparison.getByText('Expected', { exact: true });
+        const headerTop = (await header.boundingBox())!.y;
+        expect(left).toMatchObject(
+          await expected.evaluate((image: HTMLImageElement) => ({
+            width: image.naturalWidth,
+            height: image.naturalHeight,
+          })),
+        );
+        const scroll = await comparison.evaluate((el) => {
+          el.scrollTop = el.scrollHeight;
+          return el.scrollTop;
+        });
+        expect(scroll).toBeGreaterThan(0);
+        expect((await expected.boundingBox())!.y).toBeCloseTo(
+          left!.y - scroll,
+          0,
+        );
+        expect((await actual.boundingBox())!.y).toBeCloseTo(
+          right!.y - scroll,
+          0,
+        );
+        expect((await header.boundingBox())!.y).toBeCloseTo(headerTop, 0);
+
+        const centerColor = () =>
+          actual.evaluate(async (image: HTMLImageElement) => {
+            await image.decode();
+            const context = document.createElement('canvas').getContext('2d')!;
+            context.drawImage(
+              image,
+              Math.floor(image.naturalWidth / 2),
+              Math.floor(image.naturalHeight / 2),
+              1,
+              1,
+              0,
+              0,
+              1,
+              1,
+            );
+            return Array.from(context.getImageData(0, 0, 1, 1).data);
+          });
+        const originalCenter = await centerColor();
+        await highlight.check();
+        expect(await expected.getAttribute('src')).toBe(reference);
+        expect(await actual.getAttribute('src')).toBe(regions);
+        expect(await centerColor()).not.toEqual(originalCenter);
+        const dialog = page.getByRole('dialog');
+        for (const [label, src] of [
+          ['expected', reference],
+          ['actual', capture],
+        ]) {
+          await panel
+            .getByRole('button', {
+              name: `Open ${label} screenshot at original size`,
+            })
+            .click();
+          const original = dialog.getByRole('img');
+          expect(await original.getAttribute('src')).toBe(src);
+          expect(
+            await original.evaluate(async (el: HTMLImageElement) => {
+              await el.decode();
+              return el.getBoundingClientRect().height === el.naturalHeight;
+            }),
+          ).toBe(true);
+          await page.keyboard.press('Escape');
+          await dialog.waitFor({ state: 'hidden' });
+        }
+        await highlight.uncheck();
+        expect(await actual.getAttribute('src')).toBe(capture);
+        await panel.getByText('Snapshot details', { exact: true }).click();
+        await panel.getByRole('button', { name: 'View pixel diff' }).click();
+        expect(await dialog.getByRole('img').getAttribute('src')).toBe(pixels);
+        await dialog.getByRole('button', { name: 'Close' }).click();
+        await dialog.waitFor({ state: 'hidden' });
+        await cli.waitForStdout('Waiting for file changes...');
+        cli.resetStd();
+        fs.update(file, (source) =>
+          source.replace('background: blue', 'background: red'),
+        );
         await cli.waitForStdout('Test Files 1 passed');
         await panel.waitFor({ state: 'hidden' });
       } finally {

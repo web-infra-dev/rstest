@@ -1,3 +1,5 @@
+import type { ScreenshotComparison } from '@rstest/browser/protocol';
+
 /**
  * Per-frame run leases — the container's half of headed run identity.
  *
@@ -15,6 +17,7 @@
 export type FrameLease = {
   runId: string;
   boot: number;
+  comparisons: Map<string, ScreenshotComparison>;
   testNamePattern?: string;
 };
 
@@ -30,7 +33,12 @@ export const createFrameLeaseTable = () => {
       testNamePattern?: string,
     ): FrameLease {
       bootCounter += 1;
-      const lease: FrameLease = { runId, boot: bootCounter, testNamePattern };
+      const lease: FrameLease = {
+        runId,
+        boot: bootCounter,
+        testNamePattern,
+        comparisons: new Map(),
+      };
       leases.set(testPath, lease);
       return lease;
     },

@@ -169,7 +169,13 @@ const settlePendingRequest = (response: BrowserDispatchResponse): void => {
     return;
   }
   if (response.error) {
-    pending.reject(new Error(response.error));
+    const error = new Error(response.error);
+    if (response.screenshotComparisonId) {
+      Object.assign(error, {
+        screenshotComparisonId: response.screenshotComparisonId,
+      });
+    }
+    pending.reject(error);
     return;
   }
   pending.resolve(response.result);

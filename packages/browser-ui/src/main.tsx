@@ -483,7 +483,16 @@ const BrowserRunner: React.FC<{
           }
         }
 
-        void forwardDispatchRpcRequest(rpc, dispatchRequest, event.source);
+        const file = dispatchRequest.target?.testFile;
+        const lease = file ? leasesRef.current.get(file) : undefined;
+        void forwardDispatchRpcRequest(
+          rpc,
+          dispatchRequest,
+          event.source,
+          lease && lease.runId === dispatchRequest.runId
+            ? lease.comparisons
+            : undefined,
+        );
         return;
       }
 
@@ -916,6 +925,7 @@ const BrowserRunner: React.FC<{
             </div>
             {active && (
               <FailureDetails
+                comparisons={leasesRef.current.get(active)?.comparisons}
                 fileErrors={
                   selectedCase ? undefined : fileStates[active]?.errors
                 }

@@ -260,6 +260,9 @@ describe.sequential('browser mode - screenshot matching', () => {
     expect(`${mismatchRun.cli.stdout}\n${mismatchRun.cli.stderr}`).toContain(
       'Diff:',
     );
+    expect(`${mismatchRun.cli.stdout}\n${mismatchRun.cli.stderr}`).toContain(
+      'Regions:',
+    );
     const failureDir = path.join(screenshotDir, '__failures__');
     expect(
       fs.readdirSync(failureDir).some((name) => name.endsWith('.actual.png')),
@@ -268,8 +271,14 @@ describe.sequential('browser mode - screenshot matching', () => {
       fs.readdirSync(failureDir).some((name) => name.endsWith('.diff.png')),
     ).toBe(true);
 
+    const regions = path.join(
+      failureDir,
+      referenceName.replace(/\.png$/, '.regions.png'),
+    );
+    expect(fs.existsSync(regions)).toBe(true);
     const updateRun = await runScreenshot([...args, '--update']);
     await updateRun.expectExecSuccess();
+    expect(fs.existsSync(regions)).toBe(false);
     expect(fs.readFileSync(referencePath)).not.toEqual(originalReference);
 
     const updatedMatchRun = await runScreenshot(['--reporters=json', ...args]);

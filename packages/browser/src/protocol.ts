@@ -351,6 +351,16 @@ export type BrowserDispatchRequest = {
   };
 };
 
+/** Base64-encoded PNGs captured by one headed screenshot assertion. */
+export type ScreenshotComparison = {
+  /** Present when the originals can share a pixel-aligned comparison. */
+  sharedSize?: { width: number; height: number };
+  regions?: string;
+  diff: string;
+  reference: string;
+  actual: string;
+};
+
 /**
  * Dispatch response envelope.
  * `stale: true` signals a safe drop from an older run generation, not a failure.
@@ -360,6 +370,8 @@ export type BrowserDispatchResponse = {
   runToken?: number;
   result?: unknown;
   error?: string;
+  screenshotComparison?: ScreenshotComparison;
+  screenshotComparisonId?: string;
   stale?: boolean;
 };
 

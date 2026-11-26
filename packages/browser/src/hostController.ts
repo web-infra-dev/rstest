@@ -1243,6 +1243,7 @@ export const runBrowserController = async (
             }
             return result;
           },
+          includeComparison: Boolean(containerPage && !runnerPage),
           updateSnapshot: request.snapshotUpdate ?? initialSnapshotUpdate,
           options: screenshotOptions,
           deadline: screenshotDeadline,
@@ -1275,6 +1276,7 @@ export const runBrowserController = async (
         };
         counts.unmatched += 1;
         screenshotCountsByFile.set(key, counts);
+        if (error.comparison) throw error;
       }
       // birpc serializes thrown Errors as `{}` over JSON; throw a string instead.
       if (error instanceof Error) {
