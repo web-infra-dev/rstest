@@ -186,21 +186,26 @@ export function HeroDitherMatrix() {
       off.height = gh;
       outImg = ctx.createImageData(gw, gh);
 
-      cols = rect.width >= 960 ? 16 : rect.width >= 640 ? 12 : 8;
+      // Match Tailwind breakpoints (sm: 640px, lg: 1024px) so InstallCommand
+      // snaps to the exact same column tracks at every viewport width.
+      cols = window.innerWidth >= 1024 ? 16 : window.innerWidth >= 640 ? 12 : 8;
       cellW = gw / cols;
       rows = Math.max(5, Math.round(gh / cellW));
       cellH = gh / rows;
       toneMap = new Uint8Array(cols * rows);
 
-      const isNarrow = rect.width < 640;
+      const isNarrow = window.innerWidth < 640;
       slots = [];
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const nx = (c + 0.5) / cols;
+          const isTablet = window.innerWidth >= 640 && window.innerWidth < 1024;
           const inCenterClear = isNarrow
             ? r > 0 && r < rows - 1
-            : nx > 0.2 && nx < 0.8 && r > 0 && r < rows - 1;
+            : isTablet
+              ? c >= 1 && c < cols - 1 && r > 0 && r < rows - 1
+              : c >= 3 && c < cols - 3 && r > 0 && r < rows - 1;
 
+          const nx = (c + 0.5) / cols;
           const hash = (((r + 1) * 73856093) ^ ((c + 1) * 19349663)) >>> 0;
           const browserKind =
             hash % 3 === 0

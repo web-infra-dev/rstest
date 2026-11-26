@@ -115,9 +115,11 @@ const PACKAGE_MANAGERS = ['npm', 'pnpm', 'yarn', 'bun'];
 export function InstallCommand({
   prompt,
   args,
+  className = '',
 }: {
   prompt: string;
   args: string;
+  className?: string;
 }) {
   const tabs = ['prompt', ...PACKAGE_MANAGERS];
   const lineOf = (tab: string) =>
@@ -146,7 +148,7 @@ export function InstallCommand({
   };
 
   return (
-    <div className="w-[min(100%,660px)] text-left">
+    <div className={`w-full text-left ${className}`}>
       <div className="border border-[var(--home-border-strong)] bg-[var(--home-bg)]">
         <div className="relative flex items-center justify-between gap-2 border-b border-[var(--home-border)] px-2 font-mono text-[12px]">
           <div className="relative flex items-center">
@@ -159,7 +161,7 @@ export function InstallCommand({
                 type="button"
                 aria-pressed={name === tab}
                 onClick={() => select(name)}
-                className={`cursor-pointer bg-transparent! px-2 py-2.5 transition-colors sm:px-2.5 ${
+                className={`cursor-pointer bg-transparent! px-2 py-2 transition-colors sm:px-2.5 ${
                   name === tab
                     ? 'font-medium text-fg'
                     : 'text-fg-muted/75 hover:text-fg'
@@ -185,7 +187,7 @@ export function InstallCommand({
                 ? 'Copied'
                 : `Copy ${tab === 'prompt' ? 'prompt' : 'command'}`
             }
-            className={`flex shrink-0 cursor-pointer items-center gap-1.5 bg-transparent! px-2.5 py-1.5 transition-colors hover:bg-[var(--home-surface-hover)]! ${
+            className={`flex shrink-0 cursor-pointer items-center gap-1.5 bg-transparent! px-2.5 py-1 transition-colors hover:bg-[var(--home-surface-hover)]! ${
               copied ? 'text-brand' : 'text-fg-muted hover:text-fg'
             }`}
           >
@@ -211,7 +213,7 @@ export function InstallCommand({
             {copied ? 'copied' : 'copy'}
           </button>
         </div>
-        <div className="flex items-start gap-3 bg-[var(--home-stage-bg)] px-4 py-3 font-mono text-[13px]/[1.6]">
+        <div className="flex items-start gap-3 bg-[var(--home-stage-bg)] px-4 py-2 font-mono text-[12.5px]/[1.5]">
           <span className="font-medium text-brand select-none">
             {tab === 'prompt' ? '>' : '$'}
           </span>

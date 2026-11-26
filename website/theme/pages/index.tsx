@@ -567,48 +567,55 @@ export function HomeLayout() {
         <section className="border-x border-[var(--home-border)]">
           <div className="relative overflow-hidden bg-[var(--home-bg)]">
             <HeroDitherMatrix />
-            <div className="relative z-10 flex flex-col items-center px-6 pt-18 pb-16 text-center sm:px-10 sm:pt-22 sm:pb-18 lg:pt-24 lg:pb-20">
-              <h1 className="text-[44px]/[1.02] font-semibold tracking-[-0.055em] sm:text-[66px]/[1.0] lg:text-[76px]/[0.98]">
-                <span className="block text-fg">
-                  {HERO_TITLE[lang][0]}
-                  <span className="text-brand">Rspack</span>
-                  {HERO_TITLE[lang][1]}
-                </span>
-                <span className="home-hero-sub mt-1.5 block">
-                  {HERO_TITLE[lang][2]}
-                </span>
-              </h1>
-              <p className="mt-6 max-w-2xl text-[17px]/[1.6] text-fg-muted sm:text-[19px]/[1.55]">
-                {t('slogan')}
-              </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <Button href={tUrl('/guide/start/quick-start')} LinkComp={Link}>
-                  <span>{t('quickStart')}</span>
-                  <span
-                    aria-hidden
-                    className="transition-transform duration-150 group-hover:translate-x-0.5"
-                  >
-                    →
+            <div className="relative z-10 flex flex-col items-center pt-18 pb-[12.5%] text-center sm:pt-22 sm:pb-[8.3333%] lg:pt-24 lg:pb-[6.25%]">
+              <div className="flex flex-col items-center px-6 sm:px-10">
+                <h1 className="text-[44px]/[1.02] font-semibold tracking-[-0.055em] sm:text-[66px]/[1.0] lg:text-[76px]/[0.98]">
+                  <span className="block text-fg">
+                    {HERO_TITLE[lang][0]}
+                    <span className="text-brand">Rspack</span>
+                    {HERO_TITLE[lang][1]}
                   </span>
-                </Button>
-                <Button
-                  href="https://github.com/web-infra-dev/rstest"
-                  variant="secondary"
-                >
-                  <svg
-                    viewBox="0 0 16 16"
-                    className="size-4 fill-current"
-                    aria-hidden
+                  <span className="home-hero-sub mt-1.5 block">
+                    {HERO_TITLE[lang][2]}
+                  </span>
+                </h1>
+                <p className="mt-6 max-w-2xl text-[17px]/[1.6] text-fg-muted sm:text-[19px]/[1.55]">
+                  {t('slogan')}
+                </p>
+                <div className="mt-8 flex flex-wrap justify-center gap-3">
+                  <Button
+                    href={tUrl('/guide/start/quick-start')}
+                    LinkComp={Link}
                   >
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8" />
-                  </svg>
-                  <span>GitHub</span>
-                </Button>
+                    <span>{t('quickStart')}</span>
+                    <span
+                      aria-hidden
+                      className="transition-transform duration-150 group-hover:translate-x-0.5"
+                    >
+                      →
+                    </span>
+                  </Button>
+                  <Button
+                    href="https://github.com/web-infra-dev/rstest"
+                    variant="secondary"
+                  >
+                    <svg
+                      viewBox="0 0 16 16"
+                      className="size-4 fill-current"
+                      aria-hidden
+                    >
+                      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8" />
+                    </svg>
+                    <span>GitHub</span>
+                  </Button>
+                </div>
               </div>
-              <div className="mt-8 flex w-full justify-center">
+              {/* Snaps flush to the inner dither grid tracks: 8/8 mobile, 10/12 tablet, 10/16 desktop. */}
+              <div className="mt-9 flex w-full justify-center">
                 <InstallCommand
                   prompt={AGENT_PROMPT}
                   args="add @rstest/core -D"
+                  className="sm:w-[83.3333%] lg:w-[62.5%]"
                 />
               </div>
             </div>
