@@ -139,8 +139,8 @@ type BrowserConfigRow = {
 
 /**
  * One `(project, browser)` row per configured browser of every browser
- * project, computed once per validation pass. The headed, watch-hybrid, and
- * coverage-v8 checks all read the same selection, so they share it.
+ * project, computed once per validation pass so the coverage-v8 and
+ * unsupported-option checks read the same selection.
  */
 const browserConfigRows = (context: InternalContext): BrowserConfigRow[] =>
   context.projects.flatMap((project) =>
@@ -323,37 +323,6 @@ export const validateBrowserConfig = (context: InternalContext): void => {
     }
   }
 
-  // Headed debugging works through one container window today, so at most one
-  // (project, browser) pair may run headed per run; the rest run headless.
   const browserRows = browserConfigRows(context);
-  const headedPairs = browserRows.filter((row) => row.headed);
-  if (headedPairs.length > 1) {
-    const listed = headedPairs
-      .map(
-        ({ projectName, browserName }) =>
-          `${JSON.stringify(projectName)} (${JSON.stringify(browserName)})`,
-      )
-      .join(', ');
-    throw new Error(
-      `Only one (project, browser) pair can run headed per run: ${listed}. Browser mode opens one debug window, so every other browser must set headless: true.` +
-        ' Most often this comes from `--browser.headless=false` on a multi-browser run: select a single headless pair with `--browser.instances <name>` or narrow the projects with `--project`.',
-    );
-  }
-
-  // Watch rerun planning is single-planner: a headed pair has its own serial
-  // reload queue, and a mixed headed+headless watch session would rerun only
-  // through the last-installed scheduler. Until the two-watch-owner composition
-  // lands, mixed headed+headless is a run-only shape.
-  if (
-    context.command === 'watch' &&
-    headedPairs.length > 0 &&
-    browserRows.some((row) => !row.headed)
-  ) {
-    const { projectName, browserName } = headedPairs[0]!;
-    throw new Error(
-      `Watch mode does not support mixing headed (${projectName} / ${browserName}) and headless browsers in one run yet: every configured browser must set headless: true, or run without watch.`,
-    );
-  }
-
   reportUnsupportedBrowserOptions(context, browserRows);
 };

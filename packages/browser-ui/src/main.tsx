@@ -106,14 +106,17 @@ const BrowserRunner: React.FC<{
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
-      // Keep key stable but reasonably unique per workspace.
+      const storageId =
+        options.projects?.find((project) => project.name === projectName)
+          ?.instanceName || projectName;
+      // Keep key stable but reasonably unique per workspace and browser instance.
       let hash = 5381;
       for (let i = 0; i < options.rootPath.length; i++) {
         hash = (hash * 33) ^ options.rootPath.charCodeAt(i);
       }
-      return `rstest-viewport:${(hash >>> 0).toString(16)}:${projectName}`;
+      return `rstest-viewport:${(hash >>> 0).toString(16)}:${storageId}`;
     },
-    [options.rootPath],
+    [options.projects, options.rootPath],
   );
 
   const readStoredViewport = useCallback(
@@ -267,10 +270,16 @@ const BrowserRunner: React.FC<{
     [markFileRunning],
   );
 
+  const containerId =
+    options.containerId ??
+    new URLSearchParams(window.location.search).get('containerId') ??
+    undefined;
+
   const { rpc, loading, connected } = useRpc(
     setFileSet,
     options?.wsPort,
     handleReloadTestFile,
+    containerId,
   );
 
   // Consolidated effect for handling testFiles changes
@@ -669,8 +678,9 @@ const BrowserRunner: React.FC<{
     return [...new Set(keys)]; // Deduplicate
   }, [testFiles, caseMap]);
 
-  // Generate project-specific storage key for split position
+  // Generate instance-specific storage key for split position
   const projectKey =
+    options.projects?.[0]?.instanceName ||
     options.projects?.[0]?.name ||
     options.rootPath.split('/').filter(Boolean).pop() ||
     'default';
@@ -765,6 +775,7 @@ const BrowserRunner: React.FC<{
               isConnected={connected}
               token={token}
               counts={caseCounts}
+              instanceLabel={options.projects?.[0]?.instanceName}
             />
 
             <TestFilesHeader
@@ -1045,14 +1056,15 @@ const App: React.FC = () => {
   }
 
   const isDark = theme === 'dark';
-  const projectName =
+  const instanceName =
+    options.projects?.[0]?.instanceName ||
     options.projects?.[0]?.name ||
     options.rootPath.split('/').filter(Boolean).pop() ||
     'rstest';
 
   useEffect(() => {
-    document.title = `${projectName} [RSTEST BROWSER]`;
-  }, [projectName]);
+    document.title = `${instanceName} [RSTEST BROWSER]`;
+  }, [instanceName]);
 
   return (
     <ConfigProvider

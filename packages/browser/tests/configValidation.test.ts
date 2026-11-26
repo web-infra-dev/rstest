@@ -91,8 +91,8 @@ describe('browser config validation errors', () => {
     expect(() => validateBrowserConfig(context)).not.toThrow();
   });
 
-  it('rejects watch mixed with a headed pair when headless rows exist too', () => {
-    const watchContext = (
+  it('accepts watch and run mixing headed and headless browsers', () => {
+    const commandContext = (
       command: string,
       projects: InternalProjectContext[],
     ): InternalContext =>
@@ -124,35 +124,11 @@ describe('browser config validation errors', () => {
         ],
       }),
     ];
-    expect(() => validateBrowserConfig(watchContext('watch', hybrid))).toThrow(
-      /Watch mode does not support mixing headed/,
-    );
     expect(() =>
-      validateBrowserConfig(watchContext('run', hybrid)),
+      validateBrowserConfig(commandContext('watch', hybrid)),
     ).not.toThrow();
-
-    // Watch + single headless-only selection stays valid.
-    const headlessOnly = [
-      makeProject('p', {
-        enabled: true,
-        instances: [
-          {
-            browserName: 'chromium',
-            headless: true,
-            screenshotFailures: false,
-            providerOptions: {},
-          },
-          {
-            browserName: 'firefox',
-            headless: true,
-            screenshotFailures: false,
-            providerOptions: {},
-          },
-        ],
-      }),
-    ];
     expect(() =>
-      validateBrowserConfig(watchContext('watch', headlessOnly)),
+      validateBrowserConfig(commandContext('run', hybrid)),
     ).not.toThrow();
   });
 
@@ -192,7 +168,7 @@ describe('browser config validation errors', () => {
     );
   });
 
-  it('rejects more than one headed (project, browser) pair per run', () => {
+  it('accepts multiple headed (project, browser) pairs in one run', () => {
     const context = makeContext([
       makeProject('a', {
         enabled: true,
@@ -217,9 +193,7 @@ describe('browser config validation errors', () => {
         ],
       }),
     ]);
-    expect(() => validateBrowserConfig(context)).toThrow(
-      /Only one \(project, browser\) pair can run headed[\s\S]*--browser\.headless=false[\s\S]*--browser\.instances <name>` or narrow the projects with `--project`/,
-    );
+    expect(() => validateBrowserConfig(context)).not.toThrow();
   });
 
   it('hard-errors v8 coverage for a selected non-Chromium browser, in browser-only and mixed runs', () => {

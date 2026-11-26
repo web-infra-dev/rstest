@@ -16,6 +16,7 @@ type SidebarHeaderProps = {
   isConnected: boolean;
   token: GlobalToken;
   counts: StatusCounts;
+  instanceLabel?: string;
 };
 
 export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
@@ -24,6 +25,7 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
   isConnected,
   token,
   counts,
+  instanceLabel,
 }) => {
   const [flashKey, setFlashKey] = useState(0);
   const prevCountsRef = useRef(counts);
@@ -83,13 +85,23 @@ export const SidebarHeader: React.FC<SidebarHeaderProps> = ({
       data-testid="sidebar-header"
       style={{ background: token.colorBgContainer }}
     >
-      <div className="flex items-center gap-2">
-        <Logo className="h-6 transition-all" />
-        <div className="flex flex-col leading-none">
+      <div className="flex min-w-0 items-center gap-2">
+        <Logo className="h-6 shrink-0 transition-all" />
+        <div className="flex min-w-0 flex-col leading-none">
           <span className="text-[13px] font-bold tracking-tight">Rstest</span>
-          <span className="font-mono text-[9px] opacity-40 uppercase tracking-widest">
-            Browser
-          </span>
+          {instanceLabel ? (
+            <span
+              className="truncate font-mono text-[10px] tracking-tight text-[var(--accents-5)]"
+              data-testid="sidebar-instance-label"
+              title={instanceLabel}
+            >
+              {instanceLabel}
+            </span>
+          ) : (
+            <span className="font-mono text-[9px] uppercase tracking-widest opacity-40">
+              Browser
+            </span>
+          )}
         </div>
       </div>
       <div className="flex items-center gap-3">

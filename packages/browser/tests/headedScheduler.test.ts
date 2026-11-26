@@ -3,6 +3,7 @@ import { SnapshotManager } from '@vitest/snapshot/manager';
 import type { BrowserRuntime } from '../src/browserRsbuild';
 import type { HostRpcMethods } from '../src/containerRpc';
 import { HostDispatchRouter } from '../src/dispatchRouter';
+import { createHeadedRunRegistry } from '../src/headedRunRegistry';
 import {
   claimHeadedCycleScope,
   createHeadedScheduler,
@@ -133,20 +134,36 @@ describe('createHeadedScheduler', () => {
       launchPool: {
         acquire: async () => ({ browser: {}, release: () => {} }),
       },
-      containerContext: context,
-      containerPage: page,
       containerServer: { port: 3000 },
-      rpcManager: {
-        currentWebSocket: null,
-        isConnected: false,
-        reloadTestFile: async (_testFile: string, runId: string) => {
-          reloadRequested.resolve(runId);
-        },
-        updateMethods: (methods: HostRpcMethods) => {
+      setContainerOptions: () => {},
+      rpcHub: {
+        register: (_containerId: string, methods: HostRpcMethods) => {
           hostMethods = methods;
+          return {
+            currentWebSocket: null,
+            isConnected: false,
+            reloadTestFile: async (_testFile: string, runId: string) => {
+              reloadRequested.resolve(runId);
+            },
+            notifyTestFileUpdate: async () => {},
+            updateHostConfig: async () => {},
+          };
         },
       },
-      watchState: { lastTestFiles: [], headedFileSetVersion: 0 },
+      watchState: {
+        lastTestFiles: [],
+        headedContainers: new Map([
+          [
+            'browser',
+            {
+              runs: createHeadedRunRegistry(),
+              fileSetVersion: 0,
+              page,
+              context,
+            },
+          ],
+        ]),
+      },
     } as unknown as BrowserRuntime;
 
     // The runner-namespace routing the controller normally installs: the gate
@@ -201,25 +218,10 @@ describe('createHeadedScheduler', () => {
       handlers: { handleTestFileComplete: async () => {} },
       fatalErrorRef,
       watchSignals: {
-        setAbort: () => {},
-        setDispatchRerun: () => {},
-        signalInvalidation: async () => ({ cycle: Promise.resolve() }),
-        queueInvalidationAfter: () => {},
+        addAbort: () => {},
+        addInterrupt: () => {},
       },
       setDispatchPageResolver: () => {},
-      createWatchSession: () => ({
-        runCycle: async () => ({
-          results: [],
-          testResults: [],
-          errors: [],
-          testPaths: [],
-          duration: { buildTime: 0, testTime: 0 },
-        }),
-        requestRerun: async () => {},
-      }),
-      collectProjectEntries: async () => [],
-      logWatchReady: () => {},
-      destroyRuntime: async () => {},
     });
 
     // The identity the fatal must speak under is the one the host minted for

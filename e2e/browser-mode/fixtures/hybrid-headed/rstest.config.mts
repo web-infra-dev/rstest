@@ -1,8 +1,7 @@
 import { defineConfig } from '@rstest/core';
 import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
 
-// One headed (project, browser) pair beside a headless row — a legal run
-// shape (run-only: watch with a mixed headed/headless set is rejected).
+// One headed (project, browser) pair beside a headless row.
 export default defineConfig({
   browser: {
     enabled: true,

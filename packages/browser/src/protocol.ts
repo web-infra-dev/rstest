@@ -35,7 +35,7 @@ export const DISPATCH_RPC_REQUEST_TYPE = 'dispatch-rpc-request';
 export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
 export const RSTEST_VIEWPORT_EVENT = 'rstest:viewport';
 
-// The headed UI renders one project/browser pair, so a test path identifies its frame.
+// Each headed UI window renders one project/browser pair, so a test path identifies its frame.
 export type BrowserViewportChange = {
   testPath: string;
   viewport?: ViewportSize;
@@ -223,6 +223,12 @@ export type BrowserHostConfig = {
    * WebSocket port for container RPC.
    */
   wsPort?: number;
+  /**
+   * Container identity for headed mode. Each headed `(project, browser)` row
+   * opens its own container window, so the UI tags its WebSocket URL with this
+   * id to bind to its dedicated host-side RPC session.
+   */
+  containerId?: string;
   /**
    * Execution mode. Defaults to 'run'.
    */

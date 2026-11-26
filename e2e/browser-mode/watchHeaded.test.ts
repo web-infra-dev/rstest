@@ -16,15 +16,20 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function getBrowserUiPage() {
+async function getBrowserUiPages() {
   const { chromium } = await import('playwright');
   const browser = await chromium.connectOverCDP(
     `http://127.0.0.1:${BROWSER_PORTS['watch-headed-cdp']}`,
   );
-  const page = browser
+  return browser
     .contexts()
     .flatMap((context) => context.pages())
-    .find((page) => page.url().startsWith('http://localhost:'));
+    .filter((page) => page.url().startsWith('http://localhost:'));
+}
+
+async function getBrowserUiPage() {
+  const pages = await getBrowserUiPages();
+  const page = pages[0];
   if (!page) throw new Error('Browser UI page is missing');
   return page;
 }
@@ -493,5 +498,214 @@ it('runs the added file', () => expect(document.createElement('main').tagName).t
       }
     },
     60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'supports mixed headed and headless projects in watch mode and scopes UI reruns to the headed window',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-mixed-headed`;
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+      const testFile = path.join(fixturesTargetPath, 'tests/index.test.ts');
+      fs.create(
+        path.join(fixturesTargetPath, 'rstest.mixed.config.mts'),
+        `import { defineConfig } from '@rstest/core';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
+
+const chromeLaunch = ciChromeEntry().providerOptions?.launch ?? {};
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'headed-app',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: false,
+        port: BROWSER_PORTS['watch-headed'],
+        providerOptions: {
+          launch: {
+            ...chromeLaunch,
+            args: ['--remote-debugging-port=' + BROWSER_PORTS['watch-headed-cdp']],
+          },
+        },
+      },
+      include: ['tests/**/*.test.ts'],
+      setupFiles: ['./setup.ts'],
+      testTimeout: BROWSER_TEST_TIMEOUT,
+    },
+    {
+      name: 'headless-app',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: true,
+        providerOptions: {
+          launch: chromeLaunch,
+        },
+      },
+      include: ['tests/**/*.test.ts'],
+      setupFiles: ['./setup.ts'],
+      testTimeout: BROWSER_TEST_TIMEOUT,
+    },
+  ],
+});
+`,
+      );
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: ['-c', 'rstest.mixed.config.mts'],
+      });
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/\[headed-app\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).toMatch(/\[headless-app\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).toContain('Test Files 2 passed');
+
+        const page = await getBrowserUiPage();
+        expect(await page.title()).toBe('headed-app [RSTEST BROWSER]');
+        expect(
+          await page.getByTestId('sidebar-instance-label').textContent(),
+        ).toBe('headed-app');
+
+        // UI rerun button reruns ONLY the headed window's project (even though
+        // both projects include tests/index.test.ts).
+        cli.resetStd();
+        await page.getByTestId('test-file-rerun').first().click();
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/\[headed-app\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).not.toMatch(/\[headless-app\]/);
+
+        // File edit reruns both headed and headless projects.
+        cli.resetStd();
+        fs.update(testFile, (content) => `${content}\n// watch edit\n`);
+        await cli.waitForStdout('✓ [headed-app] tests/index.test.ts');
+        await cli.waitForStdout('✓ [headless-app] tests/index.test.ts');
+        await cli.waitForStdout('Test Files 2 passed');
+
+        // File add + delete sync across both lanes cleanly.
+        const addedFile = path.join(fixturesTargetPath, 'tests/added.test.ts');
+        cli.resetStd();
+        fs.create(
+          addedFile,
+          `import { expect, test } from '@rstest/core';\ntest('added', () => expect(1 + 1).toBe(2));\n`,
+        );
+        await cli.waitForStdout('✓ [headed-app] tests/added.test.ts');
+        await cli.waitForStdout('✓ [headless-app] tests/added.test.ts');
+        await cli.waitForStdout('Test Files 4 passed');
+
+        cli.resetStd();
+        fs.delete(addedFile);
+        await cli.waitForStdout('Test Files 2 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    90_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'runs multiple headed projects in watch mode with independent UI windows and scoped UI reruns',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-multi-headed`;
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+      const testFile = path.join(fixturesTargetPath, 'tests/index.test.ts');
+      fs.create(
+        path.join(fixturesTargetPath, 'rstest.multi-headed.config.mts'),
+        `import { defineConfig } from '@rstest/core';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
+
+const sharedLaunch = {
+  ...(ciChromeEntry().providerOptions?.launch ?? {}),
+  args: ['--remote-debugging-port=' + BROWSER_PORTS['watch-headed-cdp']],
+};
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'app-a',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: false,
+        port: BROWSER_PORTS['watch-headed'],
+        providerOptions: { launch: sharedLaunch },
+      },
+      include: ['tests/**/*.test.ts'],
+      setupFiles: ['./setup.ts'],
+      testTimeout: BROWSER_TEST_TIMEOUT,
+    },
+    {
+      name: 'app-b',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: false,
+        providerOptions: { launch: sharedLaunch },
+      },
+      include: ['tests/**/*.test.ts'],
+      setupFiles: ['./setup.ts'],
+      testTimeout: BROWSER_TEST_TIMEOUT,
+    },
+  ],
+});
+`,
+      );
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: ['-c', 'rstest.multi-headed.config.mts'],
+      });
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/\[app-a\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).toMatch(/\[app-b\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).toContain('Test Files 2 passed');
+
+        const pages = await getBrowserUiPages();
+        expect(pages).toHaveLength(2);
+        const pageByTitle = new Map<string, (typeof pages)[number]>();
+        for (const p of pages) {
+          pageByTitle.set(await p.title(), p);
+        }
+        const pageA = pageByTitle.get('app-a [RSTEST BROWSER]');
+        const pageB = pageByTitle.get('app-b [RSTEST BROWSER]');
+        expect(pageA).toBeDefined();
+        expect(pageB).toBeDefined();
+        expect(
+          await pageA!.getByTestId('sidebar-instance-label').textContent(),
+        ).toBe('app-a');
+        expect(
+          await pageB!.getByTestId('sidebar-instance-label').textContent(),
+        ).toBe('app-b');
+
+        // Clicking rerun inside app-a reruns ONLY app-a (even though both
+        // headed windows include tests/index.test.ts).
+        cli.resetStd();
+        await pageA!.getByTestId('test-file-rerun').first().click();
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/\[app-a\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).not.toMatch(/\[app-b\]/);
+
+        // File edit reruns both headed windows.
+        cli.resetStd();
+        fs.update(testFile, (content) => `${content}\n// multi headed edit\n`);
+        await cli.waitForStdout('✓ [app-a] tests/index.test.ts');
+        await cli.waitForStdout('✓ [app-b] tests/index.test.ts');
+        await cli.waitForStdout('Test Files 2 passed');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    90_000,
   );
 });

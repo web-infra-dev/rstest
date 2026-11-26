@@ -3,18 +3,15 @@ import type {
   RawTestFileResult,
 } from '@rstest/core/internal/browser';
 import {
-  color,
   createFileCleanupTimeoutResult,
   FIXTURE_CLEANUP_TIMEOUT_MS,
   logger,
 } from '@rstest/core/internal/browser';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { getTestPathKey } from './pathUtils';
-import { createSerialTaskQueue } from './serialTaskQueue';
 import {
   type BrowserProjectServer,
   type BrowserRuntime,
-  drainPendingAffectedTestFiles,
   resolveViewport,
   serializeForInlineScript,
 } from './browserRsbuild';
@@ -56,15 +53,13 @@ import {
   RunSessionLifecycle,
 } from './runSession';
 import { RunnerSessionRegistry } from './sessionRegistry';
-import { commitWatchFileSetUpdate, planWatchRerun } from './watchRerunPlanner';
 import {
   expandToRows,
   groupRowsByProject,
   type BrowserV8CoverageRuntime,
-  type BrowserWatchSession,
-  type DispatchLanes,
+  type DispatchPageResolver,
+  type HeadlessLaneResult,
   type ScheduledTestFile,
-  type SchedulerRunResult,
 } from './schedulerSeam';
 import type { WatchSignals } from './watchSignals';
 
@@ -83,7 +78,7 @@ type HeadlessSchedulerDeps = {
   v8Coverage?: BrowserV8CoverageRuntime;
   allTestFiles: TestFileInfo[];
   projectRuntimeConfigs: BrowserProjectRuntime[];
-  /** Mixed runs only: the budget shared with the headed lane. */
+  /** Multi-lane runs only: the budget shared with headed lanes. */
   fileLimiter?: ConcurrencyLimiter;
   hostOptions: BrowserHostConfig;
   watchState: BrowserRuntime['watchState'];
@@ -95,25 +90,8 @@ type HeadlessSchedulerDeps = {
     handleFatal: (payload: FatalPayload) => Promise<void>;
     handleTestFileComplete: (payload: RawTestFileResult) => Promise<void>;
   };
-  watchSignals: Pick<
-    WatchSignals,
-    | 'setDispatchRerun'
-    | 'setInterrupt'
-    | 'signalInvalidation'
-    | 'queueInvalidationAfter'
-  >;
-  setDispatchPageResolver: (lanes: Pick<DispatchLanes, 'headless'>) => void;
-  createWatchSession: (
-    execute: (
-      testPaths: string[],
-      updateSnapshot: SnapshotUpdateState,
-    ) => Promise<unknown[]>,
-  ) => BrowserWatchSession;
-  collectProjectEntries: () => Promise<
-    Parameters<typeof planWatchRerun>[0]['projectEntries']
-  >;
-  logWatchReady: () => void;
-  destroyRuntime: () => Promise<void>;
+  watchSignals: Pick<WatchSignals, 'addInterrupt'>;
+  setDispatchPageResolver: (resolver: DispatchPageResolver) => void;
 };
 
 /**
@@ -140,11 +118,7 @@ export const createHeadlessScheduler = async ({
   handlers: { handleFatal, handleTestFileComplete },
   watchSignals,
   setDispatchPageResolver,
-  createWatchSession,
-  collectProjectEntries,
-  logWatchReady,
-  destroyRuntime,
-}: HeadlessSchedulerDeps): Promise<SchedulerRunResult> => {
+}: HeadlessSchedulerDeps): Promise<HeadlessLaneResult> => {
   // Session-based scheduling path: lifecycle + session index + dispatch routing.
   type ActiveHeadlessRun = RunSession & {
     contexts: Set<BrowserProviderContext>;
@@ -155,13 +129,11 @@ export const createHeadlessScheduler = async ({
 
   const runLifecycle = new RunSessionLifecycle<ActiveHeadlessRun>();
   const sessionRegistry = new RunnerSessionRegistry();
-  setDispatchPageResolver({
-    headless: (target) => ({
-      runnerPage: target?.sessionId
-        ? sessionRegistry.getById(target.sessionId)?.page
-        : undefined,
-    }),
-  });
+  setDispatchPageResolver((target) => ({
+    runnerPage: target?.sessionId
+      ? sessionRegistry.getById(target.sessionId)?.page
+      : undefined,
+  }));
   let dispatchRequestCounter = 0;
 
   const nextDispatchRequestId = (namespace: string): string => {
@@ -1132,7 +1104,7 @@ export const createHeadlessScheduler = async ({
   // unwinds, and every page operation it can be sitting in is bounded by the
   // driver's own timeout. On session abort, the controller destroys the runtime
   // after this callback returns.
-  watchSignals.setInterrupt(async () => {
+  watchSignals.addInterrupt(async () => {
     const active = runLifecycle.activeSession;
     if (!active || active.cancelled) {
       return;
@@ -1145,97 +1117,37 @@ export const createHeadlessScheduler = async ({
   const rawCoverage = await runFilesWithPool(allTestFiles);
   const testTime = Date.now() - testStart;
 
-  let watchSession: BrowserWatchSession | undefined;
-  if (isWatchMode) {
-    // A queued scope can go stale before its cycle is dequeued — a later
-    // trigger may have rebuilt the file set without one of these files — so a
-    // path that no longer resolves is skipped rather than failing the cycle
-    // beside its still-valid siblings.
-    const runScope = async (
-      testPaths: string[],
-      updateSnapshot: SnapshotUpdateState,
-    ): Promise<unknown[]> => {
-      await watchState.awaitFailureScreenshotCleanups?.();
-      const pathSet = new Set(
-        testPaths.map((testPath) => getTestPathKey(testPath)),
-      );
-      return runFilesWithPool(
-        watchState.lastTestFiles.filter((file) =>
-          pathSet.has(getTestPathKey(file.testPath)),
-        ),
-        updateSnapshot,
-      );
-    };
-
-    // Each project compiler can trigger a rebuild independently; serialize
-    // planning so the drain-once affected set and file-set commit cannot race.
-    const dispatchRerunQueue = createSerialTaskQueue();
-    watchSignals.setDispatchRerun((updateSnapshot, requestedTestPaths) =>
-      dispatchRerunQueue.enqueue(async () => {
-        const newProjectEntries = await collectProjectEntries();
-        const rerunPlan = planWatchRerun({
-          projectEntries: newProjectEntries,
-          previousTestFiles: watchState.lastTestFiles,
-          affectedTestFiles: drainPendingAffectedTestFiles(watchState),
-          requestedTestPaths,
-        });
-
-        commitWatchFileSetUpdate(rerunPlan.fileSetUpdate, watchState);
-        watchState.removeFailureScreenshots?.(
-          rerunPlan.fileSetUpdate?.deletedTestFiles ?? [],
-        );
-        const failureScreenshotCleanup =
-          watchState.awaitFailureScreenshotCleanups?.() ?? Promise.resolve();
-
-        if (rerunPlan.decision.kind === 'idle') {
-          void failureScreenshotCleanup.then(() => {
-            logger.log(color.cyan(rerunPlan.decision.message));
-            logWatchReady();
-            if (rerunPlan.deferredTestPaths) {
-              watchSignals.queueInvalidationAfter(
-                Promise.resolve(),
-                rerunPlan.deferredTestPaths,
-              );
-            }
-          });
-          return;
-        }
-
-        void failureScreenshotCleanup.then(() => {
-          logger.log(color.cyan(rerunPlan.decision.message));
-        });
-        const { cycle } = await watchSignals.signalInvalidation(
-          rerunPlan.decision.kind === 'empty'
-            ? []
-            : rerunPlan.decision.testPaths,
-          undefined,
-          updateSnapshot,
-        );
-        if (rerunPlan.deferredTestPaths) {
-          watchSignals.queueInvalidationAfter(
-            cycle,
-            rerunPlan.deferredTestPaths,
-          );
-        }
-      }),
+  // A queued scope can go stale before its cycle is dequeued — a later trigger
+  // may have rebuilt the file set without one of these files — so a path that
+  // no longer resolves is skipped rather than failing the cycle beside its
+  // still-valid siblings.
+  const runScope = async (
+    testPaths: string[],
+    updateSnapshot: SnapshotUpdateState,
+  ): Promise<unknown[]> => {
+    const pathSet = new Set(
+      testPaths.map((testPath) => getTestPathKey(testPath)),
     );
+    return runFilesWithPool(
+      watchState.lastTestFiles.filter(
+        (file) =>
+          rowsByProject.has(file.projectName) &&
+          pathSet.has(getTestPathKey(file.testPath)),
+      ),
+      updateSnapshot,
+    );
+  };
 
-    watchSession = createWatchSession(runScope);
-  }
-
-  const closeHeadlessRuntime = !isWatchMode
+  const closeHeadlessLane = !isWatchMode
     ? async () => {
         sessionRegistry.clear();
-        await destroyRuntime();
       }
     : undefined;
 
   return {
     testTime,
     rawCoverage,
-    watchSession,
-    // `closeHeadlessRuntime` is already `undefined` in watch mode: the watch
-    // runtime outlives the cycle and is torn down through `executor.close()`.
-    close: closeHeadlessRuntime,
+    runScope,
+    close: closeHeadlessLane,
   };
 };

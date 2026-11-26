@@ -211,7 +211,6 @@ export default defineConfig({
 
 - 同一个 `browserName` 在单个项目中最多配置一次。
 - `instances` 不能为空——移除该选项即可使用默认的 Chromium。
-- 每次 run 最多只有一对 `(project, browser)` 以 headed 模式（`headless: false`）运行，见[启动规则](#launch-rules)。
 - [`coverage.provider: 'v8'`](/config/test/coverage) 要求选中的浏览器全部为 Chromium，见[启动规则](#launch-rules)。
 
 ### browser（已废弃） \{#browser-deprecated}
@@ -242,7 +241,7 @@ export default defineConfig({
 - **默认值：** CI 环境为 `true`，本地开发为 `false`
 - **CLI：** `--browser.headless`
 
-以无头模式（无 UI 窗口）运行浏览器。[`instances`](#instances) 的每一项可按浏览器覆盖它，并受[每次 run 只能有一个 headed 浏览器](#launch-rules)规则约束。
+以无头模式（无 UI 窗口）运行浏览器。[`instances`](#instances) 的每一项可按浏览器覆盖它，关于 headed 与 headless 协同运行的行为详见[启动规则](#launch-rules)。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -475,13 +474,12 @@ export default defineConfig({
 
 浏览器按需启动：某个 launch 在第一个测试文件需要它时才启动，因此无法启动的 launch（例如可执行文件不存在）会在运行到对应文件时失败。同时打开的 headless 浏览器最多为 [`pool.maxWorkers`](/config/test/pool#poolmaxworkers) 个；有新的 launch 需要名额时，会优先关闭最久未使用的空闲浏览器。watch 模式下，空闲浏览器在两次运行之间保持打开，直到需要腾出名额。headed 浏览器不计入该上限，并在整个 run 期间保持打开。
 
+headed 与混合模式行为：
+
+- **多个 headed 浏览器。** 每对 headed `(project, browser)` 都会打开独立的 Browser UI 窗口，并在各自窗口内串行执行测试文件；不同 headed 窗口之间并发运行（共用同一个 `pool.maxWorkers` 文件并发预算）。如果只想打开单个调试窗口，可通过 `--browser.instances <name>` 或 `--project` 缩小范围。
+- **混用 headed 与 headless 浏览器。** `run` 与 `watch` 模式均支持跨项目或同项目混用 headed 与 headless instance。在 watch 模式下，文件变更和 CLI 快捷键会重跑所有受影响的 lane；点击某个 headed Browser UI 窗口内的重跑按钮则仅重跑该窗口对应的 instance。
+
 以下规则在任何浏览器启动之前完成校验：
-
-- **每次 run 只能有一个 headed 浏览器。** Browser Mode 只打开一个调试窗口，因此最多允许一对 `(project, browser)` 设置 `headless: false`，其余浏览器必须设置 `headless: true`：
-
-  > Only one (project, browser) pair can run headed per run: "web" ("chromium"). Browser mode opens one debug window, so every other browser must set headless: true. Most often this comes from `--browser.headless=false` on a multi-browser run: select a single headless pair with `--browser.instances <name>` or narrow the projects with `--project`.
-
-- **Watch 模式不支持混合 headed 与 headless 浏览器。** 若一个浏览器为 headed、另一个为 headless，watch 会话会在校验阶段被拒绝；请为所有浏览器设置 `headless: true`，或改用非 watch 方式运行。
 
 - **Coverage provider `v8` 需要 Chromium。** 启用 `coverage.enabled` 且 `coverage.provider: 'v8'` 时，选中任何非 Chromium 浏览器都会校验失败。可切换为 `coverage.provider: 'istanbul'`，或仅选择 Chromium（`--browser.instances chromium`）。
 

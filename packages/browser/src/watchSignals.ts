@@ -31,12 +31,13 @@ export const createWatchSignals = (
     | undefined;
 
   /**
-   * Latest-wins interrupt, installed by the run branch whose in-flight run can
-   * be cut short (headless). Core serializes cycles, so a trigger arriving
-   * mid-cycle would otherwise wait out a run the user has already superseded.
+   * Latest-wins interrupts installed by active lanes (headless cancels its
+   * in-flight run; headed skips remaining queued files in the superseded
+   * cycle). Core serializes cycles, so a trigger arriving mid-cycle would
+   * otherwise wait out a run the user has already superseded.
    */
-  let interruptInFlightRun: (() => Promise<void>) | undefined;
-  let abortSession: (() => Promise<void>) | undefined;
+  const interruptHandlers: Array<() => Promise<void> | void> = [];
+  const abortHandlers: Array<() => Promise<void> | void> = [];
 
   /**
    * The cycle core is running for the scope last signalled. Only an explicit
@@ -80,17 +81,17 @@ export const createWatchSignals = (
     ): Promise<void> {
       await dispatchRerun?.(updateSnapshot, requestedTestPaths);
     },
-    setInterrupt(fn: () => Promise<void>): void {
-      interruptInFlightRun = fn;
+    addInterrupt(fn: () => Promise<void> | void): void {
+      interruptHandlers.push(fn);
     },
     async interrupt(): Promise<void> {
-      await interruptInFlightRun?.();
+      await Promise.all(interruptHandlers.map((fn) => fn()));
     },
-    setAbort(fn: () => Promise<void>): void {
-      abortSession = fn;
+    addAbort(fn: () => Promise<void> | void): void {
+      abortHandlers.push(fn);
     },
     async abort(): Promise<void> {
-      await abortSession?.();
+      await Promise.all(abortHandlers.map((fn) => fn()));
     },
     /**
      * Hand the scope this trigger resolved to core, which resets the cycle state,
@@ -128,7 +129,7 @@ export const createWatchSignals = (
       claimScope?: () => void,
       updateSnapshot?: SnapshotUpdateState,
     ): Promise<{ cycle: Promise<void> }> {
-      await interruptInFlightRun?.();
+      await Promise.all(interruptHandlers.map((fn) => fn()));
       claimScope?.();
       const cycle = runInvalidation(fileFilters, updateSnapshot);
       signalledCycle = cycle;
