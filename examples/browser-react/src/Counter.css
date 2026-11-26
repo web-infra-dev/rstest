@@ -6,6 +6,8 @@
   padding: 1rem;
   border: 1px solid #d8dee8;
   border-radius: 0.75rem;
+  color: #202938;
+  font-family: system-ui, sans-serif;
   background: linear-gradient(180deg, #fff 0%, #f7fafc 100%);
 }
 
@@ -21,18 +23,73 @@
   font-size: 1.25rem;
 }
 
+.control-select,
+.count-btn,
+.primary-btn {
+  box-sizing: border-box;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid #b8c4d2;
+  border-radius: 0.5rem;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-size: 0.9375rem;
+  cursor: pointer;
+}
+
+.size-picker {
+  position: relative;
+  width: 5rem;
+  max-width: 100%;
+}
+
 .control-select {
-  width: 6rem;
-  padding: 0.35rem 0.5rem;
+  width: 100%;
+  appearance: none;
+  padding-inline: 0.75rem 2rem;
+}
+
+.size-picker::after {
+  position: absolute;
+  top: 50%;
+  right: 0.8125rem;
+  width: 0.4375rem;
+  height: 0.4375rem;
+  box-sizing: border-box;
+  border: solid #526174;
+  border-width: 0 1.5px 1.5px 0;
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+  content: '';
+}
+
+@media (forced-colors: active) {
+  .control-select {
+    appearance: auto;
+    padding-inline-end: 0.75rem;
+  }
+
+  .size-picker::after {
+    display: none;
+  }
 }
 
 .control-row {
   display: flex;
   gap: 0.5rem;
   align-items: center;
+  min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+.control-row output {
+  min-width: 2ch;
+  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .control-row > legend {
@@ -47,24 +104,40 @@
   border: 0;
 }
 
-.count-btn,
-.primary-btn {
-  padding: 0.45rem 0.8rem;
-  font-size: 0.95rem;
-  border-radius: 0.5rem;
-  border: 1px solid #c8d2df;
-  background: #fff;
-  cursor: pointer;
+.count-btn {
+  flex: 1;
+  font-weight: 500;
 }
 
 .primary-btn {
+  min-height: 2.75rem;
   border-color: #0053d6;
   color: #fff;
+  font-weight: 600;
   background: #0053d6;
+}
+
+@media (hover: hover) {
+  .count-btn:enabled:hover,
+  .control-select:hover {
+    border-color: #8094aa;
+    background-color: #f2f6fa;
+  }
+
+  .primary-btn:enabled:hover {
+    background: #0046b7;
+  }
+}
+
+.product-card :is(button, select):focus-visible {
+  outline: 2px solid #0053d6;
+  outline-offset: 2px;
 }
 
 .count-btn:disabled,
 .primary-btn:disabled {
-  opacity: 0.45;
+  border-color: #d6dee7;
+  background: #edf1f5;
+  color: #657181;
   cursor: not-allowed;
 }
