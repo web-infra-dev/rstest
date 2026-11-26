@@ -23,7 +23,7 @@ import { pluginExternal } from '../plugins/external';
 import { pluginIgnoreResolveError } from '../plugins/ignoreResolveError';
 import { pluginInspect } from '../plugins/inspect';
 import { isNodeProject } from '../environment/isBrowserProject';
-import { pluginMockRuntime } from '../plugins/mockRuntime';
+import { createMockRuntimePlugin } from '../plugins/mockRuntime';
 import {
   pluginCacheControl,
   type TestEntryPathState,
@@ -214,7 +214,7 @@ export const prepareRsbuild = async ({
       plugins: [
         pluginBasic(context),
         pluginIgnoreResolveError,
-        pluginMockRuntime,
+        createMockRuntimePlugin(projects),
         pluginEntryWatch({
           globTestSourceEntries,
           setupFiles,

@@ -16,7 +16,7 @@ import { pluginBasic } from '../plugins/basic';
 import { pluginEntryWatch } from '../plugins/entry';
 import { pluginExternal } from '../plugins/external';
 import { pluginIgnoreResolveError } from '../plugins/ignoreResolveError';
-import { pluginMockRuntime } from '../plugins/mockRuntime';
+import { createMockRuntimePlugin } from '../plugins/mockRuntime';
 import { createRsbuildServer, hostServerConfig } from '../build/rsbuild';
 import { createSetupFileState } from '../config/setupFileState';
 
@@ -170,7 +170,7 @@ async function compileAndRunGlobalSetup(
       plugins: [
         pluginBasic(context),
         pluginIgnoreResolveError,
-        pluginMockRuntime,
+        createMockRuntimePlugin(candidateProjects),
         pluginEntryWatch({
           globTestSourceEntries: emptyEntries,
           setupFiles: setupFileState.setupFiles,

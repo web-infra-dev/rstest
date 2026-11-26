@@ -24,7 +24,7 @@ import { loadVmExternalModules } from '../../src/runtime/worker/vm/externalModul
 
 const getFederationFallbackCode = () => {
   const source = readFileSync(
-    join(__dirname, '../../src/core/plugins/mockRuntimeCode.js'),
+    join(__dirname, '../../src/core/plugins/federationRuntimeCode.js'),
     'utf-8',
   );
   const start = source.indexOf('//#region federation dynamic import fallback');

@@ -211,6 +211,10 @@ define.lib({
                   to: 'mockRuntimeCode.js',
                 },
                 {
+                  from: 'src/core/plugins/federationRuntimeCode.js',
+                  to: 'federationRuntimeCode.js',
+                },
+                {
                   from: 'src/core/plugins/importActualLoader.mjs',
                   to: 'importActualLoader.mjs',
                 },
