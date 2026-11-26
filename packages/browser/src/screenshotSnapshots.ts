@@ -297,8 +297,11 @@ export const resolveScreenshotComparisonOptions = (
 > => {
   const result = {
     threshold: options?.threshold ?? 0.1,
-    maxDiffPixels: options?.maxDiffPixels ?? 0,
-    maxDiffPixelRatio: options?.maxDiffPixelRatio ?? 0,
+    // A ratio alone sets the limit. With neither option, allow no differing pixels.
+    maxDiffPixels:
+      options?.maxDiffPixels ??
+      (options?.maxDiffPixelRatio === undefined ? 0 : Number.POSITIVE_INFINITY),
+    maxDiffPixelRatio: options?.maxDiffPixelRatio ?? 1,
   };
   if (
     !Number.isFinite(result.threshold) ||
@@ -308,9 +311,8 @@ export const resolveScreenshotComparisonOptions = (
     throw new Error('toMatchScreenshot threshold must be between 0 and 1.');
   }
   if (
-    !Number.isFinite(result.maxDiffPixels) ||
-    result.maxDiffPixels < 0 ||
-    !Number.isInteger(result.maxDiffPixels)
+    options?.maxDiffPixels !== undefined &&
+    (!Number.isInteger(options.maxDiffPixels) || options.maxDiffPixels < 0)
   ) {
     throw new Error(
       'toMatchScreenshot maxDiffPixels must be a non-negative integer.',
@@ -323,14 +325,6 @@ export const resolveScreenshotComparisonOptions = (
   ) {
     throw new Error(
       'toMatchScreenshot maxDiffPixelRatio must be between 0 and 1.',
-    );
-  }
-  if (
-    options?.maxDiffPixels !== undefined &&
-    options.maxDiffPixelRatio !== undefined
-  ) {
-    throw new Error(
-      'toMatchScreenshot accepts either maxDiffPixels or maxDiffPixelRatio, not both.',
     );
   }
   return result;
@@ -350,7 +344,7 @@ export const compareScreenshotPixels = (
     expected.height,
     { threshold: options.threshold },
   );
-  const maxDiffPixels = Math.max(
+  const maxDiffPixels = Math.min(
     options.maxDiffPixels,
     Math.floor(expected.width * expected.height * options.maxDiffPixelRatio),
   );

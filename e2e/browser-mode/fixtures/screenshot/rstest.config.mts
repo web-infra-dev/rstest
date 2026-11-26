@@ -32,7 +32,7 @@ export default defineConfig({
         expect: {
           toMatchScreenshot: {
             stabilityTimeout: 10_000,
-            comparatorOptions: { maxDiffPixels: 1 },
+            comparatorOptions: { maxDiffPixels: 1, maxDiffPixelRatio: 0.5 },
             screenshotDirectory: 'custom-baselines',
           },
         },

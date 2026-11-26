@@ -91,6 +91,36 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it.each([
+    { width: 150, allowed: 1 },
+    { width: 400, allowed: 2 },
+  ])(
+    'allows up to $allowed differing pixels in a $width-pixel screenshot',
+    async ({ width, allowed }) => {
+      await withRoot(async (root) => {
+        const png = new PNG({ width, height: 1 });
+        png.data.fill(255);
+        const captureScreenshot = async () =>
+          PNG.sync.write(png).toString('base64');
+        await match(root, { captureScreenshot });
+        const compare = () =>
+          match(root, {
+            captureScreenshot,
+            options: { maxDiffPixels: 2, maxDiffPixelRatio: 0.01 },
+            updateSnapshot: 'none',
+          });
+        for (let i = 0; i < allowed; i++) {
+          png.data.fill(0, i * 4, i * 4 + 3);
+        }
+        expect(await compare()).toBe('matched');
+        png.data.fill(0, allowed * 4, allowed * 4 + 3);
+        await expect(compare()).rejects.toThrow(
+          `${allowed + 1} pixels differ (allowed: ${allowed})`,
+        );
+      });
+    },
+  );
+
   it('does not persist a baseline after the screenshot deadline', async () => {
     await withRoot(async (root) => {
       let saved = false;
