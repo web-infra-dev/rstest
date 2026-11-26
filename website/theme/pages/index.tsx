@@ -569,23 +569,53 @@ export function HomeLayout() {
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <section className="border-x border-[var(--home-border)]">
           <div className="relative overflow-hidden bg-[var(--home-bg)]">
-            {/* True 1px CSS grid overlays share the exact same tracks as InstallCommand. */}
+            {/* True 1px CSS grid overlays: the prompt row merges its spanned cells horizontally so no vertical lines cut through InstallCommand. */}
             <div
               aria-hidden
-              className="pointer-events-none absolute inset-0 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:grid-cols-12 lg:grid-cols-16"
+              className="pointer-events-none absolute inset-0 grid grid-rows-[repeat(8,66px)] sm:grid-rows-[repeat(8,74px)]"
             >
-              {HERO_GRID_COLS.map((i) => (
-                <div
-                  key={i}
-                  className={
-                    i >= 12
-                      ? 'hidden lg:block'
-                      : i >= 8
-                        ? 'hidden sm:block'
-                        : ''
-                  }
-                />
-              ))}
+              <div className="row-start-1 row-span-5 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:row-span-6 sm:grid-cols-12 lg:grid-cols-16">
+                {HERO_GRID_COLS.map((i) => (
+                  <div
+                    key={i}
+                    className={
+                      i >= 12
+                        ? 'hidden lg:block'
+                        : i >= 8
+                          ? 'hidden sm:block'
+                          : ''
+                    }
+                  />
+                ))}
+              </div>
+              <div className="row-start-6 row-span-2 hidden divide-x divide-[var(--home-grid-line)] sm:row-start-7 sm:row-span-1 sm:grid sm:grid-cols-12 lg:hidden">
+                <div />
+                <div className="col-span-10" />
+                <div />
+              </div>
+              <div className="row-start-7 row-span-1 hidden grid-cols-16 divide-x divide-[var(--home-grid-line)] lg:grid">
+                <div />
+                <div />
+                <div />
+                <div className="col-span-10" />
+                <div />
+                <div />
+                <div />
+              </div>
+              <div className="row-start-8 row-span-1 grid grid-cols-8 divide-x divide-[var(--home-grid-line)] sm:grid-cols-12 lg:grid-cols-16">
+                {HERO_GRID_COLS.map((i) => (
+                  <div
+                    key={i}
+                    className={
+                      i >= 12
+                        ? 'hidden lg:block'
+                        : i >= 8
+                          ? 'hidden sm:block'
+                          : ''
+                    }
+                  />
+                ))}
+              </div>
             </div>
             <div
               aria-hidden
