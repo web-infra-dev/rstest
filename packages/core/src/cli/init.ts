@@ -7,10 +7,16 @@ import {
   loadConfig,
   mergeForceRerunTriggers,
   plainDeepMerge,
+  readConfigFile,
   resolveExtends,
 } from '../config';
 import type { LoadProjectConfig } from '../projectLoader';
-import type { Project, ResolvedRstestConfig, RstestConfig } from '../types';
+import type {
+  GlobProject,
+  Project,
+  ResolvedRstestConfig,
+  RstestConfig,
+} from '../types';
 import {
   castArray,
   color,
@@ -410,6 +416,7 @@ export function mergeWithCLIOptions(
 async function resolveConfig(
   options: CommonOptions & { cwd: string },
   projectLoader: LoadProjectConfig | undefined,
+  defaults?: NonNullable<RstestConfig['extends']>,
 ): Promise<LoadConfigResult<RstestConfig>> {
   let result: LoadConfigResult<RstestConfig>;
   if (projectLoader) {
@@ -422,21 +429,23 @@ async function resolveConfig(
     )) ?? { content: {}, filePath: null, dependencies: [] };
     const dependencies = [...(loaded.dependencies ?? [])];
     result = {
-      content: await resolveExtends(
-        { ...loaded.content },
-        { filePath: loaded.filePath, dependencies },
-      ),
+      content: { ...loaded.content },
       filePath: loaded.filePath,
       dependencies,
     };
   } else {
-    result = await loadConfig({
+    result = await readConfigFile({
       cwd: options.cwd,
       path: options.config,
       configLoader: options.configLoader,
     });
   }
 
+  result.content = await resolveExtends(
+    result.content,
+    result,
+    defaults && { root: options.cwd, extends: defaults },
+  );
   mergeWithCLIOptions(result.content, options);
   result.content.root ||= options.cwd;
   return result;
@@ -483,11 +492,16 @@ export async function resolveProjects({
     return name;
   };
 
-  const globProjects = async (patterns: string[], root: string) => {
+  const globProjects = async (
+    patterns: string[],
+    root: string,
+    onlyDirectories = false,
+  ) => {
     const globOptions: GlobOptions = {
       absolute: true,
       dot: true,
       onlyFiles: false,
+      onlyDirectories,
       cwd: root,
       expandDirectories: false,
       ignore: ['**/node_modules/**', '**/.DS_Store'],
@@ -501,6 +515,7 @@ export async function resolveProjects({
   const getProjects = async (rstestConfig: RstestConfig, root: string) => {
     const projectPaths: string[] = [];
     const projectPatterns: string[] = [];
+    const globEntries: GlobProject[] = [];
     const inlineProjectConfigPromises: Promise<
       | LoadConfigResult<RstestConfig>
       | {
@@ -510,6 +525,10 @@ export async function resolveProjects({
 
     for (const p of rstestConfig.projects || []) {
       if (typeof p === 'object') {
+        if ('glob' in p) {
+          globEntries.push(p);
+          continue;
+        }
         const projectRoot = p.root ? formatRootStr(p.root, root) : root;
 
         inlineProjectConfigPromises.push(
@@ -546,12 +565,21 @@ export async function resolveProjects({
       }
     }
 
-    const [inlineProjectConfigResults, globbedProjectPaths] = await Promise.all(
-      [
+    const [inlineProjectConfigResults, globbedProjectPaths, globMatches] =
+      await Promise.all([
         Promise.all(inlineProjectConfigPromises),
         globProjects(projectPatterns, root),
-      ],
-    );
+        Promise.all(
+          globEntries.map(async ({ glob: pattern, extends: defaults }) => ({
+            paths: await globProjects(
+              [formatRootStr(pattern, root)],
+              root,
+              true,
+            ),
+            defaults,
+          })),
+        ),
+      ]);
 
     const projectConfigs = inlineProjectConfigResults.map((result) => {
       if ('error' in result) {
@@ -561,29 +589,47 @@ export async function resolveProjects({
       return result;
     });
 
-    projectPaths.push(...globbedProjectPaths);
+    const targets = new Map<
+      string,
+      { path: string; defaults?: GlobProject['extends'] }
+    >();
+    for (const { paths, defaults } of globMatches) {
+      for (const path of paths) {
+        const directory = resolve(path);
+        if (!targets.has(directory))
+          targets.set(directory, { path: directory, defaults });
+      }
+    }
+    for (const path of [...projectPaths, ...globbedProjectPaths]) {
+      const key = resolve(path);
+      if (!targets.has(key)) targets.set(key, { path });
+    }
 
-    const projects: LoadConfigResult<RstestConfig>[] = [];
-
-    await Promise.all(
-      projectPaths.map(async (project) => {
-        const isDirectory = statSync(project).isDirectory();
-        const projectRoot = isDirectory ? project : dirname(project);
+    const loadedProjects = await Promise.all(
+      Array.from(targets.values(), async ({ path, defaults }) => {
+        const isDirectory = statSync(path).isDirectory();
+        const projectRoot = isDirectory ? path : dirname(path);
         const result = await resolveConfig(
           {
             ...options,
-            config: isDirectory ? undefined : project,
+            config: isDirectory ? undefined : path,
             cwd: projectRoot,
           },
           projectLoader,
+          defaults,
         );
-
-        if (result.filePath) {
-          if (resolvedProjectPaths.has(result.filePath)) {
-            return;
-          }
-          resolvedProjectPaths.add(result.filePath);
-        }
+        return {
+          projectRoot,
+          result,
+          projectPath: resolve(result.filePath ?? path),
+        };
+      }),
+    );
+    const projects: LoadConfigResult<RstestConfig>[] = [];
+    await Promise.all(
+      loadedProjects.map(async ({ projectRoot, result, projectPath }) => {
+        if (resolvedProjectPaths.has(projectPath)) return;
+        resolvedProjectPaths.add(projectPath);
 
         const config = result.content;
         config.name ??= getDefaultProjectName(projectRoot);

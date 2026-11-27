@@ -2,6 +2,8 @@
 description: Define multiple test projects in a single Rstest process using directories, config files, globs, or inline project configs.
 ---
 
+import { ApiMeta } from '@components/ApiMeta';
+
 # projects
 
 - **Type:**
@@ -11,7 +13,12 @@ import type { ProjectConfig } from '@rstest/core';
 
 type InlineProjectConfig = ProjectConfig & { name: string };
 
-type Projects = (string | InlineProjectConfig)[];
+type GlobProject = {
+  glob: string;
+  extends: NonNullable<ProjectConfig['extends']>;
+};
+
+type Projects = (string | InlineProjectConfig | GlobProject)[];
 ```
 
 - **Default:** `undefined` (runs the root directory as a single project)
@@ -36,6 +43,25 @@ export default defineConfig({
 });
 ```
 
-Use `defineInlineProject()` (requires [`name`](/config/test/name)) for object items in a `projects` array, and `defineProject()` (which can infer `name`) for top-level exports of project config files.
+<ApiMeta addedVersion="1.0.1" />
+
+To give discovered projects shared defaults, use a directory glob with `extends`:
+
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
+export default defineConfig({
+  projects: [
+    {
+      glob: 'packages/*',
+      extends: { globals: true, setupFiles: ['./setup.ts'] },
+    },
+  ],
+});
+```
+
+Each matched directory is a project, including directories without a config file. Relative setup paths resolve from that project. Its config and inherited settings override the glob defaults. Plain objects merge recursively and local arrays replace default arrays. When multiple glob entries match the same directory, the first provides its defaults.
+
+Use `defineInlineProject()` (requires [`name`](/config/test/name)) for named inline items in a `projects` array, and `defineProject()` (which can infer `name`) for top-level exports of project config files.
 
 To run only specific projects from the command line, pass `--project <name>` (supports wildcards). See [Test projects](/guide/basic/projects) for directory/glob entries, sharing configs, global options, and nested projects.
