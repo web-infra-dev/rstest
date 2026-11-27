@@ -178,7 +178,7 @@ await expect
 
 - **Type:** `(options?: { timeout?: number; visible?: boolean }) => Promise<void>`
 
-Asserts that the element is mounted and visible (non-empty bounding box and `visibility !== 'hidden'`). `display: none` and zero-size elements fail; `opacity: 0` still counts as visible. Pass `{ visible: false }` to assert that the element is hidden.
+Asserts that the element is mounted and visible (non-empty bounding box and `visibility !== 'hidden'`). `display: none` and zero-size elements fail; `opacity: 0` still counts as visible. Pass `{ visible: false }` <ApiMeta sup addedVersion="1.0.0" /> to assert that the element is hidden.
 
 ```ts
 await expect.element(page.getByRole('button', { name: 'Save' })).toBeVisible();
@@ -198,7 +198,7 @@ await expect.element(page.getByTestId('loading')).toBeHidden();
 
 - **Type:** `(options?: { timeout?: number; enabled?: boolean }) => Promise<void>`
 
-Asserts that the element is not disabled (neither `disabled`, inside a disabled `fieldset`, nor `aria-disabled="true"`). Pass `{ enabled: false }` to assert that the element is disabled.
+Asserts that the element is not disabled (neither `disabled`, inside a disabled `fieldset`, nor `aria-disabled="true"`). Pass `{ enabled: false }` <ApiMeta sup addedVersion="1.0.0" /> to assert that the element is disabled.
 
 ```ts
 await expect
@@ -222,7 +222,7 @@ await expect
 
 - **Type:** `(options?: { timeout?: number; checked?: boolean; indeterminate?: boolean }) => Promise<void>`
 
-Asserts that a checkbox or radio control has `checked === true`. Pass `{ checked: false }` to assert unchecked, or `{ indeterminate: true }` to assert an indeterminate checkbox state.
+Asserts that a checkbox or radio control has `checked === true`. Pass `{ checked: false }` or `{ indeterminate: true }` <ApiMeta sup addedVersion="1.0.0" /> to assert an unchecked or indeterminate checkbox state.
 
 ```ts
 await expect.element(page.getByLabel('Agree')).toBeChecked();
@@ -245,7 +245,7 @@ await expect.element(page.getByLabel('Agree')).toBeUnchecked();
 
 - **Type:** `(options?: { timeout?: number; attached?: boolean }) => Promise<void>`
 
-Asserts that the node is connected to a `Document` or `ShadowRoot` (`Node.isConnected === true`), regardless of visibility. Pass `{ attached: false }` to assert that the element is detached.
+Asserts that the node is connected to a `Document` or `ShadowRoot` (`Node.isConnected === true`), regardless of visibility. Pass `{ attached: false }` <ApiMeta sup addedVersion="1.0.0" /> to assert that the element is detached.
 
 ```ts
 await expect.element(page.locator('#toast')).toBeAttached();
@@ -265,7 +265,7 @@ await expect.element(page.locator('#toast')).toBeDetached();
 
 - **Type:** `(options?: { timeout?: number; editable?: boolean }) => Promise<void>`
 
-Asserts that the element is both enabled and not read-only (`readonly` or `aria-readonly="true"`). Pass `{ editable: false }` to assert that the element is read-only.
+Asserts that the element is both enabled and not read-only (`readonly` or `aria-readonly="true"`). Pass `{ editable: false }` <ApiMeta sup addedVersion="1.0.0" /> to assert that the element is read-only.
 
 ```ts
 await expect.element(page.getByLabel('Bio')).toBeEditable();
@@ -319,7 +319,7 @@ await expect.element(page.getByTestId('save')).toHaveRole('button');
 
 - **Type:** `(name: string | RegExp, options?: { timeout?: number; ignoreCase?: boolean }) => Promise<void>`
 
-Asserts the element's accessible name. Strings match the full normalized name. Set `ignoreCase: true` for case-insensitive matching.
+Asserts the element's accessible name. Strings match the full normalized name. Set `ignoreCase: true` <ApiMeta sup addedVersion="1.0.0" /> for case-insensitive matching.
 
 ```ts
 await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
@@ -331,7 +331,7 @@ await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
 
 - **Type:** `(description: string | RegExp, options?: { timeout?: number; ignoreCase?: boolean }) => Promise<void>`
 
-Asserts the element's accessible description. Strings match the full normalized description. Set `ignoreCase: true` for case-insensitive matching.
+Asserts the element's accessible description. Strings match the full normalized description. Set `ignoreCase: true` <ApiMeta sup addedVersion="1.0.0" /> for case-insensitive matching.
 
 ```ts
 await expect
@@ -343,7 +343,7 @@ await expect
 
 - **Type:** `(text: string | RegExp | readonly (string | RegExp)[], options?: { timeout?: number; ignoreCase?: boolean; useInnerText?: boolean }) => Promise<void>`
 
-Asserts that the element's text content (including descendants, with whitespace normalized) matches `text`. Pass an array to assert the exact text list of all matched elements in order. Set `useInnerText: true` to compare `element.innerText` instead of `element.textContent`, and `ignoreCase: true` for case-insensitive matching.
+Asserts that the element's text content (including descendants, with whitespace normalized) matches `text`. Pass an array <ApiMeta sup addedVersion="1.0.0" /> to assert the exact text list of all matched elements in order. Set `useInnerText: true` <ApiMeta sup addedVersion="1.0.0" /> to compare `element.innerText` instead of `element.textContent`, and `ignoreCase: true` <ApiMeta sup addedVersion="1.0.0" /> for case-insensitive matching.
 
 ```ts
 await expect.element(page.getByRole('status')).toHaveText('Saved');
@@ -356,7 +356,7 @@ await expect
 
 - **Type:** `(text: string | RegExp | readonly (string | RegExp)[], options?: { timeout?: number; ignoreCase?: boolean; useInnerText?: boolean }) => Promise<void>`
 
-Asserts that the element's text content (with whitespace normalized) contains the `string` substring or matches the `RegExp`. Pass an array to assert that each matched element contains the corresponding entry. Supports `ignoreCase` and `useInnerText`.
+Asserts that the element's text content (with whitespace normalized) contains the `string` substring or matches the `RegExp`. Pass an array <ApiMeta sup addedVersion="1.0.0" /> to assert that each matched element contains the corresponding entry. Supports `ignoreCase` and `useInnerText` <ApiMeta sup addedVersion="1.0.0" />.
 
 ```ts
 await expect.element(page.getByRole('status')).toContainText('Save');
@@ -402,7 +402,7 @@ await expect
 
 - **Type:** `(value: string | RegExp | readonly (string | RegExp)[], options?: { timeout?: number }) => Promise<void>`
 
-Asserts that the element's `class` attribute matches `value`. Strings match the entire `class` string; pass an array to match multiple elements, or use [`toContainClass`](#tocontainclass) to match individual class names.
+Asserts that the element's `class` attribute matches `value`. Strings match the entire `class` string; pass an array <ApiMeta sup addedVersion="1.0.0" /> to match multiple elements, or use [`toContainClass`](#tocontainclass) to match individual class names.
 
 ```ts
 await expect.element(page.getByRole('alert')).toHaveClass(/error/);
@@ -439,7 +439,7 @@ function toHaveAttribute(
 ): Promise<void>;
 ```
 
-Asserts that attribute `name` exists when `value` is omitted (or `undefined`), or that its value matches when `value` is provided. Set `ignoreCase: true` for case-insensitive value matching.
+Asserts that attribute `name` exists when `value` is omitted (or `undefined`)—including the two-argument `toHaveAttribute(name, options)` overload <ApiMeta sup addedVersion="1.0.0" />—or that its value matches when `value` is provided. Set `ignoreCase: true` <ApiMeta sup addedVersion="1.0.0" /> for case-insensitive value matching.
 
 ```ts
 await expect

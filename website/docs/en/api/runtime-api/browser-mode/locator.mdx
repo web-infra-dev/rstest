@@ -98,7 +98,7 @@ All query methods return a `Locator` and support chaining.
 
 - **Type:** `(selector: string, options?: LocatorOptions) => Locator`
 
-Query elements by CSS selector, optionally filtered by descendant `Locator` or text conditions (`has`, `hasNot`, `hasText`, `hasNotText`).
+Query elements by CSS selector, optionally passing `options` <ApiMeta sup addedVersion="1.0.0" /> to filter by descendant `Locator` or text conditions (`has`, `hasNot`, `hasText`, `hasNotText`).
 
 ```ts
 const item = page.locator('.todo-item');
@@ -225,7 +225,7 @@ export default defineConfig({
 
 - **Type:** `(options: LocatorFilterOptions) => Locator`
 
-Narrow an existing `Locator` by text, descendant `Locator`, or visibility (`visible`) matches.
+Narrow an existing `Locator` by text, descendant `Locator`, or visibility (`visible` <ApiMeta sup addedVersion="1.0.0" />) matches.
 
 ```ts
 const profileSave = page
@@ -372,7 +372,7 @@ await page.getByPlaceholder('Email').fill('dev@rstest.rs');
 
 - **Type:** `(options?: LocatorClearOptions) => Promise<void>`
 
-Clear the value of an input element.
+Clear the value of an input element. Accepts optional `options` <ApiMeta sup addedVersion="1.0.0" /> (`force`, `timeout`).
 
 ```ts
 await page.getByPlaceholder('Email').clear();
@@ -442,7 +442,7 @@ await page.getByText('Ready').waitFor();
 
 - **Type:** `(type: string, eventInit?: LocatorDispatchEventInit, options?: LocatorDispatchEventOptions) => Promise<void>`
 
-Dispatch a DOM event on the matched element. `type` must be a non-empty string, and `eventInit` must be JSON-serializable (`BrowserSerializable`).
+Dispatch a DOM event on the matched element. `type` must be a non-empty string, `eventInit` must be JSON-serializable (`BrowserSerializable`), and `options` <ApiMeta sup addedVersion="1.0.0" /> accepts `{ timeout? }`.
 
 ```ts
 await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
@@ -452,7 +452,7 @@ await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
 
 - **Type:** `(values: LocatorSelectOptionValue, options?: LocatorSelectOptionOptions) => Promise<string[]>`
 
-Select option(s) on a `<select>` element by value string, `{ value?, label?, index? }`, an array of those values, or `null` to clear selections. Resolves with the array of selected option values.
+Select option(s) on a `<select>` element by value string, or <ApiMeta sup addedVersion="1.0.0" /> `{ value?, label?, index? }`, an array of those values, or `null` to clear selections. Resolves with the array of selected option values <ApiMeta sup addedVersion="1.0.0" />.
 
 ```ts
 await page.getByLabel('Choice').selectOption('b');
