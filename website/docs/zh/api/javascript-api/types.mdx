@@ -199,9 +199,11 @@ import type {
 import type {
   Assertion,
   AsymmetricMatchersContaining,
+  ExpectPollAssertion,
   ExpectStatic,
   Matchers,
   MatcherState,
+  PromisifyAssertion,
 } from '@rstest/core';
 
 function expectVisible(
@@ -213,6 +215,8 @@ function expectVisible(
 ```
 
 - `Assertion<T>`：`expect(value)` 返回的链式断言对象。
+- `PromisifyAssertion<T>`：`expect(promise).resolves` 与 `expect(promise).rejects` 返回的异步断言对象。
+- `ExpectPollAssertion<T>`：`expect.poll(...)` 返回的异步轮询断言对象。
 - `ExpectStatic`：可调用的 `expect` 函数类型，包含 `poll`、`soft`、`extend` 等静态方法。
 - `Matchers<T>` / `AsymmetricMatchersContaining`：来自 `@vitest/expect` 的匹配器接口，用于模块扩展或自定义匹配器类型标注。
 - `MatcherState`：`expect.getState()` 返回与 `expect.setState()` 接受的匹配器状态类型。

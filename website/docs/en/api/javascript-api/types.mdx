@@ -199,9 +199,11 @@ Use these types when typing custom assertion helpers or augmenting matchers.
 import type {
   Assertion,
   AsymmetricMatchersContaining,
+  ExpectPollAssertion,
   ExpectStatic,
   Matchers,
   MatcherState,
+  PromisifyAssertion,
 } from '@rstest/core';
 
 function expectVisible(
@@ -213,6 +215,8 @@ function expectVisible(
 ```
 
 - `Assertion<T>`: Chainable assertion object returned by `expect(value)`.
+- `PromisifyAssertion<T>`: Async assertion object returned by `expect(promise).resolves` and `expect(promise).rejects`.
+- `ExpectPollAssertion<T>`: Async polling assertion object returned by `expect.poll(...)`.
 - `ExpectStatic`: Callable `expect` function type with static helpers (`poll`, `soft`, `extend`, etc.).
 - `Matchers<T>` / `AsymmetricMatchersContaining`: Matcher interfaces from `@vitest/expect` for module augmentation or custom matcher typing.
 - `MatcherState`: Matcher state type returned by `expect.getState()` and accepted by `expect.setState()`.

@@ -72,6 +72,16 @@ describe('@rstest/browser public types', () => {
             threshold: 0.1,
             maxDiffPixels: 10,
           };
+
+          export const poll = () => expect.poll(() => 1);
+          export const resolves = () => expect(Promise.resolve(1)).resolves;
+
+          export async function verifyAsyncAssertionHelpers() {
+            await poll().toBe(1);
+            await poll().not.toBe(2);
+            await resolves().toBe(1);
+            await resolves().not.toBe(2);
+          }
         `,
       );
       writeFileSync(

@@ -53,7 +53,26 @@ type Promisify<O> = {
     : O[K];
 };
 
-type PromisifyAssertion<T> = Promisify<Assertion<T>>;
+// `Omit<..., never>` keeps the alias opaque during declaration emit so
+// `expect(p).resolves` and `expect.poll(...)` don't eagerly expand `Assertion`
+// past TypeScript's serialization limit (TS7056) or leak internal `@vitest/expect`
+// symbols (TS4023).
+export type PromisifyAssertion<T> = Omit<Promisify<Assertion<T>>, never>;
+
+export type ExpectPollAssertion<T> = Omit<
+  PromisifyAssertion<Awaited<T>>,
+  | 'rejects'
+  | 'resolves'
+  | 'toThrow'
+  | 'toThrowError'
+  | 'throw'
+  | 'throws'
+  | 'matchSnapshot'
+  | 'toMatchSnapshot'
+  | 'toMatchInlineSnapshot'
+  | 'toThrowErrorMatchingSnapshot'
+  | 'toThrowErrorMatchingInlineSnapshot'
+>;
 
 type CallOrderMock =
   MockInstance | Parameters<VitestAssertion['toHaveBeenCalledBefore']>[0];
@@ -144,20 +163,7 @@ export interface ExpectStatic extends VitestExpectProperties {
   poll: <T>(
     actual: () => T,
     options?: ExpectPollOptions,
-  ) => Omit<
-    PromisifyAssertion<Awaited<T>>,
-    | 'rejects'
-    | 'resolves'
-    | 'toThrow'
-    | 'toThrowError'
-    | 'throw'
-    | 'throws'
-    | 'matchSnapshot'
-    | 'toMatchSnapshot'
-    | 'toMatchInlineSnapshot'
-    | 'toThrowErrorMatchingSnapshot'
-    | 'toThrowErrorMatchingInlineSnapshot'
-  >;
+  ) => ExpectPollAssertion<T>;
   addEqualityTesters: (testers: Tester[]) => void;
   assertions: (expected: number) => void;
   hasAssertions: () => void;

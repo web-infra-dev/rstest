@@ -103,12 +103,34 @@ describe('public types and built-in reporter options', () => {
         type MockInstance,
         type MockResult,
         type MockSettledResult,
+        type RstestConfig,
         type SuiteContext,
       } from '@rstest/core';
 
+      type JUnitReporterTuple = Extract<
+        Extract<RstestConfig['reporters'], unknown[]>[number],
+        ['junit', unknown]
+      >;
+      export const validJUnitTuple: JUnitReporterTuple = [
+        'junit',
+        { outputPath: './junit.xml' },
+      ];
+      export const invalidJUnitTuple: JUnitReporterTuple = [
+        'junit',
+        {
+          // @ts-expect-error built-in junit tuple only accepts outputPath
+          outputFile: './junit.xml',
+        },
+      ];
       export const config = defineConfig({
-        reporters: [['junit', { outputPath: './junit.xml' }]],
+        reporters: [
+          ['junit', { outputPath: './junit.xml' }],
+          ['./custom-reporter.js', { customOption: 42 }],
+        ],
       });
+      export const poll = () => expect.poll(() => 1);
+      export const resolves = () => expect(Promise.resolve(1)).resolves;
+      export const rejects = () => expect(Promise.reject(new Error())).rejects;
       export const project: InlineProjectConfig = defineInlineProject({
         name: 'unit',
       });
