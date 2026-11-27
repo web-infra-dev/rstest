@@ -21,9 +21,10 @@ export const applyRstestWatchIgnored = (
   config: NormalizedConfig,
   extraIgnored: string[] = [],
 ): void => {
-  // TODO: rspack should support `(string | RegExp)[]` type
-  // https://github.com/web-infra-dev/rspack/issues/10596
-  const existing = castArray(rspackConfig.watchOptions?.ignored) as string[];
+  const ignored = rspackConfig.watchOptions?.ignored;
+  if (typeof ignored === 'function') return;
+
+  const existing = castArray(ignored);
   rspackConfig.watchOptions = {
     ...rspackConfig.watchOptions,
     ignored: [
