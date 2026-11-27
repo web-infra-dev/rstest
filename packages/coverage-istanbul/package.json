@@ -1,6 +1,6 @@
 {
   "name": "@rstest/coverage-istanbul",
-  "version": "1.0.0-beta.0",
+  "version": "1.0.0-beta.1",
   "description": "Istanbul coverage provider for Rstest",
   "keywords": [
     "rstest",
