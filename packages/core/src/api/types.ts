@@ -14,6 +14,8 @@ import type { LoadProjectConfig } from '../projectLoader';
 
 export type {
   CoverageMapData,
+  Reporter,
+  SerializedError,
   SnapshotSummary,
   TaskMeta,
   TestResultStatus,

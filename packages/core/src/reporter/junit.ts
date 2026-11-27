@@ -3,6 +3,7 @@ import path from 'node:path';
 import stripAnsi from 'strip-ansi';
 import type {
   GetSourcemap,
+  JUnitReporterOptions,
   Reporter,
   SerializedError,
   TestFileResult,
@@ -58,7 +59,7 @@ export class JUnitReporter implements Reporter {
     options: { outputPath } = {},
   }: {
     rootPath: string;
-    options?: { outputPath?: string };
+    options?: JUnitReporterOptions;
   }) {
     this.rootPath = rootPath;
     this.outputPath = outputPath;

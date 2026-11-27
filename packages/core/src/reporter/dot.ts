@@ -1,5 +1,5 @@
 import type {
-  DefaultReporterOptions,
+  DotReporterOptions,
   NormalizedProjectConfig,
   Reporter,
   RstestTestState,
@@ -32,12 +32,12 @@ export class DotReporter implements Reporter {
   readonly flushOutputStreams: boolean;
 
   private readonly rootPath: string;
-  private readonly options: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
+  private readonly options: DotReporterOptions;
   private readonly outputStream: NonNullable<
-    DefaultReporterOptions['logger']
+    DotReporterOptions['logger']
   >['outputStream'];
   private readonly getColumns: NonNullable<
-    DefaultReporterOptions['logger']
+    DotReporterOptions['logger']
   >['getColumns'];
   private currentColumn = 0;
 
@@ -46,7 +46,7 @@ export class DotReporter implements Reporter {
     options = {},
   }: {
     rootPath: string;
-    options: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
+    options: DotReporterOptions;
     testState: RstestTestState;
     projectConfigs?: Map<string, NormalizedProjectConfig>;
   }) {

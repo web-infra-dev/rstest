@@ -43,9 +43,9 @@ interface InlineSnapshotMatcher<T> {
   (message?: string): void;
 }
 
-interface ExpectPollOptions extends ExpectPollConfig {
+type ExpectPollOptions = ExpectPollConfig & {
   message?: string;
-}
+};
 
 type Promisify<O> = {
   [K in keyof O]: O[K] extends (...args: infer A) => infer R

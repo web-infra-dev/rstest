@@ -67,15 +67,7 @@ export type GetSourcemap = (
   sourcePath: string,
 ) => Promise<SourceMapInput | null>;
 
-export type BuiltInReporterNames =
-  | 'default'
-  | 'dot'
-  | 'verbose'
-  | 'md'
-  | 'github-actions'
-  | 'junit'
-  | 'json'
-  | 'blob';
+export type BuiltInReporterNames = keyof BuiltinReporterOptions;
 
 export interface ReporterContext {
   rootPath: string;
@@ -100,6 +92,11 @@ export type DefaultReporterOptions = {
    */
   showProjectName?: boolean;
 };
+
+export type DotReporterOptions = Pick<
+  DefaultReporterOptions,
+  'logger' | 'summary'
+>;
 
 export type VerboseReporterOptions = Omit<DefaultReporterOptions, 'summary'>;
 
@@ -191,7 +188,7 @@ export type MdReporterOptions = {
   errors?: boolean | { unhandled?: boolean };
 };
 
-type GithubActionsReporterOptions = {
+export type GithubActionsReporterOptions = {
   /**
    * Whether to output `::error` annotations for failed tests.
    * @default true
@@ -224,6 +221,13 @@ export type BlobReporterOptions = {
   outputDir?: string;
 };
 
+export type JUnitReporterOptions = {
+  /**
+   * Write JUnit XML report to a file instead of stdout.
+   */
+  outputPath?: string;
+};
+
 export type JsonReporterOptions = {
   /**
    * Write report JSON to a file instead of stdout.
@@ -231,13 +235,13 @@ export type JsonReporterOptions = {
   outputPath?: string;
 };
 
-type BuiltinReporterOptions = {
+export type BuiltinReporterOptions = {
   default: DefaultReporterOptions;
-  dot: Pick<DefaultReporterOptions, 'logger' | 'summary'>;
+  dot: DotReporterOptions;
   verbose: VerboseReporterOptions;
   md: MdReporterOptions;
   'github-actions': GithubActionsReporterOptions;
-  junit: Record<string, unknown>;
+  junit: JUnitReporterOptions;
   json: JsonReporterOptions;
   blob: BlobReporterOptions;
 };

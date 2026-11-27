@@ -97,7 +97,7 @@ type TestCall<Fn> = {
 
 type TestFn<ExtraContext = object> = TestCall<TestCallbackFn<ExtraContext>>;
 
-export interface TestEachFn {
+export type TestEachFn = {
   <T extends Record<string, unknown>>(
     cases: readonly T[],
   ): TestCall<(param: T) => MaybePromise<void>>;
@@ -112,7 +112,7 @@ export interface TestEachFn {
     strings: TemplateStringsArray,
     ...expressions: unknown[]
   ): TestCall<(param: T) => MaybePromise<void>>;
-}
+};
 
 export interface TestForFn<ExtraContext = object> {
   <T>(
@@ -141,7 +141,7 @@ type DescribeCall<Fn> = {
   (description: string | RuntimeFunction, options: TestOptions, fn?: Fn): void;
 };
 
-export interface DescribeEachFn {
+export type DescribeEachFn = {
   <T extends Record<string, unknown>>(
     cases: readonly T[],
   ): DescribeCall<(param: T) => MaybePromise<void>>;
@@ -156,15 +156,15 @@ export interface DescribeEachFn {
     strings: TemplateStringsArray,
     ...expressions: unknown[]
   ): DescribeCall<(param: T) => MaybePromise<void>>;
-}
+};
 
-export interface DescribeForFn {
+export type DescribeForFn = {
   <T>(cases: readonly T[]): DescribeCall<(param: T) => MaybePromise<void>>;
   <T extends Record<string, unknown>>(
     strings: TemplateStringsArray,
     ...expressions: unknown[]
   ): DescribeCall<(param: T) => MaybePromise<void>>;
-}
+};
 
 export type TestAPI<ExtraContext = object> = TestFn<ExtraContext> & {
   each: TestEachFn;
@@ -193,12 +193,12 @@ export type DescribeAPI = DescribeFn & {
   sequential: DescribeAPI;
 };
 
-interface FixtureOptions {
+type FixtureOptions = {
   /**
    * Whether to automatically set up current fixture, even though it's not being used in tests.
    */
   auto?: boolean;
-}
+};
 
 export type FileFixtureOptions = {
   /**

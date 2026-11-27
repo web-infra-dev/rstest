@@ -5,7 +5,7 @@ import stripAnsi from 'strip-ansi';
 import type {
   Duration,
   GetSourcemap,
-  ReporterWithOptions,
+  GithubActionsReporterOptions,
   SerializedError,
   TestFileResult,
   TestResult,
@@ -51,7 +51,7 @@ export class GithubActionsReporter {
     config?: {
       name?: string;
     };
-    options: ReporterWithOptions<'github-actions'>[1] & {
+    options: GithubActionsReporterOptions & {
       // `createReporters` never supplies this; only tests do. Optional is the truth.
       onWritePath?: (path: string) => string;
     };
