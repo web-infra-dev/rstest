@@ -72,6 +72,9 @@ const coverageOptionDefinitions: OptionDefinition[] = [
   ],
 ];
 
+const screenshotFlag = '--browser.screenshotFailures';
+const screenshotCleanFlag = `${screenshotFlag}.clean`;
+
 const runtimeOptionDefinitions: OptionDefinition[] = [
   [
     '-c, --config <config>',
@@ -180,9 +183,10 @@ const runtimeOptionDefinitions: OptionDefinition[] = [
     'Single browser to use (deprecated: use --browser.instances)',
   ],
   ['--browser.headless', 'Run browser in headless mode (default: true in CI)'],
+  [screenshotFlag, 'Save a screenshot when a browser test fails'],
   [
-    '--browser.screenshotFailures',
-    'Save a screenshot when a browser test fails',
+    screenshotCleanFlag,
+    'Save failure screenshots and clean previous screenshots for the file before reruns (false keeps them)',
   ],
   ['--browser.port <port>', 'Port for the browser mode dev server'],
   ['--browser.strictPort', 'Exit if the specified port is already in use'],
@@ -475,27 +479,58 @@ const normalizePoolCliArgs = (argv: string[]): string[] => {
 };
 
 const normalizeBrowserCliArgs = (argv: string[]): string[] => {
-  const hasBrowserNestedOption = argv.some((arg) =>
-    arg.startsWith('--browser.'),
-  );
-
-  if (!hasBrowserNestedOption) {
+  const separator = argv.indexOf('--');
+  const args = separator === -1 ? argv : argv.slice(0, separator);
+  if (
+    !args.some(
+      (arg) => arg.startsWith('--browser.') || arg.startsWith('--no-browser.'),
+    )
+  ) {
     return argv;
   }
 
-  return argv.map((arg) => {
+  const hasScreenshotClean = args.some(
+    (arg) =>
+      arg.split('=', 1)[0] === screenshotCleanFlag ||
+      arg === '--no-browser.screenshotFailures.clean',
+  );
+  const normalized: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i]!;
+    const flag = arg.split('=', 1)[0]!.replace(/^--no-/, '--');
+    if (flag.startsWith(`${screenshotFlag}.`) && flag !== screenshotCleanFlag) {
+      throw new Error(`Unknown option \`${flag}\``);
+    }
+    // cac cannot assign .clean to a boolean parent. The cleanup option already enables capture.
+    if (hasScreenshotClean && flag === screenshotFlag) {
+      let value = arg.split('=')[1];
+      if (
+        arg === screenshotFlag &&
+        (args[i + 1] === 'true' || args[i + 1] === 'false')
+      ) {
+        value = args[++i]!;
+      }
+      if (value === 'false' || arg.startsWith('--no-')) {
+        throw new Error(
+          `Cannot use ${screenshotCleanFlag} when failure screenshots are disabled.`,
+        );
+      }
+      if (value && value !== 'true') normalized.push(value);
+      continue;
+    }
     if (arg === '--browser') {
-      return '--browser.enabled';
+      normalized.push('--browser.enabled');
+    } else if (arg.startsWith('--browser=')) {
+      normalized.push(`--browser.enabled=${arg.slice('--browser='.length)}`);
+    } else if (arg === '--no-browser') {
+      normalized.push('--browser.enabled=false');
+    } else {
+      normalized.push(arg);
     }
-    if (arg.startsWith('--browser=')) {
-      return `--browser.enabled=${arg.slice('--browser='.length)}`;
-    }
-    if (arg === '--no-browser') {
-      return '--browser.enabled=false';
-    }
-
-    return arg;
-  });
+  }
+  return separator === -1
+    ? normalized
+    : normalized.concat(argv.slice(separator));
 };
 
 const normalizeCliArgs = (argv: string[]): string[] =>
@@ -518,7 +553,7 @@ const allowedWildcardOptions = {
 };
 
 const allowedNestedWildcardOptions = {
-  browser: new Set(['providerOptions']),
+  browser: new Set(['providerOptions', 'screenshotFailures']),
 };
 
 const validateWildcardOptions = (options: Record<string, unknown>): void => {

@@ -319,7 +319,7 @@ Rstest CLI 参数按命令注册，并不是所有命令共享同一套参数。
 | `--browser.name <name>`             | （已废弃）指定单个浏览器，请改用 `--browser.instances`，详见 [browser（已废弃）](/config/test/browser#browser-deprecated)                                                      |
 | `--browser.port <port>`             | 浏览器模式开发服务器的端口，详见 [browser](/config/test/browser#port)                                                                                                          |
 | `--browser.providerOptions.*`       | 传给浏览器 provider 的额外选项，详见 [browser.providerOptions](/config/test/browser#provideroptions)                                                                           |
-| `--browser.screenshotFailures`      | 为每个失败的浏览器测试保存截图，详见 [browser](/config/test/browser#screenshotfailures)                                                                                        |
+| `--browser.screenshotFailures`      | 为每个失败的浏览器测试保存截图。使用 `--browser.screenshotFailures.clean=false` 可保留历次运行的截图。详见 [browser](/config/test/browser#screenshotfailures)。                |
 | `--browser.strictPort`              | 如果指定端口已被占用则退出，详见 [browser](/config/test/browser#strictport)                                                                                                    |
 | `--changed [commit]`                | 运行当前 Git 仓库中变更文件相关的测试，也可以指定从某个 commit 以来的变更                                                                                                      |
 | `--clearMocks`                      | 每个测试前自动清除 mock 调用、实例、上下文和结果，详见 [clearMocks](/config/test/clear-mocks)                                                                                  |

@@ -263,7 +263,7 @@ Set `headless: process.env.CI === 'true'` if you want headed mode locally and he
 
 - **Type:** `boolean | { clean?: boolean }`
 - **Default:** `browser.headless`
-- **CLI:** `--browser.screenshotFailures`
+- **CLI:** `--browser.screenshotFailures`, `--browser.screenshotFailures.clean=false`
 
 Rstest saves a PNG screenshot for each failed attempt under `.rstest/screenshots/` in the project root. Filenames include the test file and test name. If a retry passes or skips, you can still inspect the earlier screenshots. Set to `false` to disable capture.
 

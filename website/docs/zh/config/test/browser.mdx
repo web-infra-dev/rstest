@@ -263,7 +263,7 @@ export default defineConfig({
 
 - **类型：** `boolean | { clean?: boolean }`
 - **默认值：** `browser.headless`
-- **CLI：** `--browser.screenshotFailures`
+- **CLI：** `--browser.screenshotFailures`、`--browser.screenshotFailures.clean=false`
 
 浏览器测试每失败一次，Rstest 就会在项目根目录的 `.rstest/screenshots/` 下保存一张 PNG 截图，文件名包含测试文件名和用例名。即使重试通过或跳过，仍可查看之前失败时的截图。设为 `false` 可关闭截图。
 
