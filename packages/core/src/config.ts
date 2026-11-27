@@ -172,12 +172,10 @@ export const resolveExtends = async (
       (base, layer) => plainDeepMerge(base, omitUnsetOptions(layer)),
       {},
     );
-    if (
-      merged.forceRerunTriggers === undefined &&
-      defaults.forceRerunTriggers
-    ) {
-      extendedTriggers = defaults.forceRerunTriggers;
-    }
+    const sharedTriggers = layers.flatMap(
+      (layer) => layer.forceRerunTriggers || [],
+    );
+    extendedTriggers = [...sharedTriggers, ...extendedTriggers];
     merged = plainDeepMerge(defaults, omitUnsetOptions(merged));
   }
 

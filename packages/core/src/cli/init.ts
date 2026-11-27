@@ -621,7 +621,7 @@ export async function resolveProjects({
         return {
           projectRoot,
           result,
-          projectPath: result.filePath ?? resolve(path),
+          projectPath: resolve(result.filePath ?? path),
         };
       }),
     );

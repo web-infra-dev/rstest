@@ -190,14 +190,83 @@ describe('PROJECT_LOADER', () => {
       options: {},
     });
     expect(projects).toHaveLength(1);
+    expect(resolve(projects[0]!.configFilePath!)).toBe(
+      join(root, 'packages/a/rstest.config.mjs'),
+    );
     expect(projects[0]?.config).toMatchObject({
       name: 'from-rstest-config-a',
       globals: true,
       forceRerunTriggers: expect.arrayContaining([
         '<rootDir>/shared.ts',
-        join(root, 'packages/a/rstest.config.mjs'),
+        projects[0]!.configFilePath,
       ]),
     });
+  });
+
+  it('retains deduplicated adapter forceRerunTriggers from shared and local layers unless overridden', async () => {
+    const loader = rs.fn<LoadProjectConfig>(({ dirPath }) => {
+      if (dirPath === join(root, 'packages/a')) {
+        return {
+          content: {
+            name: 'pkg-a',
+            extends: [
+              { forceRerunTriggers: ['/repo/common.config.ts'] },
+              { forceRerunTriggers: ['/repo/packages/a/rsbuild.config.ts'] },
+            ],
+          },
+          filePath: hostFile('a'),
+          dependencies: [hostDep(dirPath)],
+        };
+      }
+      return {
+        content: {
+          name: 'pkg-b',
+          extends: {
+            forceRerunTriggers: ['/repo/packages/b/rsbuild.config.ts'],
+          },
+          forceRerunTriggers: ['<rootDir>/only-b.ts'],
+        },
+        filePath: hostFile('b'),
+        dependencies: [hostDep(dirPath)],
+      };
+    });
+
+    const projects = await resolveProjects({
+      config: {
+        projects: [
+          {
+            glob: 'packages/*',
+            extends: [
+              {
+                forceRerunTriggers: [
+                  '/repo/shared.config.ts',
+                  '/repo/common.config.ts',
+                ],
+              },
+              { forceRerunTriggers: ['/repo/shared-extra.config.ts'] },
+            ],
+          },
+        ],
+      },
+      root,
+      options: {},
+      projectLoader: loader,
+    });
+
+    const [a, b] = projects.sort((x, y) =>
+      x.config.name!.localeCompare(y.config.name!),
+    );
+    expect(a?.config.forceRerunTriggers).toEqual([
+      '**/package.json/**',
+      '**/rstest.config.*',
+      '/repo/shared.config.ts',
+      '/repo/common.config.ts',
+      '/repo/shared-extra.config.ts',
+      '/repo/packages/a/rsbuild.config.ts',
+      hostFile('a'),
+      hostDep(join(root, 'packages/a')),
+    ]);
+    expect(b?.config.forceRerunTriggers).toEqual(['<rootDir>/only-b.ts']);
   });
 
   it('deduplicates directories without a config across nested and glob projects', async () => {

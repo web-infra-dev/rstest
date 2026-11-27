@@ -163,6 +163,111 @@ describe('mergeRstestConfig', () => {
     });
   });
 
+  it('should collect and deduplicate forceRerunTriggers from shared and local extends layers', async () => {
+    await expect(
+      resolveExtends(
+        {
+          extends: [
+            () => ({
+              forceRerunTriggers: [
+                '/repo/common.config.ts',
+                '/repo/pkg/rsbuild.config.ts',
+              ],
+            }),
+            {
+              forceRerunTriggers: ['/repo/pkg/rspack.config.ts'],
+            },
+          ],
+        },
+        {
+          filePath: '/repo/pkg/rstest.config.ts',
+          dependencies: ['/repo/pkg/dep.ts', '/repo/common.config.ts'],
+        },
+        {
+          root: '/repo/pkg',
+          extends: [
+            () => ({
+              forceRerunTriggers: [
+                '/repo/shared-rsbuild.config.ts',
+                '/repo/common.config.ts',
+              ],
+            }),
+            {
+              forceRerunTriggers: [
+                '/repo/shared-rslib.config.ts',
+                '/repo/common.config.ts',
+              ],
+            },
+          ],
+        },
+      ),
+    ).resolves.toMatchObject({
+      forceRerunTriggers: [
+        '**/package.json/**',
+        '**/rstest.config.*',
+        '/repo/shared-rsbuild.config.ts',
+        '/repo/common.config.ts',
+        '/repo/shared-rslib.config.ts',
+        '/repo/pkg/rsbuild.config.ts',
+        '/repo/pkg/rspack.config.ts',
+        '/repo/pkg/rstest.config.ts',
+        '/repo/pkg/dep.ts',
+      ],
+    });
+  });
+
+  it('should honor explicit project forceRerunTriggers over shared and local extends', async () => {
+    const globProject = {
+      root: '/repo/pkg',
+      extends: [
+        { forceRerunTriggers: ['/repo/shared-rsbuild.config.ts'] },
+        { forceRerunTriggers: ['/repo/shared-rslib.config.ts'] },
+      ],
+    };
+    const source = {
+      filePath: '/repo/pkg/rstest.config.ts',
+      dependencies: ['/repo/pkg/dep.ts'],
+    };
+
+    await expect(
+      resolveExtends(
+        {
+          extends: { forceRerunTriggers: ['/repo/pkg/rsbuild.config.ts'] },
+          forceRerunTriggers: ['custom/**'],
+        },
+        source,
+        globProject,
+      ),
+    ).resolves.toMatchObject({
+      forceRerunTriggers: ['custom/**'],
+    });
+
+    await expect(
+      resolveExtends(
+        {
+          extends: { forceRerunTriggers: ['/repo/pkg/rsbuild.config.ts'] },
+          forceRerunTriggers: [],
+        },
+        source,
+        globProject,
+      ),
+    ).resolves.toMatchObject({
+      forceRerunTriggers: [],
+    });
+
+    await expect(
+      resolveExtends(
+        {
+          forceRerunTriggers: ['custom/**'],
+        },
+        source,
+        globProject,
+      ),
+    ).resolves.toMatchObject({
+      forceRerunTriggers: ['custom/**'],
+    });
+  });
+
   it('should respect output.distPath.root when appending rstest temp exclude', () => {
     const merged = withDefaultConfig({
       root: __dirname,
