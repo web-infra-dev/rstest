@@ -1,37 +1,9 @@
-import type { Rspack } from '@rsbuild/core';
 import { describe, expect, it } from '@rstest/core';
-import { withDefaultConfig } from '../../src/config';
 import {
-  applyRstestWatchIgnored,
   applyWatchInvalidation,
   type EntryHashSnapshot,
   type WatchInvalidationState,
 } from '../../src/core/watch/watchInvalidation';
-
-it('combines a watch predicate with Rstest output, snapshot and extra ignores', () => {
-  const config = withDefaultConfig({ root: '/project' });
-  config.output.distPath.root = 'dist/.rstest-temp';
-  config.coverage.reportsDirectory = '/project/(app)/coverage';
-  const rspackConfig: Rspack.Configuration = {
-    watchOptions: { ignored: (file) => file === 'src\\ignored.ts' },
-  };
-  applyRstestWatchIgnored(rspackConfig, config, ['/project/[tests]/config.ts']);
-  const ignored = rspackConfig.watchOptions?.ignored;
-  expect(typeof ignored).toBe('function');
-  if (typeof ignored !== 'function')
-    throw new Error('Expected watch predicate');
-  for (const file of [
-    'src\\ignored.ts',
-    '/some/project/dist/.rstest-temp/chunk.js',
-    '/project/(app)/coverage/index.html',
-    '/project/[tests]/config.ts',
-    'C:\\project\\.hidden\\file.snap',
-  ]) {
-    expect(ignored(file), file).toBe(true);
-  }
-  expect(ignored('/project/(app)/coverage-helper.ts')).toBe(false);
-  expect(ignored('/project/src/index.ts')).toBe(false);
-});
 
 const snapshot = (
   entries: Record<string, Record<string, string>>,

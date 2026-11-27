@@ -13,7 +13,6 @@
  */
 
 import type { Rspack } from '@rsbuild/core';
-import picomatch from 'picomatch';
 import type { NormalizedConfig } from '../../types';
 import { castArray, getTempRstestOutputDirGlob } from '../../utils';
 
@@ -22,42 +21,20 @@ export const applyRstestWatchIgnored = (
   config: NormalizedConfig,
   extraIgnored: string[] = [],
 ): void => {
-  const watchOptions = (rspackConfig.watchOptions ??= {});
-  const existing = watchOptions.ignored;
-  const rstestIgnored = [
-    getTempRstestOutputDirGlob(config.output.distPath.root),
-    config.coverage.reportsDirectory,
-    '**/*.snap',
-    ...extraIgnored,
-  ];
-  if (typeof existing === 'function') {
-    // Watchers accept a predicate only at the top level. Directory ignores
-    // also cover their descendants, including paths checked individually.
-    const matchesRstestPath = picomatch(
-      rstestIgnored
-        .filter(Boolean)
-        .map(
-          (pattern) =>
-            `${pattern.replaceAll('\\', '/').replace(/[()]/g, '\\$&')}/**`,
-        ),
-      {
-        // cspell:words nonegate noext nobrace
-        dot: true,
-        nonegate: true,
-        noext: true,
-        literalBrackets: true,
-        nobrace: true,
-      },
-    );
-    watchOptions.ignored = (file) =>
-      existing(file) || matchesRstestPath(file.replaceAll('\\', '/'));
-    return;
-  }
-  const patterns = castArray(existing);
-  watchOptions.ignored = [
-    ...(patterns.length ? patterns : ['**/.git', '**/node_modules']),
-    ...rstestIgnored,
-  ];
+  const ignored = rspackConfig.watchOptions?.ignored;
+  if (typeof ignored === 'function') return;
+
+  const existing = castArray(ignored);
+  rspackConfig.watchOptions = {
+    ...rspackConfig.watchOptions,
+    ignored: [
+      ...(existing.length ? existing : ['**/.git', '**/node_modules']),
+      getTempRstestOutputDirGlob(config.output.distPath.root),
+      config.coverage.reportsDirectory,
+      '**/*.snap',
+      ...extraIgnored,
+    ],
+  };
 };
 
 /** Chunk hashes for one entry: stable chunk key -> chunk hash. */
