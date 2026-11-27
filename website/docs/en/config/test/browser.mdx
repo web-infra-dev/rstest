@@ -265,7 +265,7 @@ Set `headless: process.env.CI === 'true'` if you want headed mode locally and he
 - **Default:** `browser.headless`
 - **CLI:** `--browser.screenshotFailures`
 
-Capture a PNG screenshot for each failed browser test. Screenshots are saved under `.rstest/screenshots/` in the project root with the test file and test name in the filename. Set to `false` to disable capture.
+Rstest saves a PNG screenshot for each failed attempt under `.rstest/screenshots/` in the project root. Filenames include the test file and test name. If a retry passes or skips, you can still inspect the earlier screenshots. Set to `false` to disable capture.
 
 By default, running a test file again clears its previous screenshots. Removing a file in watch mode also clears its screenshots. Set `screenshotFailures: { clean: false }` <ApiMeta sup addedVersion="1.0.0" /> to enable capture and keep screenshots across runs, including watch reruns and file removal. You can delete them manually from `.rstest/screenshots/`.
 
