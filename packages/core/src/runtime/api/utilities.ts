@@ -195,10 +195,9 @@ export const disposeRstestUtilities = (): void => {
  * without any forwarder/Proxy (the live-binding contract, see `./index`).
  * Per-file state is RESET, not rebuilt: the config methods resolve the running
  * file's worker state through `fileContext()` at call time, and `resetForFile`
- * drops the env/global/timer stub bookkeeping between files. The mock registry
- * is kept (it holds weak references, keyed by project) so a mock from a module
- * shared across files stays tracked without one project's `*AllMocks` reaching
- * another project's mocks on a reused worker. The actual globalThis side-effects
+ * drops the env/global/timer stub bookkeeping between files. Each mock stays
+ * bound to its creating project so another project's `*AllMocks` cannot reach
+ * it on a reused worker. The actual globalThis side-effects
  * are unwound by the runner's config-gated `unstubAll*`/`*AllMocks` and the
  * per-file `useRealTimers`. VM file disposal also resets mocks and restores
  * spies before environment teardown, since native modules survive worker reuse.
@@ -424,7 +423,8 @@ const buildRstestUtilities = async (): Promise<{
     fn,
     spyOn,
     isMockFunction,
-    forEachMock,
+    clearAllMocks,
+    resetAllMocks,
     restoreAllSpies,
     createMockInstance,
     resetCallOrder,
@@ -459,11 +459,11 @@ const buildRstestUtilities = async (): Promise<{
     // The type transformation happens at compile time
     mocked: ((item: any) => item) as RstestUtilities['mocked'],
     clearAllMocks: () => {
-      forEachMock((mock) => mock.mockClear());
+      clearAllMocks();
       return rstest;
     },
     resetAllMocks: () => {
-      forEachMock((mock) => mock.mockReset());
+      resetAllMocks();
       return rstest;
     },
     restoreAllMocks: () => {
@@ -822,12 +822,6 @@ const buildRstestUtilities = async (): Promise<{
   // globalThis side-effects (env/global stubs, fake timers, installed spies) are
   // unwound elsewhere (the runner's config-gated `unstubAll*`/`*AllMocks` and the
   // per-file `useRealTimers`), so only the tracking maps are cleared.
-  //
-  // The mock registry is deliberately NOT reset here: under `isolate: false` a
-  // mock created in a module shared across files persists, so it must stay
-  // tracked for the per-test `*AllMocks` to keep reaching it. The registry holds
-  // weak references (see `initSpy`), so file-local mocks fall out on their own
-  // once their evicted module is collected.
   const resetForFile = (): void => {
     cancelPendingWaits();
     resetCallOrder();
@@ -842,7 +836,7 @@ const buildRstestUtilities = async (): Promise<{
     try {
       // Native modules can retain a spy after its export is restored. Reset
       // captured implementations too, without calling mutable public APIs.
-      forEachMock((mock) => mock.mockReset());
+      resetAllMocks();
       restoreAllSpies();
     } finally {
       cancelPendingWaits();

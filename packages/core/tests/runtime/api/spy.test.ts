@@ -1,8 +1,18 @@
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from '@rstest/core';
+import { spies as tinyspySpies } from 'tinyspy';
 import { initSpy } from '../../../src/runtime/api/spy';
 
 describe('initSpy fn()', () => {
+  it('keeps its mocks out of the strong tinyspy restore registry', () => {
+    const { fn, spyOn } = initSpy();
+    const initialSize = tinyspySpies.size;
+    fn();
+    const target = { method: () => 1 };
+    spyOn(target, 'method');
+    expect(tinyspySpies.size).toBe(initialSize);
+  });
+
   it('creates mocks in the supplied VM realm', () => {
     const context = runInNewContext('globalThis', {}) as Record<
       string,
@@ -273,26 +283,30 @@ describe('initSpy fn()', () => {
     },
   );
 
-  it('keeps pending results out of a cleared mock', async () => {
-    const { fn } = initSpy();
-    let resolve!: (value: string) => void;
-    const promise = new Promise<string>((done) => {
-      resolve = done;
-    });
-    const mock = fn(() => promise);
+  it.each(['single', 'project'] as const)(
+    'keeps pending results out of a cleared mock (%s)',
+    async (scope) => {
+      const { fn, clearAllMocks } = initSpy();
+      let resolve!: (value: string) => void;
+      const promise = new Promise<string>((done) => {
+        resolve = done;
+      });
+      const mock = fn(() => promise);
 
-    mock();
-    mock.mockClear();
-    mock.mockResolvedValueOnce('new');
-    await mock();
-    resolve('old');
-    await promise;
+      mock();
+      if (scope === 'single') mock.mockClear();
+      else clearAllMocks();
+      mock.mockResolvedValueOnce('new');
+      await mock();
+      resolve('old');
+      await promise;
 
-    expect(mock.mock.calls).toEqual([[]]);
-    expect(mock.mock.settledResults).toEqual([
-      { type: 'fulfilled', value: 'new' },
-    ]);
-  });
+      expect(mock.mock.calls).toEqual([[]]);
+      expect(mock.mock.settledResults).toEqual([
+        { type: 'fulfilled', value: 'new' },
+      ]);
+    },
+  );
 
   it('preserves constructor prototypes behind a getter', () => {
     const { spyOn } = initSpy();
@@ -405,48 +419,57 @@ describe('initSpy reset semantics', () => {
     expect(spy()).toBe('base');
   });
 
-  it('visits and clears every created mock through forEachMock', () => {
-    const { fn, spyOn, forEachMock } = initSpy();
-    const a = fn();
-    const obj = { method: () => 'real' };
-    const b = spyOn(obj, 'method');
-
-    const visited = new Set();
-    forEachMock((mock) => visited.add(mock));
-    expect(visited.has(a)).toBe(true);
-    expect(visited.has(b)).toBe(true);
-
-    a();
-    obj.method();
-    // Mirror clearAllMocks: iterate the live registry.
-    forEachMock((mock) => mock.mockClear());
-    expect(a.mock.calls).toHaveLength(0);
-    expect(b.mock.calls).toHaveLength(0);
-  });
-
-  it('scopes mocks per project so one project does not reset another', () => {
-    // A reused worker under `isolate: false` serves several projects through one
-    // `rstest` singleton; the project key resolves the running file's project.
+  it('scopes call history, implementations and spy restoration to the creating project', () => {
     let project = 'A';
-    const { fn, forEachMock } = initSpy(() => project);
+    const { fn, spyOn, clearAllMocks, resetAllMocks, restoreAllSpies } =
+      initSpy(() => project);
+    const mock = fn(() => 'base').mockReturnValue('override');
+    const target = { method: () => 'original' };
+    const spy = spyOn(target, 'method');
+    mock();
 
-    const mockA = fn();
-    mockA();
-    expect(mockA.mock.calls).toHaveLength(1);
-
-    // Project B's `*AllMocks` iteration must not see A's mock.
     project = 'B';
-    forEachMock((mock) => mock.mockClear());
-    project = 'A';
-    expect(mockA.mock.calls).toHaveLength(1);
+    const other = fn();
+    other();
+    clearAllMocks();
+    resetAllMocks();
+    restoreAllSpies();
+    expect(other.mock.calls).toHaveLength(0);
+    expect(mock.mock.calls).toHaveLength(1);
+    expect(mock()).toBe('override');
+    expect(target.method).toBe(spy);
 
-    // A's own iteration still reaches it.
-    forEachMock((mock) => mock.mockClear());
-    expect(mockA.mock.calls).toHaveLength(0);
+    project = 'A';
+    const context = mock.mock;
+    mock.mockReturnValueOnce('once');
+    clearAllMocks();
+    expect(context.calls).toEqual([]);
+    expect(mock()).toBe('once');
+    expect(mock()).toBe('override');
+    mock.mockReturnValueOnce('discard');
+    resetAllMocks();
+    expect(mock.mock.calls).toEqual([]);
+    expect(mock()).toBe('base');
+    restoreAllSpies();
+    expect(target.method).not.toBe(spy);
   });
 });
 
 describe('initSpy withImplementation', () => {
+  it('does not reinstall a discarded override when an async scope finishes after reset', async () => {
+    const { fn, resetAllMocks } = initSpy();
+    const mock = fn(() => 'base').mockReturnValue('old override');
+    await mock.withImplementation(
+      () => 'temporary',
+      async () => {
+        expect(mock()).toBe('temporary');
+        resetAllMocks();
+        await Promise.resolve();
+      },
+    );
+    expect(mock()).toBe('base');
+  });
+
   it('restores the implementation after a synchronous callback throws', () => {
     const { fn } = initSpy();
     const spy = fn(() => 'original');
