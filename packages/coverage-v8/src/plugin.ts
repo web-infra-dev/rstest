@@ -92,10 +92,9 @@ export const pluginCoverage = (): RsbuildPlugin => ({
 
     api.modifyBundlerChain({
       handler: (chain, { rspack, CHAIN_ID, environment }) => {
-        const isV1 = api.context.version.startsWith('1.');
-        const jsRule = isV1
-          ? chain.module.rule(CHAIN_ID.RULE.JS)
-          : chain.module.rule(CHAIN_ID.RULE.JS).oneOf(CHAIN_ID.ONE_OF.JS_MAIN);
+        const jsRule = chain.module
+          .rule(CHAIN_ID.RULE.JS)
+          .oneOf(CHAIN_ID.ONE_OF.JS_MAIN);
 
         const {
           rspackExperiments: _rspackExperiments,
