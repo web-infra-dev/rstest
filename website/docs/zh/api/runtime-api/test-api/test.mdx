@@ -363,7 +363,7 @@ fixtures 对象中的每一项可以是普通值、fixture 函数 `(context, use
 ```ts
 import { test } from '@rstest/core';
 
-const testWithDb = test.extend({
+const testWithDb = test.extend<{ db: Database }>({
   db: async ({}, use) => {
     const db = await connectTestDb();
     await use(db);
@@ -376,7 +376,7 @@ const testWithDb = test.extend({
 
 <ApiMeta addedVersion="0.11.7" />
 
-具名 fixture 写法接收 `(name, fixture)`，直接返回 fixture 值而无需调用 `use`。第二个参数提供 `onCleanup` 用于注册清理回调（两个函数均支持异步）：
+具名 fixture 写法接收 `(name, fixture)`，直接返回 fixture 值而无需调用 `use`。由于 fixture 值通过返回值提供，TypeScript 会自动推断其类型，无需显式传入泛型。第二个参数提供 `onCleanup` 用于注册清理回调（两个函数均支持异步）：
 
 ```ts
 import { test } from '@rstest/core';
@@ -452,7 +452,7 @@ const apiTest = test.extend(
 ```ts
 import { test } from '@rstest/core';
 
-const testWithApi = test.extend({
+const testWithApi = test.extend<{ baseURL: string; token: string }>({
   baseURL: 'https://api.example.com',
   token: async ({ baseURL }, use) => {
     const token = await createTestToken(baseURL);
@@ -533,20 +533,30 @@ myTest('runs logger automatically', ({ expect }) => {
 
 ### 类型推断与显式泛型
 
-当自动推断的类型过宽时，可为 `test.extend<MyFixtures>(...)` 传入显式泛型。新类型仅作用于返回的新 API，不会改变原始 `test`：
+- **fixtures 对象写法（`test.extend({ ... })`）**：TypeScript 无法从未标注类型的 `use(value)` 回调中反推 fixture 类型；不传泛型时，基于 `use` 的 fixture 会被推断为 `unknown`（在 `strict` 模式下访问属性会报 `TS18046`）。普通数组和 `[value, { auto: true }]` 元组在无泛型时也可能产生过宽的联合或元组类型。在对象写法中定义 `use` 函数、元组 fixture 或同对象内的 sibling fixture 依赖时，请显式传入泛型 `test.extend<MyFixtures>({ ... })`。
+- **具名 fixture 写法（`test.extend(name, fixture)`）**：如果希望在不写显式泛型的情况下自动推断类型，推荐使用具名 fixture 写法。TypeScript 会直接根据返回值推断每个 fixture 的类型，并在链式 `.extend()` 调用中向后传递。
+
+新类型仅作用于返回的新 API，不会改变原始 `test`：
 
 ```ts
 import { test } from '@rstest/core';
 
+// fixtures 对象写法需显式传入泛型
 interface MyFixtures {
   user: { name: string; role: 'admin' | 'guest' };
 }
 
-const myTest = test.extend<MyFixtures>({
+const objectTest = test.extend<MyFixtures>({
   user: async ({}, use) => {
     await use({ name: 'Alice', role: 'admin' });
   },
 });
+
+// 具名 fixture 写法可自动推断类型
+const namedTest = test.extend('user', async () => ({
+  name: 'Alice',
+  role: 'admin' as const,
+}));
 ```
 
 ## 链式修饰符
