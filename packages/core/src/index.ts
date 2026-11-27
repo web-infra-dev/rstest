@@ -1,4 +1,6 @@
 import type { RsbuildPlugin } from '@rsbuild/core';
+import type { RuntimeRstest } from './runtime/api';
+import { getRuntimeAPI } from './runtime/api/global';
 import type {
   BrowserInstanceConfig,
   BrowserExpectConfig,
@@ -21,13 +23,14 @@ import type {
 export { loadConfig, mergeProjectConfig, mergeRstestConfig } from './config';
 export * from './runtime/api/public';
 
-// Node-side integrations use this hook to release resources at worker exit.
-// The registry is global-symbol backed so independently bundled Node runtime
-// entries still observe the same callbacks.
-export { registerWorkerCleanup } from './runtime/runner/workerCleanup';
-// Node-side integrations can release resources at the end of the current file.
-// Unlike suite hooks, this also runs when collection or suite execution fails.
-export { registerFileCleanup } from './runtime/runner/fileCleanup';
+// External packages may load this entry inside a VM. The worker owns the
+// cleanup registries and publishes its registrars into each runtime realm.
+export const registerWorkerCleanup: RuntimeRstest['registerWorkerCleanup'] = (
+  cleanup,
+) => getRuntimeAPI('registerWorkerCleanup')(cleanup);
+export const registerFileCleanup: RuntimeRstest['registerFileCleanup'] = (
+  cleanup,
+) => getRuntimeAPI('registerFileCleanup')(cleanup);
 
 export type {
   BrowserInstanceConfig,

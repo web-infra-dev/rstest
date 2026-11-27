@@ -109,7 +109,7 @@ describe('test interop', () => {
       fse.writeFileSync(wasmPath, wasmSource);
       onTestFinished(() => fse.removeSync(wasmPath));
 
-      const { expectExecSuccess } = await runRstestCli({
+      const { expectExecSuccess, expectLog } = await runRstestCli({
         command: 'rstest',
         args: [
           'run',
@@ -127,6 +127,8 @@ describe('test interop', () => {
       });
 
       await expectExecSuccess();
+      expectLog('VM_EXTERNAL_CLEANUP_file');
+      expectLog('VM_EXTERNAL_CLEANUP_worker');
     },
   );
 

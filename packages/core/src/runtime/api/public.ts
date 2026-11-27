@@ -1,27 +1,16 @@
 import type { Rstest, RstestUtilities } from '../../types';
+import { getRuntimeAPI } from './global';
 
 export type { Assertion } from '../../types/expect';
 export type { Mock, Mocked, MockInstance } from '../../types/mock';
-
-declare global {
-  var RSTEST_API: Rstest | undefined;
-}
-
-const check = (name: keyof Rstest) => {
-  if (!globalThis.RSTEST_API?.[name]) {
-    throw new Error(
-      `Rstest API '${name}' is not registered yet, please make sure you are running in a rstest environment.`,
-    );
-  }
-};
 
 const wrapRstestAPI = <T extends keyof Omit<Rstest, 'rstest' | 'rs'>>(
   name: T,
 ): Rstest[T] => {
   const fn = (...args: Parameters<Rstest[T]>) => {
-    check(name);
-    return globalThis.RSTEST_API![name].call(
-      globalThis.RSTEST_API![name],
+    const api = getRuntimeAPI(name);
+    return api.call(
+      api,
       // @ts-expect-error
       ...args,
     );
@@ -45,8 +34,7 @@ const wrapRstestUtilitiesAPI = <T extends keyof Pick<Rstest, 'rstest' | 'rs'>>(
 ): Rstest[T] => {
   return new Proxy({} as Rstest[T], {
     get(_target, key, receiver) {
-      check(name);
-      return Reflect.get(globalThis.RSTEST_API?.[name] || {}, key, receiver);
+      return Reflect.get(getRuntimeAPI(name), key, receiver);
     },
   });
 };
