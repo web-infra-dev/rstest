@@ -161,21 +161,25 @@ const expectWithProbes = async (
  * is intentionally confined to this provider module.
  * See: https://github.com/nicolo-ribaudo/playwright/blob/HEAD/packages/playwright-core/src/client/locator.ts
  */
+const formatExpectedTextValue = (expected: BrowserLocatorText): string =>
+  expected.type === 'string'
+    ? JSON.stringify(expected.value)
+    : `/${expected.source}/${expected.flags ?? ''}`;
+
 const callExpect = async (
   locator: Locator,
   expectMethod: string,
   options: { isNot: boolean; timeout: number } & Record<string, unknown>,
   description: string,
-  expectedText?: BrowserLocatorText,
+  expectedText?: BrowserLocatorText | BrowserLocatorText[],
 ): Promise<null> => {
   const result = await expectWithProbes(locator, expectMethod, options);
   if (result.matches !== !options.isNot) {
     const details = formatExpectError(result);
     if (!expectedText) throw new Error(details || description);
-    const value =
-      expectedText.type === 'string'
-        ? JSON.stringify(expectedText.value)
-        : `/${expectedText.source}/${expectedText.flags}`;
+    const value = Array.isArray(expectedText)
+      ? `[${expectedText.map(formatExpectedTextValue).join(', ')}]`
+      : formatExpectedTextValue(expectedText);
     const assertion = `${options.isNot ? 'not.' : ''}${description}(${value})`;
     throw new Error([assertion, details].filter(Boolean).join('\n'));
   }
@@ -196,6 +200,31 @@ const assertSerializedText = (
     throw new Error(`${matcherName} expects a serialized text matcher`);
   }
   return t as BrowserLocatorText;
+};
+
+const readMatcherOptionsObject = (
+  value: unknown,
+  matcherName: string,
+): Record<string, unknown> | undefined => {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError(`${matcherName} options must be an object`);
+  }
+  return value as Record<string, unknown>;
+};
+
+const readOptionalBooleanOption = (
+  options: Record<string, unknown> | undefined,
+  key: string,
+  matcherName: string,
+): boolean | undefined => {
+  const value = options?.[key];
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw new TypeError(
+      `${matcherName} expects ${key} to be a boolean, got ${typeof value}`,
+    );
+  }
+  return value;
 };
 
 const assertStringArg = (
@@ -366,25 +395,47 @@ const readScreenshotOptions = async (
   };
 };
 
-/** Simple boolean state matchers — no extra args. */
-const simpleMatchers: Record<string, string> = {
-  toBeVisible: 'to.be.visible',
+/** Boolean state matchers, optionally supporting an inversion flag (e.g. `{ visible: false }`). */
+const booleanStateMatchers: Record<
+  string,
+  string | { optionKey: string; trueMethod: string; falseMethod: string }
+> = {
+  toBeVisible: {
+    optionKey: 'visible',
+    trueMethod: 'to.be.visible',
+    falseMethod: 'to.be.hidden',
+  },
   toBeHidden: 'to.be.hidden',
-  toBeEnabled: 'to.be.enabled',
+  toBeEnabled: {
+    optionKey: 'enabled',
+    trueMethod: 'to.be.enabled',
+    falseMethod: 'to.be.disabled',
+  },
   toBeDisabled: 'to.be.disabled',
-  toBeAttached: 'to.be.attached',
+  toBeAttached: {
+    optionKey: 'attached',
+    trueMethod: 'to.be.attached',
+    falseMethod: 'to.be.detached',
+  },
   toBeDetached: 'to.be.detached',
-  toBeEditable: 'to.be.editable',
+  toBeEditable: {
+    optionKey: 'editable',
+    trueMethod: 'to.be.editable',
+    falseMethod: 'to.be.readonly',
+  },
   toBeFocused: 'to.be.focused',
   toBeEmpty: 'to.be.empty',
 };
 
-/** Text matchers that take a single serialized text arg. */
+/** Text matchers that take a serialized text arg (or array when `arrayExpectMethod` is set). */
 const textMatchers: Record<
   string,
   {
     expectMethod: string;
+    arrayExpectMethod?: string;
     textOptions?: { matchSubstring?: boolean; normalizeWhiteSpace?: boolean };
+    supportsIgnoreCase?: boolean;
+    supportsUseInnerText?: boolean;
   }
 > = {
   toHaveId: { expectMethod: 'to.have.id' },
@@ -392,21 +443,32 @@ const textMatchers: Record<
   toHaveAccessibleName: {
     expectMethod: 'to.have.accessible.name',
     textOptions: { normalizeWhiteSpace: true },
+    supportsIgnoreCase: true,
   },
   toHaveAccessibleDescription: {
     expectMethod: 'to.have.accessible.description',
     textOptions: { normalizeWhiteSpace: true },
+    supportsIgnoreCase: true,
   },
   toHaveText: {
     expectMethod: 'to.have.text',
+    arrayExpectMethod: 'to.have.text.array',
     textOptions: { normalizeWhiteSpace: true },
+    supportsIgnoreCase: true,
+    supportsUseInnerText: true,
   },
   toContainText: {
     expectMethod: 'to.have.text',
+    arrayExpectMethod: 'to.contain.text.array',
     textOptions: { matchSubstring: true, normalizeWhiteSpace: true },
+    supportsIgnoreCase: true,
+    supportsUseInnerText: true,
   },
   toHaveValue: { expectMethod: 'to.have.value' },
-  toHaveClass: { expectMethod: 'to.have.class' },
+  toHaveClass: {
+    expectMethod: 'to.have.class',
+    arrayExpectMethod: 'to.have.class.array',
+  },
 };
 
 /**
@@ -421,12 +483,25 @@ const dispatchExpectMatcher = (
 ): Promise<null> => {
   const { method, args } = request;
 
-  // --- Simple boolean state matchers ---
-  const simpleExpect = simpleMatchers[method];
-  if (simpleExpect) {
+  // --- Boolean state matchers ---
+  const stateDef = booleanStateMatchers[method];
+  if (stateDef) {
+    let expectMethod: string;
+    if (typeof stateDef === 'string') {
+      expectMethod = stateDef;
+    } else {
+      const matcherOptions = readMatcherOptionsObject(args[0], method);
+      const expectedState = readOptionalBooleanOption(
+        matcherOptions,
+        stateDef.optionKey,
+        method,
+      );
+      expectMethod =
+        expectedState === false ? stateDef.falseMethod : stateDef.trueMethod;
+    }
     return callExpect(
       locator,
-      simpleExpect,
+      expectMethod,
       { isNot, timeout },
       `Expected element ${method
         .replace('toBe', 'to be ')
@@ -436,9 +511,45 @@ const dispatchExpectMatcher = (
     );
   }
 
-  // --- Text matchers (single serialized text arg) ---
+  // --- Text matchers (single or array serialized text arg) ---
   const textDef = textMatchers[method];
   if (textDef) {
+    const matcherOptions =
+      textDef.supportsIgnoreCase || textDef.supportsUseInnerText
+        ? readMatcherOptionsObject(args[1], method)
+        : undefined;
+    const ignoreCase = textDef.supportsIgnoreCase
+      ? readOptionalBooleanOption(matcherOptions, 'ignoreCase', method)
+      : undefined;
+    const useInnerText = textDef.supportsUseInnerText
+      ? readOptionalBooleanOption(matcherOptions, 'useInnerText', method)
+      : undefined;
+    const serializeOptions =
+      ignoreCase === undefined
+        ? textDef.textOptions
+        : { ...textDef.textOptions, ignoreCase };
+
+    if (textDef.arrayExpectMethod && Array.isArray(args[0])) {
+      const expectedItems = args[0].map((item) =>
+        assertSerializedText(item, method),
+      );
+      const expectedText = expectedItems.flatMap((item) =>
+        serializeExpectedText(item, serializeOptions),
+      );
+      return callExpect(
+        locator,
+        textDef.arrayExpectMethod,
+        {
+          isNot,
+          timeout,
+          expectedText,
+          ...(useInnerText === undefined ? {} : { useInnerText }),
+        },
+        method,
+        expectedItems,
+      );
+    }
+
     const expected = assertSerializedText(args[0], method);
     if (method === 'toHaveRole' && expected.type !== 'string') {
       throw new TypeError('toHaveRole expects a string role');
@@ -449,7 +560,8 @@ const dispatchExpectMatcher = (
       {
         isNot,
         timeout,
-        expectedText: serializeExpectedText(expected, textDef.textOptions),
+        expectedText: serializeExpectedText(expected, serializeOptions),
+        ...(useInnerText === undefined ? {} : { useInnerText }),
       },
       method,
       expected,
@@ -458,6 +570,30 @@ const dispatchExpectMatcher = (
 
   // --- Matchers with custom arg handling ---
   switch (method) {
+    case 'toContainClass': {
+      const raw = args[0];
+      const isArray = Array.isArray(raw);
+      const values = isArray ? raw : [raw];
+      if (values.some((value) => typeof value !== 'string')) {
+        throw new TypeError(
+          'toContainClass expects a string or an array of strings',
+        );
+      }
+      const classNames = values as string[];
+      return callExpect(
+        locator,
+        isArray ? 'to.contain.class.array' : 'to.contain.class',
+        {
+          isNot,
+          timeout,
+          expectedText: classNames.map((value) => ({ string: value })),
+        },
+        method,
+        isArray
+          ? classNames.map((value) => ({ type: 'string' as const, value }))
+          : { type: 'string', value: classNames[0]! },
+      );
+    }
     case 'toHaveValues': {
       const values = args[0];
       if (!Array.isArray(values)) {
@@ -487,13 +623,34 @@ const dispatchExpectMatcher = (
         'Expected element to be in viewport',
       );
     }
-    case 'toBeChecked':
+    case 'toBeChecked': {
+      const matcherOptions = readMatcherOptionsObject(args[0], 'toBeChecked');
+      const checked = readOptionalBooleanOption(
+        matcherOptions,
+        'checked',
+        'toBeChecked',
+      );
+      const indeterminate = readOptionalBooleanOption(
+        matcherOptions,
+        'indeterminate',
+        'toBeChecked',
+      );
+      const expectedValue: { checked?: boolean; indeterminate?: boolean } = {};
+      if (indeterminate !== undefined) {
+        expectedValue.indeterminate = indeterminate;
+        if (checked !== undefined) {
+          expectedValue.checked = checked;
+        }
+      } else {
+        expectedValue.checked = checked ?? true;
+      }
       return callExpect(
         locator,
         'to.be.checked',
-        { isNot, timeout, expectedValue: { checked: true } },
+        { isNot, timeout, expectedValue },
         'Expected element to be checked',
       );
+    }
     case 'toBeUnchecked':
       return callExpect(
         locator,
@@ -528,6 +685,15 @@ const dispatchExpectMatcher = (
         );
       }
       const expected = assertSerializedText(args[1], 'toHaveAttribute');
+      const matcherOptions = readMatcherOptionsObject(
+        args[2],
+        'toHaveAttribute',
+      );
+      const ignoreCase = readOptionalBooleanOption(
+        matcherOptions,
+        'ignoreCase',
+        'toHaveAttribute',
+      );
       return callExpect(
         locator,
         'to.have.attribute.value',
@@ -535,7 +701,10 @@ const dispatchExpectMatcher = (
           isNot,
           timeout,
           expressionArg: name,
-          expectedText: serializeExpectedText(expected),
+          expectedText: serializeExpectedText(
+            expected,
+            ignoreCase === undefined ? undefined : { ignoreCase },
+          ),
         },
         `Expected attribute ${name} to match`,
       );

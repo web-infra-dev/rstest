@@ -176,9 +176,9 @@ await expect
 
 ### toBeVisible
 
-- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(options?: { timeout?: number; visible?: boolean }) => Promise<void>`
 
-断言元素已挂载且可见（bounding box 非空且 `visibility !== 'hidden'`）。`display: none` 和零尺寸元素会失败；`opacity: 0` 仍视为可见。
+断言元素已挂载且可见（bounding box 非空且 `visibility !== 'hidden'`）。`display: none` 和零尺寸元素会失败；`opacity: 0` 仍视为可见。传入 `{ visible: false }` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可断言元素不可见。
 
 ```ts
 await expect.element(page.getByRole('button', { name: 'Save' })).toBeVisible();
@@ -196,9 +196,9 @@ await expect.element(page.getByTestId('loading')).toBeHidden();
 
 ### toBeEnabled
 
-- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(options?: { timeout?: number; enabled?: boolean }) => Promise<void>`
 
-断言元素未被禁用（非 `disabled`、不在禁用的 `fieldset` 内且非 `aria-disabled="true"`）。
+断言元素未被禁用（非 `disabled`、不在禁用的 `fieldset` 内且非 `aria-disabled="true"`）。传入 `{ enabled: false }` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可断言元素处于禁用状态。
 
 ```ts
 await expect
@@ -220,12 +220,15 @@ await expect
 
 ### toBeChecked
 
-- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(options?: { timeout?: number; checked?: boolean; indeterminate?: boolean }) => Promise<void>`
 
-断言 checkbox 或 radio 控件的 `checked` 状态为 `true`。
+断言 checkbox 或 radio 控件的 `checked` 状态为 `true`。传入 `{ checked: false }` 或 `{ indeterminate: true }` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可断言未勾选或半选状态。
 
 ```ts
 await expect.element(page.getByLabel('Agree')).toBeChecked();
+await expect
+  .element(page.getByLabel('Select all'))
+  .toBeChecked({ indeterminate: true });
 ```
 
 ### toBeUnchecked
@@ -240,9 +243,9 @@ await expect.element(page.getByLabel('Agree')).toBeUnchecked();
 
 ### toBeAttached
 
-- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(options?: { timeout?: number; attached?: boolean }) => Promise<void>`
 
-断言节点已连接到 `Document` 或 `ShadowRoot`（`Node.isConnected === true`），不要求元素可见。
+断言节点已连接到 `Document` 或 `ShadowRoot`（`Node.isConnected === true`），不要求元素可见。传入 `{ attached: false }` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可断言节点未连接。
 
 ```ts
 await expect.element(page.locator('#toast')).toBeAttached();
@@ -260,9 +263,9 @@ await expect.element(page.locator('#toast')).toBeDetached();
 
 ### toBeEditable
 
-- **类型：** `(options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(options?: { timeout?: number; editable?: boolean }) => Promise<void>`
 
-断言元素同时满足已启用且非只读（`readonly` 或 `aria-readonly="true"`）。
+断言元素同时满足已启用且非只读（`readonly` 或 `aria-readonly="true"`）。传入 `{ editable: false }` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可断言元素为只读状态。
 
 ```ts
 await expect.element(page.getByLabel('Bio')).toBeEditable();
@@ -302,7 +305,7 @@ await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
 
 <ApiMeta addedVersion="0.12.5" />
 
-- **类型：** `(role: string, options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(role: LocatorAriaRole | (string & {}), options?: { timeout?: number }) => Promise<void>`
 
 断言元素的精确 ARIA role（不按 role 层级匹配）。
 
@@ -314,9 +317,9 @@ await expect.element(page.getByTestId('save')).toHaveRole('button');
 
 <ApiMeta addedVersion="0.12.5" />
 
-- **类型：** `(name: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(name: string | RegExp, options?: { timeout?: number; ignoreCase?: boolean }) => Promise<void>`
 
-断言元素的可访问名称。字符串与归一化后的完整名称匹配。
+断言元素的可访问名称。字符串与归一化后的完整名称匹配。设置 `ignoreCase: true` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可忽略大小写。
 
 ```ts
 await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
@@ -326,9 +329,9 @@ await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
 
 <ApiMeta addedVersion="0.12.5" />
 
-- **类型：** `(description: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(description: string | RegExp, options?: { timeout?: number; ignoreCase?: boolean }) => Promise<void>`
 
-断言元素的可访问描述。字符串与归一化后的完整描述匹配。
+断言元素的可访问描述。字符串与归一化后的完整描述匹配。设置 `ignoreCase: true` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可忽略大小写。
 
 ```ts
 await expect
@@ -338,19 +341,22 @@ await expect
 
 ### toHaveText
 
-- **类型：** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(text: string | RegExp | readonly (string | RegExp)[], options?: { timeout?: number; ignoreCase?: boolean; useInnerText?: boolean }) => Promise<void>`
 
-断言元素文本内容（包含后代节点，且空白字符会归一化）完整匹配 `text`。
+断言元素文本内容（包含后代节点，且空白字符会归一化）完整匹配 `text`。传入数组 <ApiMeta sup addedVersion="1.0.0-beta.1" /> 时按顺序断言所有匹配元素的文本列表。设置 `useInnerText: true` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可按 `element.innerText` 比较，`ignoreCase: true` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可忽略大小写。
 
 ```ts
 await expect.element(page.getByRole('status')).toHaveText('Saved');
+await expect
+  .element(page.getByRole('listitem'))
+  .toHaveText(['First', 'Second']);
 ```
 
 ### toContainText
 
-- **类型：** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(text: string | RegExp | readonly (string | RegExp)[], options?: { timeout?: number; ignoreCase?: boolean; useInnerText?: boolean }) => Promise<void>`
 
-断言元素文本内容（空白字符会归一化）包含 `string` 子串或匹配 `RegExp`。
+断言元素文本内容（空白字符会归一化）包含 `string` 子串或匹配 `RegExp`。传入数组 <ApiMeta sup addedVersion="1.0.0-beta.1" /> 时按顺序断言每个匹配元素包含对应文本。支持 `ignoreCase` 和 `useInnerText` <ApiMeta sup addedVersion="1.0.0-beta.1" />。
 
 ```ts
 await expect.element(page.getByRole('status')).toContainText('Save');
@@ -394,27 +400,54 @@ await expect
 
 ### toHaveClass
 
-- **类型：** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(value: string | RegExp | readonly (string | RegExp)[], options?: { timeout?: number }) => Promise<void>`
 
-断言元素的 `class` 属性匹配 `value`。传入字符串时会匹配整个 `class` 字符串；匹配单个类名请使用 `RegExp`。
+断言元素的 `class` 属性匹配 `value`。传入字符串时会匹配整个 `class` 字符串；传入数组 <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可断言多个元素；匹配单个或多个类名请使用 [`toContainClass`](#tocontainclass)。
 
 ```ts
 await expect.element(page.getByRole('alert')).toHaveClass(/error/);
 ```
 
+### toContainClass
+
+<ApiMeta addedVersion="1.0.0-beta.1" />
+
+- **类型：** `(value: string | readonly string[], options?: { timeout?: number }) => Promise<void>`
+
+断言元素的 `classList` 包含期望的类名（空格分隔的字符串会要求同时包含所有类名）。传入字符串数组可按顺序断言多个匹配元素。不支持正则表达式。
+
+```ts
+await expect.element(page.getByRole('alert')).toContainClass('error');
+await expect
+  .element(page.getByRole('listitem'))
+  .toContainClass(['item', 'item active']);
+```
+
 ### toHaveAttribute
 
-- **类型：** `(name: string, value?: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **类型：**
 
-省略 `value`（或传入 `undefined`）时断言属性 `name` 存在；传入 `value` 时断言属性值匹配。
+```ts
+function toHaveAttribute(
+  name: string,
+  options?: { timeout?: number },
+): Promise<void>;
+function toHaveAttribute(
+  name: string,
+  value?: string | RegExp,
+  options?: { timeout?: number; ignoreCase?: boolean },
+): Promise<void>;
+```
+
+省略 `value`（或传入 `undefined`）时断言属性 `name` 存在（支持两参重载 `toHaveAttribute(name, options)` <ApiMeta sup addedVersion="1.0.0-beta.1" />）；传入 `value` 时断言属性值匹配。设置 `ignoreCase: true` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 可忽略属性值大小写。
 
 ```ts
 await expect
   .element(page.getByRole('button', { name: 'Save' }))
-  .toHaveAttribute('type');
+  .toHaveAttribute('type', { timeout: 1000 });
 await expect
   .element(page.getByRole('button', { name: 'Save' }))
-  .toHaveAttribute('type', 'submit');
+  .toHaveAttribute('type', 'submit', { ignoreCase: true });
 ```
 
 ### toHaveCount

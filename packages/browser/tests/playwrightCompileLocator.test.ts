@@ -13,8 +13,10 @@ class FakeLocator {
     return new FakeLocator([...this.ops, { name, args }]);
   }
 
-  locator(selector: string): FakeLocator {
-    return this.next('locator', selector);
+  locator(selector: string, options?: any): FakeLocator {
+    return options === undefined
+      ? this.next('locator', selector)
+      : this.next('locator', selector, options);
   }
 
   getByText(text: any, options?: any): FakeLocator {
@@ -67,8 +69,13 @@ class FakeLocator {
 }
 
 class FakeFrameLocator {
-  locator(selector: string): FakeLocator {
-    return new FakeLocator([{ name: 'frame.locator', args: [selector] }]);
+  locator(selector: string, options?: any): FakeLocator {
+    return new FakeLocator([
+      {
+        name: 'frame.locator',
+        args: options === undefined ? [selector] : [selector, options],
+      },
+    ]);
   }
 
   getByText(text: any, options?: any): FakeLocator {
@@ -258,5 +265,54 @@ describe('compilePlaywrightLocator', () => {
     expect(filterOp!.args[0].hasNotText).toBeInstanceOf(RegExp);
     expect(filterOp!.args[0].hasNotText.source).toBe('draft');
     expect(filterOp!.args[0].hasNotText.flags).toBe('i');
+  });
+
+  it('should compile filter({ visible })', () => {
+    const ir: BrowserLocatorIR = {
+      steps: [
+        { type: 'locator', selector: 'li' },
+        { type: 'filter', options: { visible: false } },
+      ],
+    };
+
+    const frame = new FakeFrameLocator();
+    const out = compilePlaywrightLocator(
+      frame as any,
+      ir,
+    ) as unknown as FakeLocator;
+
+    const filterOp = out.ops.find((o) => o.name === 'filter');
+    expect(filterOp?.args[0]).toEqual({ visible: false });
+  });
+
+  it('should compile locator(selector, options) with nested locators', () => {
+    const ir: BrowserLocatorIR = {
+      steps: [
+        {
+          type: 'locator',
+          selector: 'section',
+          options: {
+            hasText: { type: 'string', value: 'Billing' },
+            hasNotText: { type: 'regexp', source: 'legacy', flags: 'i' },
+            has: { steps: [{ type: 'locator', selector: 'h2' }] },
+            hasNot: { steps: [{ type: 'locator', selector: '.hidden' }] },
+          },
+        },
+      ],
+    };
+
+    const frame = new FakeFrameLocator();
+    const out = compilePlaywrightLocator(
+      frame as any,
+      ir,
+    ) as unknown as FakeLocator;
+
+    expect(out.ops[0]?.name).toBe('frame.locator');
+    expect(out.ops[0]?.args[0]).toBe('section');
+    const opts = out.ops[0]?.args[1];
+    expect(opts.hasText).toBe('Billing');
+    expect(opts.hasNotText).toEqual(/legacy/i);
+    expect(opts.has).toBeInstanceOf(FakeLocator);
+    expect(opts.hasNot).toBeInstanceOf(FakeLocator);
   });
 });

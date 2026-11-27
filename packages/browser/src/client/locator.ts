@@ -1,4 +1,5 @@
 import type {
+  BrowserLocatorFilterOptions,
   BrowserLocatorIR,
   BrowserLocatorText,
   BrowserRpcRequest,
@@ -14,6 +15,90 @@ export const serializeText = (value: string | RegExp): BrowserLocatorText => {
   }
   return { type: 'regexp', source: value.source, flags: value.flags };
 };
+
+export type LocatorAriaRole =
+  | 'alert'
+  | 'alertdialog'
+  | 'application'
+  | 'article'
+  | 'banner'
+  | 'blockquote'
+  | 'button'
+  | 'caption'
+  | 'cell'
+  | 'checkbox'
+  | 'code'
+  | 'columnheader'
+  | 'combobox'
+  | 'complementary'
+  | 'contentinfo'
+  | 'definition'
+  | 'deletion'
+  | 'dialog'
+  | 'directory'
+  | 'document'
+  | 'emphasis'
+  | 'feed'
+  | 'figure'
+  | 'form'
+  | 'generic'
+  | 'grid'
+  | 'gridcell'
+  | 'group'
+  | 'heading'
+  | 'img'
+  | 'insertion'
+  | 'link'
+  | 'list'
+  | 'listbox'
+  | 'listitem'
+  | 'log'
+  | 'main'
+  | 'marquee'
+  | 'math'
+  | 'meter'
+  | 'menu'
+  | 'menubar'
+  | 'menuitem'
+  | 'menuitemcheckbox'
+  | 'menuitemradio'
+  | 'navigation'
+  | 'none'
+  | 'note'
+  | 'option'
+  | 'paragraph'
+  | 'presentation'
+  | 'progressbar'
+  | 'radio'
+  | 'radiogroup'
+  | 'region'
+  | 'row'
+  | 'rowgroup'
+  | 'rowheader'
+  | 'scrollbar'
+  | 'search'
+  | 'searchbox'
+  | 'separator'
+  | 'slider'
+  | 'spinbutton'
+  | 'status'
+  | 'strong'
+  | 'subscript'
+  | 'superscript'
+  | 'switch'
+  | 'tab'
+  | 'table'
+  | 'tablist'
+  | 'tabpanel'
+  | 'term'
+  | 'textbox'
+  | 'time'
+  | 'timer'
+  | 'toolbar'
+  | 'tooltip'
+  | 'tree'
+  | 'treegrid'
+  | 'treeitem';
 
 export type LocatorGetByRoleOptions = {
   name?: string | RegExp;
@@ -77,6 +162,11 @@ export type LocatorFillOptions = {
   timeout?: number;
 };
 
+export type LocatorClearOptions = {
+  force?: boolean;
+  timeout?: number;
+};
+
 export type LocatorCheckOptions = {
   force?: boolean;
   position?: LocatorPosition;
@@ -111,6 +201,23 @@ export type BrowserSerializable =
 
 export type LocatorDispatchEventInit = BrowserSerializable;
 
+export type LocatorDispatchEventOptions = {
+  timeout?: number;
+};
+
+export type LocatorSelectOptionItem = {
+  value?: string;
+  label?: string;
+  index?: number;
+};
+
+export type LocatorSelectOptionValue =
+  | null
+  | string
+  | LocatorSelectOptionItem
+  | readonly string[]
+  | readonly LocatorSelectOptionItem[];
+
 export type LocatorSelectOptionOptions = {
   force?: boolean;
   timeout?: number;
@@ -125,6 +232,77 @@ export type LocatorFilterOptions = {
   hasNotText?: string | RegExp;
   has?: Locator;
   hasNot?: Locator;
+  visible?: boolean;
+};
+
+export type LocatorOptions = Omit<LocatorFilterOptions, 'visible'>;
+
+const requireFilterLocator = (
+  value: Locator | undefined,
+  optionName: 'has' | 'hasNot',
+  methodName: string,
+): BrowserLocatorIR | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isLocator(value)) {
+    throw new TypeError(
+      `${methodName}({ ${optionName} }) expects a Locator returned from @rstest/browser page.getBy* APIs.`,
+    );
+  }
+  return value.ir;
+};
+
+const serializeFilterOptions = (
+  options: LocatorOptions,
+  methodName: string,
+): BrowserLocatorFilterOptions => {
+  return {
+    hasText:
+      options.hasText === undefined
+        ? undefined
+        : serializeText(options.hasText),
+    hasNotText:
+      options.hasNotText === undefined
+        ? undefined
+        : serializeText(options.hasNotText),
+    has: requireFilterLocator(options.has, 'has', methodName),
+    hasNot: requireFilterLocator(options.hasNot, 'hasNot', methodName),
+  };
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
+const isSelectOptionItem = (
+  value: unknown,
+): value is LocatorSelectOptionItem => {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  const { value: optionValue, label, index } = value;
+  const hasOptionField =
+    optionValue !== undefined || label !== undefined || index !== undefined;
+  if (!hasOptionField) {
+    return false;
+  }
+  if (optionValue !== undefined && typeof optionValue !== 'string') {
+    return false;
+  }
+  if (label !== undefined && typeof label !== 'string') {
+    return false;
+  }
+  if (index !== undefined && typeof index !== 'number') {
+    return false;
+  }
+  return Object.keys(value).every(
+    (key) => key === 'value' || key === 'label' || key === 'index',
+  );
 };
 
 export class Locator {
@@ -134,7 +312,10 @@ export class Locator {
     this.ir = ir;
   }
 
-  getByRole(role: string, options?: LocatorGetByRoleOptions): Locator {
+  getByRole(
+    role: LocatorAriaRole | (string & {}),
+    options?: LocatorGetByRoleOptions,
+  ): Locator {
     const next = {
       steps: [
         ...this.ir.steps,
@@ -156,9 +337,18 @@ export class Locator {
     return new Locator(next);
   }
 
-  locator(selector: string): Locator {
+  locator(selector: string, options?: LocatorOptions): Locator {
     return new Locator({
-      steps: [...this.ir.steps, { type: 'locator', selector }],
+      steps: [
+        ...this.ir.steps,
+        options === undefined
+          ? { type: 'locator', selector }
+          : {
+              type: 'locator',
+              selector,
+              options: serializeFilterOptions(options, 'Locator.locator'),
+            },
+      ],
     });
   }
 
@@ -226,32 +416,10 @@ export class Locator {
         {
           type: 'filter',
           options: {
-            hasText: options.hasText
-              ? serializeText(options.hasText)
-              : undefined,
-            hasNotText: options.hasNotText
-              ? serializeText(options.hasNotText)
-              : undefined,
-            has:
-              options.has === undefined
-                ? undefined
-                : isLocator(options.has)
-                  ? options.has.ir
-                  : (() => {
-                      throw new TypeError(
-                        'Locator.filter({ has }) expects a Locator returned from @rstest/browser page.getBy* APIs.',
-                      );
-                    })(),
-            hasNot:
-              options.hasNot === undefined
-                ? undefined
-                : isLocator(options.hasNot)
-                  ? options.hasNot.ir
-                  : (() => {
-                      throw new TypeError(
-                        'Locator.filter({ hasNot }) expects a Locator returned from @rstest/browser page.getBy* APIs.',
-                      );
-                    })(),
+            ...serializeFilterOptions(options, 'Locator.filter'),
+            ...(options.visible === undefined
+              ? {}
+              : { visible: options.visible }),
           },
         },
       ],
@@ -290,6 +458,15 @@ export class Locator {
 
   last(): Locator {
     return new Locator({ steps: [...this.ir.steps, { type: 'last' }] });
+  }
+
+  count(): Promise<number> {
+    return this.callLocator<number>('count', []);
+  }
+
+  async all(): Promise<Locator[]> {
+    const count = await this.count();
+    return Array.from({ length: count }, (_, index) => this.nth(index));
   }
 
   async click(options?: LocatorClickOptions): Promise<void> {
@@ -340,8 +517,8 @@ export class Locator {
     );
   }
 
-  async clear(): Promise<void> {
-    await this.callLocator('clear', []);
+  async clear(options?: LocatorClearOptions): Promise<void> {
+    await this.callLocator('clear', options === undefined ? [] : [options]);
   }
 
   async check(options?: LocatorCheckOptions): Promise<void> {
@@ -376,33 +553,41 @@ export class Locator {
   async dispatchEvent(
     type: string,
     eventInit?: LocatorDispatchEventInit,
+    options?: LocatorDispatchEventOptions,
   ): Promise<void> {
     if (typeof type !== 'string' || !type) {
       throw new TypeError(
         'Locator.dispatchEvent() expects a non-empty event type string.',
       );
     }
-    await this.callLocator(
-      'dispatchEvent',
-      eventInit === undefined ? [type] : [type, eventInit],
-    );
+    const args: unknown[] = [type];
+    if (options !== undefined) {
+      args.push(eventInit, options);
+    } else if (eventInit !== undefined) {
+      args.push(eventInit);
+    }
+    await this.callLocator('dispatchEvent', args);
   }
 
   async selectOption(
-    value: string | string[],
+    values: LocatorSelectOptionValue,
     options?: LocatorSelectOptionOptions,
-  ): Promise<void> {
-    if (
-      typeof value !== 'string' &&
-      !(Array.isArray(value) && value.every((v) => typeof v === 'string'))
-    ) {
+  ): Promise<string[]> {
+    const isValid =
+      values === null ||
+      typeof values === 'string' ||
+      isSelectOptionItem(values) ||
+      (Array.isArray(values) &&
+        (values.every((item) => typeof item === 'string') ||
+          values.every(isSelectOptionItem)));
+    if (!isValid) {
       throw new TypeError(
-        'Locator.selectOption() only supports string or string[] values in browser mode.',
+        'Locator.selectOption() expects null, a string, { value?, label?, index? }, string[], or an array of { value?, label?, index? } in browser mode.',
       );
     }
-    await this.callLocator(
+    return await this.callLocator<string[]>(
       'selectOption',
-      options === undefined ? [value] : [value, options],
+      options === undefined ? [values] : [values, options],
     );
   }
 
@@ -424,8 +609,8 @@ export class Locator {
     );
   }
 
-  private async callLocator(method: string, args: unknown[]): Promise<void> {
-    await callBrowserRpc<void>({
+  private callLocator<T = void>(method: string, args: unknown[]): Promise<T> {
+    return callBrowserRpc<T>({
       kind: 'locator',
       locator: this.ir,
       method,

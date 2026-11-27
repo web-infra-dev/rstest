@@ -5,7 +5,7 @@
  * data) to keep this module focused on host-side validation.
  *
  * Planned gaps (non-exhaustive):
- * - Locator query/interop: locator.selector/length, locator.query()/element()/elements()/all(),
+ * - Locator query/interop: locator.selector/length, locator.query()/element()/elements(),
  *   locators.extend(...)
  * - Locator actions: tripleClick, hover out, other drag/drop helpers
  * - Artifacts intentionally excluded for now: trace/video
@@ -32,6 +32,7 @@ export const supportedLocatorActions: Set<string> = new Set([
   'dispatchEvent',
   'selectOption',
   'setInputFiles',
+  'count',
 ]);
 
 export const supportedExpectElementMatchers: Set<string> = new Set([
@@ -54,6 +55,7 @@ export const supportedExpectElementMatchers: Set<string> = new Set([
   'toHaveValues',
   'toHaveAttribute',
   'toHaveClass',
+  'toContainClass',
   'toHaveCount',
   'toBeChecked',
   'toBeUnchecked',

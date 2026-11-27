@@ -107,6 +107,8 @@ const createExpectArgs = (method: string): unknown[] => {
       return [1];
     case 'toHaveAttribute':
       return ['data-testid', createSerializedText('submit')];
+    case 'toContainClass':
+      return ['active'];
     case 'toHaveCSS':
       return ['color', createSerializedText('red')];
     case 'toHaveJSProperty':
@@ -147,6 +149,7 @@ describe('browser RPC registry consistency', () => {
       async toHaveId() {},
       async toHaveAttribute() {},
       async toHaveClass() {},
+      async toContainClass() {},
       async toHaveCount() {},
       async toHaveCSS() {},
       async toHaveJSProperty() {},

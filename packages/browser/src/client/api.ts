@@ -25,6 +25,28 @@ const serializeMatcherText = (value: string | RegExp): BrowserLocatorText => {
   return serializeText(value);
 };
 
+const serializeMatcherTextOrArray = (
+  value: string | RegExp | readonly (string | RegExp)[],
+): BrowserLocatorText | BrowserLocatorText[] => {
+  return Array.isArray(value)
+    ? value.map(serializeMatcherText)
+    : serializeMatcherText(value as string | RegExp);
+};
+
+const pickDefinedOptions = (
+  entries: Record<string, unknown>,
+): Record<string, unknown> | undefined => {
+  const result: Record<string, unknown> = {};
+  let hasKeys = false;
+  for (const [key, value] of Object.entries(entries)) {
+    if (value !== undefined) {
+      result[key] = value;
+      hasKeys = true;
+    }
+  }
+  return hasKeys ? result : undefined;
+};
+
 const screenshotAssertionCounts = new WeakMap<object, number>();
 
 const createElementExpect = (
@@ -36,12 +58,14 @@ const createElementExpect = (
     method: string,
     args: unknown[],
     timeout?: number,
+    options?: Record<string, unknown>,
   ): Promise<void> => {
+    const matcherOptions = options ? pickDefinedOptions(options) : undefined;
     await callBrowserRpc<void>({
       kind: 'expect',
       locator: locator.ir,
       method,
-      args,
+      args: matcherOptions ? [...args, matcherOptions] : args,
       isNot,
       timeout: getTimeout(timeout),
       timeoutIsExplicit: timeout !== undefined,
@@ -50,31 +74,42 @@ const createElementExpect = (
 
   const api: Omit<BrowserElementExpect, 'not'> = {
     async toBeVisible(options) {
-      await callExpect('toBeVisible', [], options?.timeout);
+      await callExpect('toBeVisible', [], options?.timeout, {
+        visible: options?.visible,
+      });
     },
     async toBeHidden(options) {
       await callExpect('toBeHidden', [], options?.timeout);
     },
     async toBeEnabled(options) {
-      await callExpect('toBeEnabled', [], options?.timeout);
+      await callExpect('toBeEnabled', [], options?.timeout, {
+        enabled: options?.enabled,
+      });
     },
     async toBeDisabled(options) {
       await callExpect('toBeDisabled', [], options?.timeout);
     },
     async toBeChecked(options) {
-      await callExpect('toBeChecked', [], options?.timeout);
+      await callExpect('toBeChecked', [], options?.timeout, {
+        checked: options?.checked,
+        indeterminate: options?.indeterminate,
+      });
     },
     async toBeUnchecked(options) {
       await callExpect('toBeUnchecked', [], options?.timeout);
     },
     async toBeAttached(options) {
-      await callExpect('toBeAttached', [], options?.timeout);
+      await callExpect('toBeAttached', [], options?.timeout, {
+        attached: options?.attached,
+      });
     },
     async toBeDetached(options) {
       await callExpect('toBeDetached', [], options?.timeout);
     },
     async toBeEditable(options) {
-      await callExpect('toBeEditable', [], options?.timeout);
+      await callExpect('toBeEditable', [], options?.timeout, {
+        editable: options?.editable,
+      });
     },
     async toBeFocused(options) {
       await callExpect('toBeFocused', [], options?.timeout);
@@ -93,8 +128,12 @@ const createElementExpect = (
     async toHaveText(text, options) {
       await callExpect(
         'toHaveText',
-        [serializeMatcherText(text)],
+        [serializeMatcherTextOrArray(text)],
         options?.timeout,
+        {
+          ignoreCase: options?.ignoreCase,
+          useInnerText: options?.useInnerText,
+        },
       );
     },
     async toHaveRole(role, options) {
@@ -109,6 +148,7 @@ const createElementExpect = (
         'toHaveAccessibleName',
         [serializeMatcherText(name)],
         options?.timeout,
+        { ignoreCase: options?.ignoreCase },
       );
     },
     async toHaveAccessibleDescription(description, options) {
@@ -116,13 +156,18 @@ const createElementExpect = (
         'toHaveAccessibleDescription',
         [serializeMatcherText(description)],
         options?.timeout,
+        { ignoreCase: options?.ignoreCase },
       );
     },
     async toContainText(text, options) {
       await callExpect(
         'toContainText',
-        [serializeMatcherText(text)],
+        [serializeMatcherTextOrArray(text)],
         options?.timeout,
+        {
+          ignoreCase: options?.ignoreCase,
+          useInnerText: options?.useInnerText,
+        },
       );
     },
     async toHaveValue(value, options) {
@@ -146,17 +191,54 @@ const createElementExpect = (
         options?.timeout,
       );
     },
-    async toHaveAttribute(name, value, options) {
-      const args =
-        value === undefined ? [name] : [name, serializeMatcherText(value)];
-      await callExpect('toHaveAttribute', args, options?.timeout);
+    async toHaveAttribute(
+      name: string,
+      valueOrOptions?: string | RegExp | { timeout?: number },
+      maybeOptions?: { timeout?: number; ignoreCase?: boolean },
+    ) {
+      if (
+        maybeOptions === undefined &&
+        typeof valueOrOptions === 'object' &&
+        valueOrOptions !== null &&
+        !(valueOrOptions instanceof RegExp)
+      ) {
+        await callExpect('toHaveAttribute', [name], valueOrOptions.timeout);
+        return;
+      }
+      if (valueOrOptions === undefined) {
+        await callExpect('toHaveAttribute', [name], maybeOptions?.timeout);
+        return;
+      }
+      await callExpect(
+        'toHaveAttribute',
+        [name, serializeMatcherText(valueOrOptions as string | RegExp)],
+        maybeOptions?.timeout,
+        { ignoreCase: maybeOptions?.ignoreCase },
+      );
     },
     async toHaveClass(value, options) {
       await callExpect(
         'toHaveClass',
-        [serializeMatcherText(value)],
+        [serializeMatcherTextOrArray(value)],
         options?.timeout,
       );
+    },
+    async toContainClass(value, options) {
+      const isArray = Array.isArray(value);
+      const items = isArray ? value : [value];
+      if (items.some((item) => item instanceof RegExp)) {
+        throw new TypeError(
+          isArray
+            ? '"expected" argument in toContainClass cannot contain RegExp values'
+            : '"expected" argument in toContainClass cannot be a RegExp value',
+        );
+      }
+      if (items.some((item) => typeof item !== 'string')) {
+        throw new TypeError(
+          'toContainClass expects a string or an array of strings',
+        );
+      }
+      await callExpect('toContainClass', [value], options?.timeout);
     },
     async toHaveCount(count, options) {
       await callExpect('toHaveCount', [count], options?.timeout);
@@ -310,12 +392,15 @@ expect.extend({
 export type {
   BrowserPage,
   BrowserSerializable,
+  LocatorAriaRole,
   LocatorBlurOptions,
   LocatorCheckOptions,
+  LocatorClearOptions,
   LocatorClickOptions,
   LocatorDblclickOptions,
   LocatorDragToOptions,
   LocatorDispatchEventInit,
+  LocatorDispatchEventOptions,
   LocatorFillOptions,
   LocatorFilterOptions,
   LocatorFocusOptions,
@@ -323,10 +408,13 @@ export type {
   LocatorHoverOptions,
   LocatorKeyboardModifier,
   LocatorMouseButton,
+  LocatorOptions,
   LocatorPosition,
   LocatorPressOptions,
   LocatorScrollIntoViewIfNeededOptions,
+  LocatorSelectOptionItem,
   LocatorSelectOptionOptions,
+  LocatorSelectOptionValue,
   LocatorSetInputFilesOptions,
   LocatorTextOptions,
   LocatorWaitForOptions,

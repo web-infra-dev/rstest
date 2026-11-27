@@ -96,17 +96,18 @@ headless 模式会恢复当前浏览器实例的初始视口尺寸，headed 模�
 
 ### locator
 
-- **类型：** `(selector: string) => Locator`
+- **类型：** `(selector: string, options?: LocatorOptions) => Locator`
 
-按 CSS selector 查询元素。
+按 CSS selector 查询元素，可选传入 `options` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 按子 `Locator` 或文本条件（`has`、`hasNot`、`hasText`、`hasNotText`）过滤。
 
 ```ts
 const item = page.locator('.todo-item');
+const activeItem = page.locator('.todo-item', { hasText: 'Active' });
 ```
 
 ### getByRole
 
-- **类型：** `(role: string, options?: LocatorGetByRoleOptions) => Locator`
+- **类型：** `(role: LocatorAriaRole | (string & {}), options?: LocatorGetByRoleOptions) => Locator`
 
 按 ARIA 语义角色查询元素。当语义角色可用时，优先使用此方法，而不是 CSS selector 或 test ID。
 
@@ -224,7 +225,7 @@ export default defineConfig({
 
 - **类型：** `(options: LocatorFilterOptions) => Locator`
 
-基于文本或子 `Locator` 条件对已有 `Locator` 做二次过滤。
+基于文本、子 `Locator` 或可见性（`visible` <ApiMeta sup addedVersion="1.0.0-beta.1" />）条件对已有 `Locator` 做二次过滤。
 
 ```ts
 const profileSave = page
@@ -233,6 +234,7 @@ const profileSave = page
   .getByRole('button', { name: 'Save' });
 
 const visibleItems = page.locator('li').filter({
+  visible: true,
   hasNotText: /archived/i,
   hasNot: page.getByRole('img', { name: 'Locked' }),
 });
@@ -260,9 +262,35 @@ const exactOne = byRole.and(byId);
 
 当 `Locator` 匹配多个元素时，按从 `0` 开始的下标、首个匹配或最后一个匹配选择单个元素。
 
+### count
+
+<ApiMeta addedVersion="1.0.0-beta.1" />
+
+- **类型：** `() => Promise<number>`
+
+返回当前匹配该 `Locator` 的元素数量。该方法不会自动重试；断言数量请使用 [`toHaveCount`](/api/runtime-api/browser-mode/assertion#tohavecount)。
+
+```ts
+const total = await page.getByRole('listitem').count();
+```
+
+### all
+
+<ApiMeta addedVersion="1.0.0-beta.1" />
+
+- **类型：** `() => Promise<Locator[]>`
+
+解析当前匹配到的元素数量，并返回由 `nth(index)` 组成的 `Locator` 数组。该方法不会自动等待元素出现。
+
+```ts
+for (const item of await page.getByRole('listitem').all()) {
+  await expect.element(item).toBeVisible();
+}
+```
+
 ## 交互 API
 
-交互方法会执行浏览器操作并返回 `Promise<void>`。
+交互方法会执行浏览器操作并返回 `Promise<void>`（[`selectOption`](#selectoption) 除外，它会返回选中选项的值数组）。
 
 :::warning 严格模式
 Locator 默认处于严格模式。如果交互操作（如 `click`、`fill`）匹配到多个元素，会抛出错误。请使用 [`first()`](#nth--first--last)、[`last()`](#nth--first--last) 或 [`nth()`](#nth--first--last) 显式选择单个元素。
@@ -342,9 +370,9 @@ await page.getByPlaceholder('Email').fill('dev@rstest.rs');
 
 ### clear
 
-- **类型：** `() => Promise<void>`
+- **类型：** `(options?: LocatorClearOptions) => Promise<void>`
 
-清空输入元素的值。
+清空输入元素的值，可选传入 `options` <ApiMeta sup addedVersion="1.0.0-beta.1" />（`force`、`timeout`）。
 
 ```ts
 await page.getByPlaceholder('Email').clear();
@@ -412,9 +440,9 @@ await page.getByText('Ready').waitFor();
 
 ### dispatchEvent
 
-- **类型：** `(type: string, eventInit?: LocatorDispatchEventInit) => Promise<void>`
+- **类型：** `(type: string, eventInit?: LocatorDispatchEventInit, options?: LocatorDispatchEventOptions) => Promise<void>`
 
-在匹配到的元素上派发 DOM 事件。`type` 必须是非空字符串，`eventInit` 必须可被 JSON 序列化（`BrowserSerializable`）。
+在匹配到的元素上派发 DOM 事件。`type` 必须是非空字符串，`eventInit` 必须可被 JSON 序列化（`BrowserSerializable`），`options` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 支持 `{ timeout? }`。
 
 ```ts
 await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
@@ -422,12 +450,13 @@ await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
 
 ### selectOption
 
-- **类型：** `(value: string | string[], options?: LocatorSelectOptionOptions) => Promise<void>`
+- **类型：** `(values: LocatorSelectOptionValue, options?: LocatorSelectOptionOptions) => Promise<string[]>`
 
-选择 `<select>` 元素的选项。当前仅支持 `string` 或 `string[]` 作为值。
+按值字符串，或 <ApiMeta sup addedVersion="1.0.0-beta.1" /> `{ value?, label?, index? }`、它们的数组或 `null`（取消全部选中）选择 `<select>` 元素的选项，并返回已选中选项的 `value` 数组 <ApiMeta sup addedVersion="1.0.0-beta.1" />。
 
 ```ts
 await page.getByLabel('Choice').selectOption('b');
+await page.getByLabel('Choice').selectOption({ label: 'Option B' });
 ```
 
 ### setInputFiles
@@ -445,6 +474,18 @@ await page.locator('#upload').setInputFiles('/tmp/demo.txt');
 以下选项与辅助类型均从 `@rstest/browser` 导出：
 
 ```ts
+type LocatorAriaRole =
+  | 'alert'
+  | 'alertdialog'
+  | 'button'
+  | 'checkbox'
+  | 'dialog'
+  | 'heading'
+  | 'link'
+  | 'listitem'
+  | 'textbox'
+  | /* ...标准 WAI-ARIA role */;
+
 type LocatorTextOptions = {
   exact?: boolean;
 };
@@ -466,7 +507,10 @@ type LocatorFilterOptions = {
   hasNotText?: string | RegExp;
   has?: Locator;
   hasNot?: Locator;
+  visible?: boolean;
 };
+
+type LocatorOptions = Omit<LocatorFilterOptions, 'visible'>;
 
 type LocatorKeyboardModifier =
   'Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift';
@@ -514,6 +558,11 @@ type LocatorFillOptions = {
   timeout?: number;
 };
 
+type LocatorClearOptions = {
+  force?: boolean;
+  timeout?: number;
+};
+
 type LocatorCheckOptions = {
   force?: boolean;
   position?: LocatorPosition;
@@ -548,6 +597,23 @@ type BrowserSerializable =
 
 type LocatorDispatchEventInit = BrowserSerializable;
 
+type LocatorDispatchEventOptions = {
+  timeout?: number;
+};
+
+type LocatorSelectOptionItem = {
+  value?: string;
+  label?: string;
+  index?: number;
+};
+
+type LocatorSelectOptionValue =
+  | null
+  | string
+  | LocatorSelectOptionItem
+  | readonly string[]
+  | readonly LocatorSelectOptionItem[];
+
 type LocatorSelectOptionOptions = {
   force?: boolean;
   timeout?: number;
@@ -561,9 +627,9 @@ type LocatorSetInputFilesOptions = {
 ## 使用约束
 
 - 当前仅支持本页列出的 Playwright `Locator` API 子集。
-- `and()`、`or()`、`dragTo()` 以及 `filter({ has | hasNot })` 的参数必须是 `@rstest/browser` 返回的 `Locator`。
-- `dispatchEvent(type, eventInit?)` 的 `type` 必须是非空字符串，`eventInit` 必须可被 JSON 序列化。
-- `selectOption()` 和 `setInputFiles()` 仅接受 `string` 或 `string[]`。
+- `and()`、`or()`、`dragTo()`、`locator(_, { has | hasNot })` 以及 `filter({ has | hasNot })` 的参数必须是 `@rstest/browser` 返回的 `Locator`。
+- `dispatchEvent(type, eventInit?, options?)` 的 `type` 必须是非空字符串，`eventInit` 必须可被 JSON 序列化。
+- `selectOption()` 仅接受 `null`、`string`、`{ value?, label?, index? }`、`string[]` 或 `{ value?, label?, index? }` 数组（不支持字符串与对象混排数组或 DOM 元素）；`setInputFiles()` 仅接受 `string` 或 `string[]` 形式的文件路径。
 
 ## 与 expect.element 配合
 
