@@ -14,6 +14,7 @@ type WatchRerunPlannerInput = {
   previousTestFiles: TestFileInfo[];
   affectedTestFiles: string[];
   requestedTestPaths?: string[] | 'all';
+  filterTestPaths?: (testPaths: string[]) => string[];
 };
 
 type WatchFileSetUpdate = {
@@ -43,7 +44,7 @@ type WatchRerunPlan = {
   decision: WatchRerunDecision;
 };
 
-const serializeTestFiles = (files: TestFileInfo[]): string => {
+const serializeTestFiles = (files: readonly TestFileInfo[]): string => {
   return JSON.stringify(
     files.map((f) => `${f.projectName}:${getTestPathKey(f.testPath)}`).sort(),
   );
@@ -56,7 +57,7 @@ const normalizeTestFiles = (files: TestFileInfo[]): TestFileInfo[] => {
   }));
 };
 
-const collectTestPaths = (files: TestFileInfo[]): string[] => {
+const collectTestPaths = (files: readonly TestFileInfo[]): string[] => {
   return [
     ...new Map(
       files.map((file) => [getTestPathKey(file.testPath), file.testPath]),
@@ -97,7 +98,10 @@ export const planWatchRerun = ({
   previousTestFiles,
   affectedTestFiles,
   requestedTestPaths,
+  filterTestPaths,
 }: WatchRerunPlannerInput): WatchRerunPlan => {
+  const applyFilter = (paths: string[]): string[] =>
+    filterTestPaths ? filterTestPaths(paths) : paths;
   const currentTestFiles = collectWatchTestFiles(projectEntries);
   const normalizedPrevious = normalizeTestFiles(previousTestFiles);
   const fileSetChanged =
@@ -146,6 +150,25 @@ export const planWatchRerun = ({
       };
     }
 
+    if (
+      requestedTestPaths === undefined &&
+      filterTestPaths &&
+      filterTestPaths([
+        ...collectTestPaths(addedTestFiles),
+        ...fileSetUpdate.deletedTestPaths,
+        ...affectedTestFiles,
+      ]).length === 0
+    ) {
+      return {
+        fileSetUpdate,
+        decision: {
+          kind: 'idle',
+          message:
+            'No affected browser test files detected, skipping re-run.\n',
+        },
+      };
+    }
+
     const requestedPathSet =
       requestedTestPaths === undefined || requestedTestPaths === 'all'
         ? undefined
@@ -154,7 +177,7 @@ export const planWatchRerun = ({
           );
     const testPaths =
       requestedPathSet === undefined
-        ? collectTestPaths(currentTestFiles)
+        ? applyFilter(collectTestPaths(currentTestFiles))
         : collectTestPaths(
             currentTestFiles.filter(({ testPath }) =>
               requestedPathSet.has(getTestPathKey(testPath)),
@@ -163,19 +186,29 @@ export const planWatchRerun = ({
     const deferredTestPaths =
       requestedPathSet === undefined
         ? []
-        : collectTestPaths(
-            addedTestFiles.filter(
-              ({ testPath }) => !requestedPathSet.has(getTestPathKey(testPath)),
+        : applyFilter(
+            collectTestPaths(
+              addedTestFiles.filter(
+                ({ testPath }) =>
+                  !requestedPathSet.has(getTestPathKey(testPath)),
+              ),
             ),
           );
 
     if (testPaths.length === 0) {
       return {
         fileSetUpdate,
-        decision: {
-          kind: 'idle',
-          message: 'No requested browser test files remain after update.\n',
-        },
+        decision:
+          requestedTestPaths === undefined
+            ? {
+                kind: 'empty',
+                message: 'No browser test files remain after update.\n',
+              }
+            : {
+                kind: 'idle',
+                message:
+                  'No requested browser test files remain after update.\n',
+              },
       };
     }
 
@@ -194,10 +227,11 @@ export const planWatchRerun = ({
     requestedTestPaths === undefined || requestedTestPaths === 'all'
       ? undefined
       : new Set(requestedTestPaths.map((testPath) => getTestPathKey(testPath)));
+  const filteredAffectedPaths = applyFilter(affectedTestFiles);
   const affectedPathSet = new Set([
-    ...affectedTestFiles.map((testFile) => getTestPathKey(testFile)),
+    ...filteredAffectedPaths.map((testFile) => getTestPathKey(testFile)),
     ...(requestedTestPaths === 'all'
-      ? collectTestPaths(currentTestFiles).map((testPath) =>
+      ? applyFilter(collectTestPaths(currentTestFiles)).map((testPath) =>
           getTestPathKey(testPath),
         )
       : (requestedPathSet ?? [])),

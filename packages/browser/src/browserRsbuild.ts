@@ -914,7 +914,10 @@ export const collectProjectEntries = async (
   // back to re-deriving from `context` for internal callers (e.g. the watch
   // plugin) that do not carry the plan's project list.
   browserProjects: InternalProjectContext[] = getBrowserProjects(context),
+  options?: { applyFileFilters?: boolean },
 ): Promise<BrowserProjectEntries[]> => {
+  const fileFilters =
+    options?.applyFileFilters === false ? undefined : context.fileFilters;
   return Promise.all(
     browserProjects.map(async (project) => {
       const {
@@ -927,7 +930,7 @@ export const collectProjectEntries = async (
         includeSource,
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
-        fileFilters: context.fileFilters,
+        fileFilters,
       });
 
       const setup = materializeVirtualSetupFiles(
@@ -1437,6 +1440,7 @@ export const createBrowserRuntime = async ({
       context,
       updatedShardedEntries,
       browserProjects,
+      { applyFileFilters: !isWatchMode || Boolean(configOnly) },
     );
     for (const manifestModule of manifestModules) {
       refreshManifestModule(manifestModule);
@@ -1947,11 +1951,14 @@ export const createBrowserRuntime = async ({
               }
               // Collect hashes even during initial build to establish baseline
               if (stats) {
-                // This compiler only ever holds this project's entries; the
-                // diff baseline is keyed per project accordingly.
-                const [projectEntry] = await collectProjectEntries(context, [
-                  project,
-                ]);
+                // This compiler only ever holds this project's entries; keep
+                // the hash baseline unfiltered so interactive `p` filter
+                // changes never drop untouched files from the diff baseline.
+                const [projectEntry] = await collectProjectEntries(
+                  context,
+                  [project],
+                  { applyFileFilters: false },
+                );
                 const entryTestFiles = new Set<string>(
                   collectWatchTestFiles(projectEntry ? [projectEntry] : []).map(
                     (file) => file.testPath,
@@ -2210,6 +2217,7 @@ export async function resolveProjectEntries(
   context: InternalContext,
   shardedEntries: Map<string, { entries: Record<string, string> }> | undefined,
   browserProjects: InternalProjectContext[],
+  options?: { applyFileFilters?: boolean },
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
     const projectEntries: BrowserProjectEntries[] = [];
@@ -2239,5 +2247,5 @@ export async function resolveProjectEntries(
     }
     return projectEntries;
   }
-  return collectProjectEntries(context, browserProjects);
+  return collectProjectEntries(context, browserProjects, options);
 }

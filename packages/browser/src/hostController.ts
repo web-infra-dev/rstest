@@ -14,6 +14,7 @@ import {
   createRunnerEventSink,
   createSilentConsoleController,
   DEFAULT_TEST_TIMEOUT,
+  filterFiles,
   getPrettyConsoleName,
   hasUserRstestConfigPlugins,
   type InternalContext,
@@ -32,6 +33,7 @@ import {
   resolveBrowserInstances,
   resolveSnapshotPathDefault,
   type SelectedTestFile,
+  serializableConfig,
   type SerializedError,
   toSelectedTestFile,
   type TestFileResult,
@@ -373,6 +375,20 @@ export const runBrowserController = async (
       envOverlay: env,
     },
   );
+  // Refresh live per-cycle runtime fields (`testNamePattern` updated by watch
+  // `t`/`a` shortcuts) on each row before a rerun executes.
+  const syncLiveRuntimeConfig = (): void => {
+    for (const row of projectRuntimeConfigs) {
+      const project = projectByName.get(row.name);
+      const testNamePattern = project
+        ? project.normalizedConfig.testNamePattern
+        : context.normalizedConfig.testNamePattern;
+      row.runtimeConfig = serializableConfig({
+        ...row.runtimeConfig,
+        testNamePattern,
+      });
+    }
+  };
   // The schedulers partition on the row itself: headless rows share one
   // headless scheduler, and each headed `(project, browser)` row opens its own
   // container window. `useHeadlessDirect` only skips resolving container assets
@@ -572,6 +588,7 @@ export const runBrowserController = async (
     context,
     options?.shardedEntries,
     browserProjects,
+    { applyFileFilters: !isWatchMode || filesOnly },
   );
   let totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
@@ -710,10 +727,19 @@ export const runBrowserController = async (
     return cleanup;
   };
 
-  // Track initial test files for watch mode (from this controller's freshly
-  // collected entries, before adopting the runtime's entry snapshot below).
+  // Track initial test files for watch mode (unfiltered disk set, including
+  // any updates applied by `modifyRstestConfig` during runtime creation).
+  const filterWatchTestPaths = (testPaths: string[]): string[] =>
+    context.fileFilters === undefined
+      ? testPaths
+      : filterFiles(testPaths, context.fileFilters, context.rootPath);
+  const collectUnfilteredWatchEntries = () =>
+    collectProjectEntries(context, browserProjects, {
+      applyFileFilters: false,
+    });
+
   if (isWatchMode) {
-    watchState.lastTestFiles = collectWatchTestFiles(projectEntries);
+    watchState.lastTestFiles = collectWatchTestFiles(runtime.projectEntries);
     // Bind the runtime's long-lived watch plugins to THIS entry's trigger —
     // the runtime survives config-change restarts, this closure does not.
     watchState.triggerRerun = async () => {
@@ -732,13 +758,12 @@ export const runBrowserController = async (
   // A path-scoped shortcut must match a browser entry. Keep its paths on the
   // dispatch call instead of putting them in the shared compiler-change set:
   // an overlapping rebuild can drain that set before the shortcut is planned.
-  const hasMatchingTestPath = (testPaths: string[]): boolean => {
-    const wanted = testPaths
-      ? new Set(testPaths.map((testPath) => getTestPathKey(testPath)))
-      : new Set<string>();
-    return watchState.lastTestFiles.some((file) =>
-      wanted.has(getTestPathKey(file.testPath)),
-    );
+  const hasMatchingTestPath = (
+    testPaths: string[],
+    files: readonly TestFileInfo[] = watchState.lastTestFiles,
+  ): boolean => {
+    const wanted = new Set(testPaths.map(getTestPathKey));
+    return files.some((file) => wanted.has(getTestPathKey(file.testPath)));
   };
 
   /**
@@ -841,12 +866,22 @@ export const runBrowserController = async (
 
   // Collect all test files from project entries with project info
   // Normalize paths to posix format for cross-platform compatibility
-  const allTestFiles: TestFileInfo[] = projectEntries.flatMap((entry) =>
+  let allTestFiles: TestFileInfo[] = projectEntries.flatMap((entry) =>
     entry.testFiles.map((testPath) => ({
       testPath: normalize(testPath),
       projectName: entry.project.name,
     })),
   );
+  if (isWatchMode && context.fileFilters !== undefined) {
+    const matchedPaths = new Set(
+      filterWatchTestPaths(allTestFiles.map((file) => file.testPath)).map(
+        getTestPathKey,
+      ),
+    );
+    allTestFiles = allTestFiles.filter((file) =>
+      matchedPaths.has(getTestPathKey(file.testPath)),
+    );
+  }
   let runStartFailure: Error | undefined;
   try {
     runStartFailure = await options?.onSelected?.(
@@ -1746,7 +1781,9 @@ export const runBrowserController = async (
         headlessLane: headless,
         headlessRows,
         headedLanes,
-        collectProjectEntries: () => collectProjectEntries(context),
+        collectProjectEntries: collectUnfilteredWatchEntries,
+        filterWatchTestPaths,
+        syncRuntimeConfig: syncLiveRuntimeConfig,
         logWatchReady: () => logWatchReadyMessage(context, enableCliShortcuts),
         hasMatchingTestPath,
         getFatalCompileError: () => fatalCompileError,
