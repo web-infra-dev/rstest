@@ -1,4 +1,11 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -179,4 +186,101 @@ describe('node pool e2e', () => {
       'Node worker pools require `testEnvironment.options` to be structured-cloneable',
     );
   });
+
+  it.for(['forks', 'vmThreads', 'vmForks'] as const)(
+    'runs file and worker cleanups registered by an externalized node_modules package under %s',
+    async (pool, { onTestFinished }) => {
+      const fixtureDir = mkdtempSync(
+        join(tmpdir(), 'rstest-external-cleanup-'),
+      );
+      const markerFile = join(fixtureDir, 'cleanup-events.txt');
+      writeFileSync(markerFile, '');
+      onTestFinished(() =>
+        rmSync(fixtureDir, { force: true, recursive: true }),
+      );
+
+      const pluginDir = join(
+        fixtureDir,
+        'node_modules',
+        'external-cleanup-plugin',
+      );
+      mkdirSync(pluginDir, { recursive: true });
+      mkdirSync(join(fixtureDir, 'node_modules', '@rstest'), {
+        recursive: true,
+      });
+      symlinkSync(
+        join(__dirname, '../../packages/core'),
+        join(fixtureDir, 'node_modules', '@rstest', 'core'),
+        'junction',
+      );
+
+      writeFileSync(
+        join(pluginDir, 'package.json'),
+        JSON.stringify({
+          name: 'external-cleanup-plugin',
+          type: 'module',
+          exports: { '.': './index.mjs' },
+        }),
+      );
+      writeFileSync(
+        join(pluginDir, 'index.mjs'),
+        [
+          "import { appendFileSync } from 'node:fs';",
+          "import { registerFileCleanup, registerWorkerCleanup } from '@rstest/core/internal/node-runtime';",
+          'export function registerExternalCleanups(markerPath) {',
+          '  registerFileCleanup(() => {',
+          "    appendFileSync(markerPath, 'file\\n');",
+          '  });',
+          '  registerWorkerCleanup(() => {',
+          "    appendFileSync(markerPath, 'worker\\n');",
+          '  });',
+          '}',
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(
+        join(fixtureDir, 'rstest.config.mjs'),
+        [
+          'export default {',
+          "  include: ['./index.test.ts'],",
+          "  testEnvironment: 'node',",
+          '};',
+          '',
+        ].join('\n'),
+      );
+      writeFileSync(
+        join(fixtureDir, 'index.test.ts'),
+        [
+          "import * as core from '@rstest/core';",
+          "import { registerExternalCleanups } from 'external-cleanup-plugin';",
+          '',
+          "core.test('registers cleanups from externalized package', () => {",
+          "  core.expect('registerFileCleanup' in core).toBe(false);",
+          "  core.expect('registerWorkerCleanup' in core).toBe(false);",
+          '  registerExternalCleanups(process.env.RSTEST_EXTERNAL_CLEANUP_MARKER!);',
+          '});',
+          '',
+        ].join('\n'),
+      );
+
+      const { expectExecSuccess } = await runRstestCli({
+        command: 'rstest',
+        args: ['run', '--pool', pool, '--pool.maxWorkers', '1'],
+        onTestFinished,
+        options: {
+          nodeOptions: {
+            cwd: fixtureDir,
+            env: {
+              ISOLATE: undefined,
+              RSTEST_EXTERNAL_CLEANUP_MARKER: markerFile,
+            },
+          },
+        },
+      });
+
+      await expectExecSuccess();
+      const events = readFileSync(markerFile, 'utf8').trim().split('\n').sort();
+      expect(events).toEqual(['file', 'worker']);
+    },
+  );
 });

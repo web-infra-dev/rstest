@@ -197,6 +197,7 @@ define.lib({
           'api/index': './src/api/index.ts',
           adapter: './src/adapter.ts',
           browser: './src/browser.ts',
+          'node-runtime': './src/nodeRuntime.ts',
           globalSetupWorker: './src/runtime/worker/globalSetupWorker.ts',
           prebundleWorker: './src/core/environment/prebundleWorker.ts',
         },

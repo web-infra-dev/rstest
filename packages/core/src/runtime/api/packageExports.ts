@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import type { RuntimeRstest } from './index';
+import type { Rstest } from '../../types';
 
 // Rspack compiles external named imports to synchronous property reads at call sites,
 // so getters must load via require; import() would return a Promise.
@@ -7,7 +7,7 @@ const require = createRequire(import.meta.url);
 
 type PackageOnlyExport = Exclude<
   keyof typeof import('../../index'),
-  keyof RuntimeRstest
+  keyof Rstest
 >;
 
 // Tests resolve @rstest/core through the runtime global, which must also expose
@@ -34,7 +34,7 @@ type PackageExportsAreExhaustive = [MissingPackageExports] extends [never]
 const _packageExportsAreExhaustive: PackageExportsAreExhaustive = true;
 void _packageExportsAreExhaustive;
 
-export function withPackageExports(api: RuntimeRstest): RuntimeRstest {
+export function withPackageExports(api: Rstest): Rstest {
   const exports = { ...api };
   for (const name of PACKAGE_ONLY_EXPORTS) {
     Object.defineProperty(exports, name, {

@@ -1,4 +1,5 @@
-import { expect, registerFileCleanup, test } from '@rstest/core';
+import { expect, test } from '@rstest/core';
+import { registerFileCleanup } from '@rstest/core/internal/node-runtime';
 
 test('cancels pending VM immediate callbacks during DOM teardown', () => {
   expect(typeof window).toBe('object');

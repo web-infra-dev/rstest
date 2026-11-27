@@ -4,7 +4,8 @@ import { createRequire, syncBuiltinESMExports } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { threadId } from 'node:worker_threads';
-import { afterAll, expect, it, registerFileCleanup, rs } from '@rstest/core';
+import { afterAll, expect, it, rs } from '@rstest/core';
+import { registerFileCleanup } from '@rstest/core/internal/node-runtime';
 
 const load = createRequire(import.meta.url);
 const marker = Symbol.for('rstest.native-fs.probe');

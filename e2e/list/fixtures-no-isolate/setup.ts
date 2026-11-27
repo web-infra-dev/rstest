@@ -1,4 +1,4 @@
-import { registerWorkerCleanup } from '@rstest/core';
+import { registerWorkerCleanup } from '@rstest/core/internal/node-runtime';
 
 declare global {
   var __rstestListWorkerCleanupCount: number | undefined;

@@ -1,6 +1,6 @@
 import { Buffer } from 'node:buffer';
-import { registerFileCleanup } from '@rstest/core';
 import type { ExtendConfig } from '@rstest/core';
+import { registerFileCleanup } from '@rstest/core/internal/node-runtime';
 import type { PlaywrightOptions } from './fixture';
 
 const PLAYWRIGHT_CONFIG_SYMBOL = Symbol.for('rstest.playwright.config');

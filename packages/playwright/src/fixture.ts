@@ -28,10 +28,10 @@ import {
   beforeEach as rstestBeforeEach,
   describe as rstestDescribe,
   expect as rstestExpect,
-  registerWorkerCleanup,
   rstest,
   test as base,
 } from '@rstest/core';
+import { registerWorkerCleanup } from '@rstest/core/internal/node-runtime';
 import type {
   FixtureLifecycle,
   FileFixtureOptions,

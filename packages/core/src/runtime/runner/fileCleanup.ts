@@ -1,35 +1,19 @@
 import type { RawTestFileResult } from '../../types';
-import type { MaybePromise } from '../../types';
+import {
+  type CleanupCallback,
+  createCleanupRegistry,
+  type RegisterCleanup,
+} from './cleanupRegistry';
 
-type FileCleanup = () => MaybePromise<void>;
+export type FileCleanup = CleanupCallback;
 
-const FILE_CLEANUP_REGISTRY = Symbol.for('rstest.file.cleanup.registry');
+const fileCleanups = createCleanupRegistry('file');
 
-const getFileCleanupRegistry = (): Set<FileCleanup> => {
-  const globalObject = globalThis as unknown as Record<PropertyKey, unknown>;
-  let registry = globalObject[FILE_CLEANUP_REGISTRY] as
-    Set<FileCleanup> | undefined;
-
-  if (!registry) {
-    registry = new Set<FileCleanup>();
-    globalObject[FILE_CLEANUP_REGISTRY] = registry;
-  }
-
-  return registry;
-};
-
-export const registerFileCleanup = (cleanup: FileCleanup): (() => boolean) => {
-  const registry = getFileCleanupRegistry();
-  registry.add(cleanup);
-  return () => registry.delete(cleanup);
-};
-
-export const takeFileCleanups = (): FileCleanup[] => {
-  const registry = getFileCleanupRegistry();
-  const cleanups = [...registry];
-  registry.clear();
-  return cleanups;
-};
+export const registerFileCleanup: RegisterCleanup = fileCleanups.register;
+export const installFileCleanupBridge: (
+  runtimeGlobal: Record<PropertyKey, unknown>,
+) => void = fileCleanups.installBridge;
+export const takeFileCleanups: () => FileCleanup[] = fileCleanups.take;
 
 export const createFileCleanupTimeoutResult = ({
   message,
