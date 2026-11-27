@@ -420,6 +420,62 @@ describe('CLI help output', () => {
     });
   });
 
+  it.each([
+    { args: ['--browser.screenshotFailures.clean', 'false'], clean: false },
+    { args: ['--browser.screenshotFailures.clean=false'], clean: false },
+    { args: ['--browser.screenshotFailures.clean'], clean: true },
+    {
+      args: [
+        '--browser.screenshotFailures',
+        '--browser.screenshotFailures.clean=false',
+      ],
+      clean: false,
+    },
+    {
+      args: [
+        '--browser.screenshotFailures.clean=false',
+        '--browser.screenshotFailures',
+        'true',
+      ],
+      clean: false,
+    },
+  ])(
+    'parses screenshot cleanup and preserves test filters: $args',
+    ({ args, clean }) => {
+      const parsed = createCli().parse(
+        ['node', 'rstest', 'run', ...args, 'login.test.ts'],
+        { run: false },
+      );
+      expect(parsed.options.browser).toEqual({ screenshotFailures: { clean } });
+      expect(parsed.args).toEqual(['login.test.ts']);
+    },
+  );
+
+  it.each([
+    [
+      '--browser.screenshotFailures=false',
+      '--browser.screenshotFailures.clean',
+    ],
+    [
+      '--browser.screenshotFailures.clean=false',
+      '--browser.screenshotFailures',
+      'false',
+    ],
+  ])('rejects cleanup with disabled screenshot capture', (...args) => {
+    expect(() =>
+      createCli().parse(['node', 'rstest', 'run', ...args], { run: false }),
+    ).toThrow('when failure screenshots are disabled');
+  });
+
+  it.each([
+    '--browser.screenshotFailures.keep',
+    '--browser.screenshotFailures.clean.unused',
+  ])('rejects unknown screenshot options: %s', (flag) => {
+    expect(() =>
+      createCli().parse(['node', 'rstest', 'run', flag], { run: false }),
+    ).toThrow(`Unknown option \`${flag}\``);
+  });
+
   it('allows provider-specific browser options', () => {
     const parsed = createCli().parse(
       [

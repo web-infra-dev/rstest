@@ -487,6 +487,45 @@ test('fails in both projects', () => {
     }
   });
 
+  it('overrides failure screenshot cleanup from the CLI', async () => {
+    const args = ['--project=project-a', 'tests/failure.test.ts'];
+
+    const first = await runScreenshot([
+      ...args,
+      '--browser.screenshotFailures.clean',
+      'false',
+    ]);
+    await first.cli.exec;
+    const screenshots = () =>
+      fs
+        .readdirSync(path.join(fixtureDir, '.rstest', 'screenshots'), {
+          recursive: true,
+          encoding: 'utf8',
+        })
+        .filter((entry) => entry.endsWith('.png'));
+    expect(first.cli.exec.exitCode).toBe(1);
+    const original = screenshots();
+    expect(original).toHaveLength(1);
+
+    const second = await runScreenshot([
+      ...args,
+      '--browser.screenshotFailures.clean=true',
+      '--browser.screenshotFailures.clean=false',
+    ]);
+    await second.cli.exec;
+    expect(second.cli.exec.exitCode).toBe(1);
+    expect(screenshots()).toHaveLength(2);
+    expect(screenshots()).toContain(original[0]);
+
+    const clean = await runScreenshot([
+      ...args,
+      '--browser.screenshotFailures.clean=true',
+    ]);
+    await clean.cli.exec;
+    expect(clean.cli.exec.exitCode).toBe(1);
+    expect(screenshots()).toHaveLength(1);
+  });
+
   it('can disable failed-test screenshots', async () => {
     const result = await runScreenshot([
       '--browser.screenshotFailures=false',

@@ -331,7 +331,8 @@ export function mergeWithCLIOptions(
         const configured = config.browser.screenshotFailures;
         const policy = typeof configured === 'object' ? { ...configured } : {};
         if (screenshotFailures.clean !== undefined) {
-          policy.clean = screenshotFailures.clean;
+          const { clean } = screenshotFailures;
+          policy.clean = Array.isArray(clean) ? clean.at(-1) : clean;
         }
         config.browser.screenshotFailures = policy;
       } else if (screenshotFailures !== undefined) {
