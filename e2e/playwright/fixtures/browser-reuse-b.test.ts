@@ -1,4 +1,4 @@
-import { registerWorkerCleanup } from '@rstest/core';
+import { registerWorkerCleanup } from '@rstest/core/internal/node-runtime';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect } from '@rstest/playwright';

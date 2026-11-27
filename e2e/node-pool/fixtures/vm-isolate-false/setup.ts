@@ -4,13 +4,8 @@ import { appendFileSync } from 'node:fs';
 import nodeProcess from 'node:process';
 import { setTimeout as nodeSetTimeout } from 'node:timers';
 import { promisify } from 'node:util';
-import {
-  afterAll,
-  beforeAll,
-  expect,
-  registerFileCleanup,
-  rs,
-} from '@rstest/core';
+import { afterAll, beforeAll, expect, rs } from '@rstest/core';
+import { registerFileCleanup } from '@rstest/core/internal/node-runtime';
 
 const assertProcessGuardRealm = () => {
   for (const target of [process, nodeProcess]) {

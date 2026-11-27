@@ -1,4 +1,9 @@
+import vm from 'node:vm';
 import { describe, expect, it } from '@rstest/core';
+import {
+  installFileCleanupBridge,
+  takeFileCleanups,
+} from '../../../src/runtime/runner/fileCleanup';
 import {
   createFixtureResolver,
   FileFixtureManager,
@@ -7,6 +12,7 @@ import {
   normalizeNamedFixture,
   registerWorkerCleanup,
 } from '../../../src/runtime/runner/fixtures';
+import { installWorkerCleanupBridge } from '../../../src/runtime/runner/workerCleanup';
 
 describe('worker cleanup callbacks', () => {
   it('runs registered callbacks when the worker scope is cleaned up', async () => {
@@ -42,6 +48,43 @@ describe('worker cleanup callbacks', () => {
         'Worker cleanup failed: second cleanup failed',
       ].join('\n'),
     });
+  });
+
+  it('forwards file and worker cleanups registered inside a VM context to the host registry', async () => {
+    const events: string[] = [];
+    const vmContext = vm.createContext({ events });
+    const vmGlobal = vm.runInContext('globalThis', vmContext) as Record<
+      PropertyKey,
+      unknown
+    >;
+
+    installFileCleanupBridge(vmGlobal);
+    installWorkerCleanupBridge(vmGlobal);
+
+    vm.runInContext(
+      `
+        const registerFile = Reflect.get(globalThis, Symbol.for('rstest.file.cleanup.register'));
+        const registerWorker = Reflect.get(globalThis, Symbol.for('rstest.worker.cleanup.register'));
+        const unregisterSkipped = registerFile(() => {
+          events.push('skipped-file');
+        });
+        unregisterSkipped();
+        registerFile(() => {
+          events.push('vm-file');
+        });
+        registerWorker(() => {
+          events.push('vm-worker');
+        });
+      `,
+      vmContext,
+    );
+
+    for (const cleanup of takeFileCleanups()) {
+      await cleanup();
+    }
+    await cleanupWorkerFixtures();
+
+    expect(events).toEqual(['vm-file', 'vm-worker']);
   });
 });
 

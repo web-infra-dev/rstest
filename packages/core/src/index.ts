@@ -21,14 +21,6 @@ import type {
 export { loadConfig, mergeProjectConfig, mergeRstestConfig } from './config';
 export * from './runtime/api/public';
 
-// Node-side integrations use this hook to release resources at worker exit.
-// The registry is global-symbol backed so independently bundled Node runtime
-// entries still observe the same callbacks.
-export { registerWorkerCleanup } from './runtime/runner/workerCleanup';
-// Node-side integrations can release resources at the end of the current file.
-// Unlike suite hooks, this also runs when collection or suite execution fails.
-export { registerFileCleanup } from './runtime/runner/fileCleanup';
-
 export type {
   BrowserInstanceConfig,
   BrowserExpectConfig,

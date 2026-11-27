@@ -1,17 +1,12 @@
 import { normalize } from 'pathe';
 import type { Rstest, RstestExpect, WorkerState } from '../../types';
 import { createRunner, runnerAPI } from '../runner';
-import { registerWorkerCleanup } from '../runner/workerCleanup';
-import { registerFileCleanup } from '../runner/fileCleanup';
+import { installFileCleanupBridge } from '../runner/fileCleanup';
+import { installWorkerCleanupBridge } from '../runner/workerCleanup';
 import type { TaskContext } from '../worker/taskContext';
 import { assert, createFileExpect, setupChaiConfig } from './expect';
 import { loadSnapshotModule } from './snapshotLoader';
 import { createRstestUtilities } from './utilities';
-
-export type RuntimeRstest = Rstest & {
-  registerFileCleanup: typeof registerFileCleanup;
-  registerWorkerCleanup: typeof registerWorkerCleanup;
-};
 
 /**
  * Live per-file API binding under `isolate: false` (the canonical contract).
@@ -50,7 +45,7 @@ export const createRstestRuntime = async (
 ): Promise<{
   resolveImportMetaRstest: (filename: string) => Rstest | undefined;
   runner: ReturnType<typeof createRunner>['runner'];
-  api: RuntimeRstest;
+  api: Rstest;
 }> => {
   const [{ runner }, { SnapshotPlugin, ensureSnapshotClient }] =
     await Promise.all([
@@ -82,8 +77,6 @@ export const createRstestRuntime = async (
       assert,
       rstest,
       rs: rstest,
-      registerFileCleanup,
-      registerWorkerCleanup,
     },
   };
 
@@ -94,6 +87,10 @@ export const createRstestRuntime = async (
   // either realm without sharing state across worker threads.
   globalThis.RSTEST_API = runtime.api;
   (runtimeGlobal ?? globalThis).RSTEST_API = runtime.api;
+  if (runtimeGlobal) {
+    installFileCleanupBridge(runtimeGlobal);
+    installWorkerCleanupBridge(runtimeGlobal);
+  }
 
   const testPath = normalize(workerState.testPath);
 

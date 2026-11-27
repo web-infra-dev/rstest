@@ -1,33 +1,15 @@
-import type { MaybePromise } from '../../types';
+import {
+  type CleanupCallback,
+  createCleanupRegistry,
+  type RegisterCleanup,
+} from './cleanupRegistry';
 
-type WorkerCleanup = () => MaybePromise<void>;
+export type WorkerCleanup = CleanupCallback;
 
-const WORKER_CLEANUP_REGISTRY = Symbol.for('rstest.worker.cleanup.registry');
+const workerCleanups = createCleanupRegistry('worker');
 
-const getWorkerCleanupRegistry = (): Set<WorkerCleanup> => {
-  const globalObject = globalThis as unknown as Record<PropertyKey, unknown>;
-  let registry = globalObject[WORKER_CLEANUP_REGISTRY] as
-    Set<WorkerCleanup> | undefined;
-
-  if (!registry) {
-    registry = new Set<WorkerCleanup>();
-    globalObject[WORKER_CLEANUP_REGISTRY] = registry;
-  }
-
-  return registry;
-};
-
-export const registerWorkerCleanup = (
-  cleanup: WorkerCleanup,
-): (() => boolean) => {
-  const registry = getWorkerCleanupRegistry();
-  registry.add(cleanup);
-  return () => registry.delete(cleanup);
-};
-
-export const takeWorkerCleanups = (): WorkerCleanup[] => {
-  const registry = getWorkerCleanupRegistry();
-  const cleanups = [...registry];
-  registry.clear();
-  return cleanups;
-};
+export const registerWorkerCleanup: RegisterCleanup = workerCleanups.register;
+export const installWorkerCleanupBridge: (
+  runtimeGlobal: Record<PropertyKey, unknown>,
+) => void = workerCleanups.installBridge;
+export const takeWorkerCleanups: () => WorkerCleanup[] = workerCleanups.take;

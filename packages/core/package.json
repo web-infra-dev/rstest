@@ -41,6 +41,10 @@
       "types": "./dist/browser-runtime/index.d.ts",
       "default": "./dist/browser-runtime/index.js"
     },
+    "./internal/node-runtime": {
+      "types": "./dist/node-runtime.d.ts",
+      "default": "./dist/node-runtime.js"
+    },
     "./package.json": {
       "default": "./package.json"
     },

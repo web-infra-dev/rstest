@@ -18,6 +18,8 @@ define.lib({
         sourceMap: process.env.SOURCEMAP === 'true',
         externals: {
           '@rstest/core': '@rstest/core',
+          '@rstest/core/internal/node-runtime':
+            '@rstest/core/internal/node-runtime',
           playwright: 'playwright',
         },
       },

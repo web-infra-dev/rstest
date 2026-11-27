@@ -1,4 +1,5 @@
-import { describe, expect, it, registerFileCleanup } from '@rstest/core';
+import { describe, expect, it } from '@rstest/core';
+import { registerFileCleanup } from '@rstest/core/internal/node-runtime';
 
 const teardownError = process.env.RSTEST_VM_TEARDOWN_ERROR;
 if (teardownError) {
