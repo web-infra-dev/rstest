@@ -30,7 +30,6 @@ import {
   type RawTestResult,
   type RawUserConsoleLog,
   reporterFileKey,
-  resolveBrowserInstances,
   resolveSnapshotPathDefault,
   type SelectedTestFile,
   serializableConfig,
@@ -185,53 +184,7 @@ const getFailureScreenshotDirectory = (
   );
 };
 
-const removeFailureScreenshotsForFiles = async (
-  projects: Pick<
-    InternalProjectContext,
-    'name' | 'rootPath' | 'normalizedConfig'
-  >[],
-  testFiles: TestFileInfo[],
-): Promise<void> => {
-  await Promise.all(
-    testFiles.flatMap(({ projectName, browserName, testPath }) => {
-      const project = projects.find((item) => item.name === projectName);
-      if (!project) {
-        return [];
-      }
-      // Watch file-set entries have no browser dimension: stale cleanup must
-      // then sweep every browser directory the project could have written,
-      // not only the bare-path hash that carries no browser segment.
-      const sweptBrowsers = browserName
-        ? [browserName]
-        : project.normalizedConfig.browser.enabled
-          ? resolveBrowserInstances(project).map((entry) => entry.browserName)
-          : [undefined];
-      return sweptBrowsers.map((sweptBrowserName) =>
-        fs
-          .rm(
-            getFailureScreenshotDirectory(
-              project.rootPath,
-              projectName,
-              testPath,
-              sweptBrowserName,
-            ),
-            {
-              recursive: true,
-              force: true,
-            },
-          )
-          .catch((error) => {
-            logger.warn(
-              `Failed to remove stale browser test screenshots for ${testPath}`,
-              error,
-            );
-          }),
-      );
-    }),
-  );
-};
-
-const getFailureScreenshotPath = ({
+const saveFailureScreenshot = async ({
   projectRoot,
   projectName,
   testPath,
@@ -239,6 +192,7 @@ const getFailureScreenshotPath = ({
   testId,
   parentNames,
   browserName,
+  image,
 }: {
   projectRoot: string;
   projectName: string;
@@ -247,7 +201,8 @@ const getFailureScreenshotPath = ({
   testId: string;
   parentNames: string[];
   browserName?: string;
-}): string => {
+  image: Buffer;
+}): Promise<string> => {
   const safeName = `${basename(testPath)}-${testName}`
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .slice(0, 140);
@@ -263,15 +218,30 @@ const getFailureScreenshotPath = ({
     )
     .digest('hex')
     .slice(0, 16);
-  return join(
-    getFailureScreenshotDirectory(
-      projectRoot,
-      projectName,
-      testPath,
-      browserName,
-    ),
-    `${safeName}-${identityHash}.png`,
+  const directory = getFailureScreenshotDirectory(
+    projectRoot,
+    projectName,
+    testPath,
+    browserName,
   );
+  await fs.mkdir(directory, { recursive: true });
+  const basePath = join(directory, `${safeName}-${identityHash}`);
+  for (let index = 1; ; index++) {
+    const filepath =
+      index === 1 ? `${basePath}.png` : `${basePath}-${index}.png`;
+    try {
+      await fs.writeFile(filepath, image, { flag: 'wx' });
+      return filepath;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !('code' in error) ||
+        error.code !== 'EEXIST'
+      ) {
+        throw error;
+      }
+    }
+  }
 };
 
 const resolveProviderForTestPath = ({
@@ -407,9 +377,6 @@ export const runBrowserController = async (
   // name their `(project, browser)` row instead, so the host translates them
   // here and keys its own per-file maps by instance name too — a client
   // payload and the core payload it leads to then address the same entry.
-  const rowByInstance = new Map(
-    projectRuntimeConfigs.map((row) => [row.instanceName, row]),
-  );
   const rowOf = (file: { projectName: string; browserName?: string }) =>
     rowsByProject
       .get(file.projectName)
@@ -705,26 +672,49 @@ export const runBrowserController = async (
   signal?.addEventListener('abort', onAbort, { once: true });
   const watchState = runtime.watchState;
   const failureScreenshotCleanups = new Map<string, Promise<void>>();
-  const queueFailureScreenshotCleanup = (
+  const queueFailureScreenshotCleanup = async (
     testFile: TestFileInfo,
   ): Promise<void> => {
-    const project = projectByName.get(testFile.projectName);
-    if (!project) {
-      return Promise.resolve();
-    }
+    // Watch deletions carry no browser name. Apply each instance's policy to
+    // its own directory, just as when that instance starts running the file.
+    const rows = rowsByProject.get(testFile.projectName) ?? [];
+    await Promise.all(
+      rows.map(async (row) => {
+        if (
+          (testFile.browserName && testFile.browserName !== row.browserName) ||
+          (typeof row.screenshotFailures === 'object' &&
+            row.screenshotFailures.clean === false)
+        ) {
+          return;
+        }
 
-    const cleanupKey = fileKeyOf(testFile);
-    const cleanup = (
-      failureScreenshotCleanups.get(cleanupKey) ?? Promise.resolve()
-    ).then(() => removeFailureScreenshotsForFiles([project], [testFile]));
-    failureScreenshotCleanups.set(cleanupKey, cleanup);
-    const clear = () => {
-      if (failureScreenshotCleanups.get(cleanupKey) === cleanup) {
-        failureScreenshotCleanups.delete(cleanupKey);
-      }
-    };
-    void cleanup.then(clear, clear);
-    return cleanup;
+        const key = reporterFileKey(row.instanceName, testFile.testPath);
+        const directory = getFailureScreenshotDirectory(
+          row.projectRoot,
+          row.name,
+          testFile.testPath,
+          row.browserName,
+        );
+        const cleanup = (
+          failureScreenshotCleanups.get(key) ?? Promise.resolve()
+        )
+          .then(() => fs.rm(directory, { recursive: true, force: true }))
+          .catch((error) => {
+            logger.warn(
+              `Failed to remove stale browser test screenshots for ${testFile.testPath}`,
+              error,
+            );
+          });
+        failureScreenshotCleanups.set(key, cleanup);
+        try {
+          await cleanup;
+        } finally {
+          if (failureScreenshotCleanups.get(key) === cleanup) {
+            failureScreenshotCleanups.delete(key);
+          }
+        }
+      }),
+    );
   };
 
   // Track initial test files for watch mode (unfiltered disk set, including
@@ -1156,27 +1146,29 @@ export const runBrowserController = async (
           ) {
             throw new Error('Invalid failed-test screenshot response.');
           }
-          const testId = testIdentity.testId;
-          const filepath = getFailureScreenshotPath({
-            projectRoot: project.rootPath,
-            projectName: request.projectName,
-            testPath: request.testPath,
-            testName,
-            testId,
-            parentNames: testIdentity.parentNames,
-            browserName: request.browserName,
-          });
-          await failureScreenshotCleanups.get(fileKeyOf(request));
-          await fs.mkdir(dirname(filepath), { recursive: true });
-          await fs.writeFile(filepath, Buffer.from(result, 'base64'));
-          failureScreenshots.set(
-            getFailureScreenshotKey(
-              instanceNameOf(request),
-              request.testPath,
-              testId,
-            ),
-            filepath,
+          const key = getFailureScreenshotKey(
+            instanceNameOf(request),
+            request.testPath,
+            testIdentity.testId,
           );
+          const image = Buffer.from(result, 'base64');
+          await failureScreenshotCleanups.get(fileKeyOf(request));
+          const current = failureScreenshots.get(key);
+          if (current) {
+            await fs.writeFile(current, image);
+          } else {
+            const filepath = await saveFailureScreenshot({
+              projectRoot: project.rootPath,
+              projectName: request.projectName,
+              testPath: request.testPath,
+              testName,
+              testId: testIdentity.testId,
+              parentNames: testIdentity.parentNames,
+              browserName: request.browserName,
+              image,
+            });
+            failureScreenshots.set(key, filepath);
+          }
           return;
         }
         const [testName] = request.args;
@@ -1497,6 +1489,14 @@ export const runBrowserController = async (
   const handleTestCaseStart = async (
     payload: TestCaseStartPayload,
   ): Promise<void> => {
+    // An interrupted watch run may have captured a screenshot without emitting a case result.
+    failureScreenshots.delete(
+      getFailureScreenshotKey(
+        payload.project,
+        payload.testPath,
+        payload.testId,
+      ),
+    );
     phaseTrackers
       ?.get(reporterFileKey(payload.project, payload.testPath))
       ?.recordCaseStart(payload);
@@ -1514,23 +1514,8 @@ export const runBrowserController = async (
     );
     const failureScreenshot = failureScreenshots.get(screenshotKey);
     failureScreenshots.delete(screenshotKey);
-    let screenshotPathToRemove: string | undefined;
     if (payload.status === 'failed' && failureScreenshot) {
       logger.info(`Saved failed browser test screenshot: ${failureScreenshot}`);
-    } else if (payload.status !== 'failed') {
-      const row = rowByInstance.get(payload.project);
-      const project = row && projectByName.get(row.name);
-      screenshotPathToRemove = project
-        ? getFailureScreenshotPath({
-            projectRoot: project.rootPath,
-            projectName: project.name,
-            testPath: payload.testPath,
-            testName: payload.name,
-            browserName: row.browserName,
-            testId: payload.testId,
-            parentNames: payload.parentNames ?? [],
-          })
-        : failureScreenshot;
     }
     const result = await sinkForProjectName(payload.project).onTestCaseResult(
       payload,
@@ -1550,10 +1535,10 @@ export const runBrowserController = async (
       testPath: payload.testPath,
     });
 
-    if (screenshotPathToRemove) {
-      await fs.rm(screenshotPathToRemove, { force: true }).catch((error) => {
+    if (payload.status !== 'failed' && failureScreenshot) {
+      await fs.rm(failureScreenshot, { force: true }).catch((error) => {
         logger.warn(
-          `Failed to remove non-failing test screenshot: ${screenshotPathToRemove}`,
+          `Failed to remove non-failing test screenshot: ${failureScreenshot}`,
           error,
         );
       });

@@ -16,7 +16,7 @@ export type ResolvedBrowserInstance = {
   browserName: BrowserName;
   headless: boolean;
   viewport?: BrowserViewport;
-  screenshotFailures: boolean;
+  screenshotFailures: ProjectBrowserConfig['screenshotFailures'];
   expect?: BrowserExpectConfig;
   providerOptions: Record<string, unknown>;
 };

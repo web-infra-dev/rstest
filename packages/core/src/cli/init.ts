@@ -327,9 +327,11 @@ export function mergeWithCLIOptions(
         config.browser.headless = options.browser.headless;
       }
       if (options.browser.screenshotFailures !== undefined) {
-        config.browser.screenshotFailures = coerceCliBoolean(
-          options.browser.screenshotFailures,
-        );
+        const { screenshotFailures } = options.browser;
+        config.browser.screenshotFailures =
+          typeof screenshotFailures === 'object'
+            ? screenshotFailures
+            : coerceCliBoolean(screenshotFailures);
       }
       if (options.browser.viewport !== undefined) {
         config.browser.viewport = options.browser.viewport;

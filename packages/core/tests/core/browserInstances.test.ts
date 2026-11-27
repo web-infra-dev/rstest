@@ -111,6 +111,24 @@ describe('resolveBrowserInstances', () => {
     ]);
   });
 
+  it('inherits the screenshot cleanup policy unless the instance overrides it', () => {
+    const entries = resolveBrowserInstances(
+      makeProject({
+        screenshotFailures: { clean: false },
+        instances: [
+          { browserName: 'chromium' },
+          { browserName: 'webkit', screenshotFailures: { clean: true } },
+          { browserName: 'firefox', screenshotFailures: false },
+        ],
+      }),
+    );
+    expect(entries.map((entry) => entry.screenshotFailures)).toEqual([
+      { clean: false },
+      { clean: true },
+      false,
+    ]);
+  });
+
   it('resolves the deprecated browser.browser into a single entry and warns once', () => {
     const warn = rs.spyOn(logger, 'warn').mockImplementation(() => {});
     try {

@@ -541,61 +541,129 @@ test('fails in both projects', () => {
     ).toBe(false);
   });
 
-  it('removes stale screenshots when test and file identities change', async () => {
-    const result = await runBrowserWatchCliWithCwd(fixtureDir, {
-      args: [
-        '--browser.port=0',
-        '--project=project-a',
-        'tests/failure.test.ts',
-      ],
-    });
-    cliToKill = result.cli;
-    const getFailureScreenshots = () =>
+  it('preserves failure screenshots across runs with clean disabled', async () => {
+    const args = [
+      '--config=rstest.keep-failures.config.mts',
+      'tests/failure.test.ts',
+    ];
+    const listScreenshots = () =>
       fs
-        .readdirSync(fixtureDir, { recursive: true })
-        .map((entry) => entry.toString())
-        .filter((entry) =>
-          /failure\.test\.ts-.*-[a-f0-9]{16}\.png$/.test(entry),
+        .readdirSync(fixtureDir, { recursive: true, encoding: 'utf8' })
+        .filter((name) => name.endsWith('.png'));
+
+    const first = await runScreenshot(args);
+    await first.cli.exec;
+    expect(first.cli.exec.exitCode).toBe(1);
+    const original = listScreenshots();
+    expect(original).toHaveLength(1);
+    const originalPath = path.join(fixtureDir, original[0]!);
+    const originalImage = fs.readFileSync(originalPath);
+    const testPath = path.join(fixtureDir, 'tests', 'failure.test.ts');
+    const source = fs.readFileSync(testPath, 'utf8');
+    fs.writeFileSync(
+      testPath,
+      source.replace('screenshot marker', 'second run'),
+    );
+
+    const second = await runScreenshot(args);
+    await second.cli.exec;
+    expect(second.cli.exec.exitCode).toBe(1);
+    const screenshots = listScreenshots();
+    expect(screenshots).toHaveLength(2);
+    expect(fs.readFileSync(originalPath)).toEqual(originalImage);
+    const secondPath = screenshots.find((name) => name !== original[0])!;
+    expect(fs.readFileSync(path.join(fixtureDir, secondPath))).not.toEqual(
+      originalImage,
+    );
+
+    fs.writeFileSync(testPath, source.replace('toBe(false)', 'toBe(true)'));
+    const passing = await runScreenshot(args);
+    await passing.expectExecSuccess();
+    expect(listScreenshots().sort()).toEqual(screenshots.sort());
+    const configPath = path.join(fixtureDir, 'rstest.keep-failures.config.mts');
+    fs.writeFileSync(
+      configPath,
+      fs
+        .readFileSync(configPath, 'utf8')
+        .replace('clean: false', 'clean: true'),
+    );
+    const clean = await runScreenshot(args);
+    await clean.expectExecSuccess();
+    expect(listScreenshots()).toHaveLength(0);
+  });
+
+  it.each([
+    {
+      policy: 'removes',
+      selection: '--project=project-a',
+      afterEdit: 1,
+      afterRename: 0,
+    },
+    {
+      policy: 'preserves',
+      selection: '--config=rstest.keep-failures.config.mts',
+      afterEdit: 2,
+      afterRename: 2,
+    },
+  ])(
+    '$policy stale screenshots when test and file identities change',
+    async ({ selection, afterEdit, afterRename }) => {
+      const result = await runBrowserWatchCliWithCwd(fixtureDir, {
+        args: ['--browser.port=0', selection, 'tests/failure.test.ts'],
+      });
+      cliToKill = result.cli;
+      const getFailureScreenshots = () =>
+        fs
+          .readdirSync(fixtureDir, { recursive: true })
+          .map((entry) => entry.toString())
+          .filter((entry) =>
+            /failure\.test\.ts-.*-[a-f0-9]{16}\.png$/.test(entry),
+          );
+
+      try {
+        await result.cli.waitForStdout('Saved failed browser test screenshot:');
+        await result.cli.waitForStdout('Waiting for file changes...');
+        expect(getFailureScreenshots()).toHaveLength(1);
+
+        result.cli.resetStd();
+        const testPath = path.join(fixtureDir, 'tests/failure.test.ts');
+        fs.writeFileSync(
+          testPath,
+          fs
+            .readFileSync(testPath, 'utf8')
+            .replace(
+              'captures the failed page state',
+              'renamed failed page state',
+            ),
         );
 
-    try {
-      await result.cli.waitForStdout('Saved failed browser test screenshot:');
-      await result.cli.waitForStdout('Waiting for file changes...');
-      expect(getFailureScreenshots()).toHaveLength(1);
-
-      result.cli.resetStd();
-      const testPath = path.join(fixtureDir, 'tests/failure.test.ts');
-      fs.writeFileSync(
-        testPath,
-        fs
-          .readFileSync(testPath, 'utf8')
-          .replace(
-            'captures the failed page state',
-            'renamed failed page state',
+        await result.cli.waitForStdout('Re-running 1 affected test file(s)');
+        await result.cli.waitForStdout('Saved failed browser test screenshot:');
+        await result.cli.waitForStdout('Waiting for file changes...');
+        expect(getFailureScreenshots()).toHaveLength(afterEdit);
+        expect(
+          getFailureScreenshots().some((name) =>
+            name.includes('renamed-failed-page-state'),
           ),
-      );
+        ).toBe(true);
 
-      await result.cli.waitForStdout('Re-running 1 affected test file(s)');
-      await result.cli.waitForStdout('Saved failed browser test screenshot:');
-      await result.cli.waitForStdout('Waiting for file changes...');
-      expect(getFailureScreenshots()).toHaveLength(1);
-      expect(getFailureScreenshots()[0]).toContain('renamed-failed-page-state');
-
-      result.cli.resetStd();
-      const renamedTestPath = path.join(
-        fixtureDir,
-        'tests/failure-renamed.test.ts',
-      );
-      fs.renameSync(testPath, renamedTestPath);
-      await result.cli.waitForStdout(
-        'No browser test files remain after update.',
-      );
-      await result.cli.waitForStdout('Waiting for file changes...');
-      expect(getFailureScreenshots()).toHaveLength(0);
-    } finally {
-      await killCliProcessTree(result.cli);
-    }
-  }, 60_000);
+        result.cli.resetStd();
+        const renamedTestPath = path.join(
+          fixtureDir,
+          'tests/failure-renamed.test.ts',
+        );
+        fs.renameSync(testPath, renamedTestPath);
+        await result.cli.waitForStdout(
+          'No browser test files remain after update.',
+        );
+        await result.cli.waitForStdout('Waiting for file changes...');
+        expect(getFailureScreenshots()).toHaveLength(afterRename);
+      } finally {
+        await killCliProcessTree(result.cli);
+      }
+    },
+    60_000,
+  );
 
   it('saves a screenshot when teardown fails', async () => {
     const result = await runScreenshot(['tests/teardown-failure.test.ts']);

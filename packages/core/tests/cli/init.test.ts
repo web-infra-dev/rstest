@@ -15,6 +15,14 @@ describe('mergeWithCLIOptions', () => {
     expect(config.browser?.screenshotFailures).toBe(false);
   });
 
+  it('enables screenshot history from run options', () => {
+    const config = mergeWithCLIOptions(
+      { browser: { provider: 'playwright', screenshotFailures: false } },
+      { browser: { screenshotFailures: { clean: false } } },
+    );
+    expect(config.browser?.screenshotFailures).toEqual({ clean: false });
+  });
+
   it('overrides project repeats from CLI, including zero', async () => {
     const projects = await resolveProjects({
       config: {

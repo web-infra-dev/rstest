@@ -78,15 +78,19 @@ describe('browserLaunchKey', () => {
 });
 
 describe('toWireRow', () => {
-  it('drops host-only providerOptions so a row serializes even with cycles', () => {
+  it('sends the capture flag and omits host-only options, even with cycles', () => {
     const logger = new Logger();
     const row = {
       name: 'p',
       providerOptions: { launch: { logger } },
+      screenshotFailures: { clean: false },
     } as unknown as BrowserProjectRuntime;
     expect(() => JSON.stringify(row)).toThrow();
     const wire = toWireRow(row);
     expect('providerOptions' in wire).toBe(false);
-    expect(JSON.parse(JSON.stringify(wire))).toEqual({ name: 'p' });
+    expect(JSON.parse(JSON.stringify(wire))).toEqual({
+      name: 'p',
+      screenshotFailures: true,
+    });
   });
 });

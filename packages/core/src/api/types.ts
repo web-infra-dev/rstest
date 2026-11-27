@@ -100,7 +100,7 @@ export interface RunOptions {
          */
         instances?: BrowserName | BrowserName[];
         headless?: boolean;
-        screenshotFailures?: boolean;
+        screenshotFailures?: BrowserInstanceConfig['screenshotFailures'];
         viewport?: BrowserViewport;
         port?: number;
         strictPort?: boolean;
