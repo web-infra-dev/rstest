@@ -320,10 +320,14 @@ export async function finalizeRunCycle(
   const mergedCoverageMap = isInterrupted()
     ? undefined
     : coverageProvider?.createCoverageMap();
-  for (const outcome of outcomes) {
-    if (outcome.coverage?.map) {
-      mergedCoverageMap?.merge(outcome.coverage.map);
-    }
+  if (mergedCoverageMap) {
+    await traceRun.span('coverage:merge-maps', 'coverage', () => {
+      for (const outcome of outcomes) {
+        if (outcome.coverage?.map) {
+          mergedCoverageMap.merge(outcome.coverage.map);
+        }
+      }
+    });
   }
 
   const loadCoverageResources = async (
@@ -351,7 +355,10 @@ export async function finalizeRunCycle(
       loadSourceMaps: (filenames) =>
         loadCoverageResources(filenames, 'loadSourceMaps'),
     },
-    runCoverageStep: runLifecycleStep,
+    runCoverageStep: (name, fn, options) =>
+      traceRun.span(name, 'coverage', () =>
+        runLifecycleStep(name, fn, options),
+      ),
   });
 
   const isFailure =
@@ -375,7 +382,9 @@ export async function finalizeRunCycle(
   // Only a dispatched payload can hand coverage to reporters.
   const collectedCoverage =
     !isInterrupted() && reportersStarted && mergedCoverageMap
-      ? cloneCoverageMapData(mergedCoverageMap)
+      ? await traceRun.span('coverage:clone-map', 'coverage', () =>
+          cloneCoverageMapData(mergedCoverageMap),
+        )
       : undefined;
 
   const defersCoverageReport =

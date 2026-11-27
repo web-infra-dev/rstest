@@ -64,6 +64,34 @@ In a TTY, Rstest starts a local helper server so that the printed link opens the
 To investigate a slowdown with a Coding Agent, hand it both files: the summary for the ranking, the trace for the full event data. They pair with the [rstest-debugging](#using-agent-skills) skill.
 :::
 
+## Experimental memory diagnostics
+
+Use `DEBUG=rstest:memory` to investigate memory growth during compilation, test execution, and coverage reporting. This is an experimental debugging capability; the namespace and output format may change.
+
+```bash
+DEBUG=rstest:memory npx rstest run
+```
+
+Add `--coverage` to include coverage collection and reporting in the trace.
+
+Rstest prints the path to `.rstest/trace-rss-<timestamp>-<pid>.jsonl` when collection starts. Save this file as a CI artifact, including for failed jobs. Each line is a JSON record written immediately, so records already written remain available if the Rstest process is killed.
+
+The log records:
+
+- Host RSS, V8 heap usage and capacity, external memory, and ArrayBuffer memory, in bytes, every second and at host operation boundaries.
+- Compilation start and end for projects running in Node.js workers (including `node`, `jsdom`, `happy-dom`, and custom test environments), host operations with project and test-file context, and coverage collection and report generation. Final executor-map merging and cloning of the collected coverage map have separate operation boundaries.
+- Worker memory at startup, every second, and before and after each test file and worker-fixture cleanup. Worker records carry `role: "worker"`, `workerId`, `pool`, PID, `threadId`, and the worker-side `sampledAt` timestamp. Active tasks also include their project and test-file path. `worker:exit` records mark the end of each worker lifetime.
+- Per-project emitted asset counts and byte sizes in `project:assets` records. `jsBytes`, `sourceMapBytes`, `otherBytes`, and `totalBytes` describe the built files. `unavailableAssetCount` counts files whose sizes could not be read; totals cover the files successfully measured. Inline source maps are included in `jsBytes`.
+- On Linux with readable cgroup v2 files, current memory usage, the limit, peak usage when available, and cumulative `oom` / `oom_kill` counters at startup, periodic samples, run errors, and shutdown. These files are not read at every operation boundary. `cgroupPath` identifies the sampled cgroup.
+
+Host records carry `role: "host"`. For forks and vmForks, `rssScope: "worker-process"` identifies a separate process. For threads and vmThreads, `rssScope: "shared-process"` means the RSS already includes the host and every thread in that PID, so count it once. Heap metrics belong to each isolate and can be inspected separately. Worker ids are reused; use PID and thread id to identify a worker lifetime. Samples arrive asynchronously and may be delayed while the host is blocked. Summed RSS can count shared pages more than once. Browser processes, prebundle processes, and subprocesses spawned by tests have their own memory outside these worker records. cgroup values cover the sampled cgroup and its descendants and may include other processes or earlier activity. Periodic samples pause while the host event loop is blocked; operation-start records can still identify a synchronous operation interrupted by a kill.
+
+`DEBUG=rstest:memory` works independently of `--trace`; combine them to also collect timing traces.
+
+It requires the exact namespace in the comma-separated `DEBUG` value; `DEBUG=rstest` and `DEBUG=*` do not enable it. Used alone, it does not enable verbose logging or write build outputs to disk. For JavaScript API calls, the environment variable also enables collection, but the file path is not printed. In watch mode, collection continues until the session closes.
+
+Sampling, file-write, and file-close failures are contained so diagnostic errors do not fail the tests. Memory logging adds sampling and synchronous file I/O overhead. A missing final `stop` record means collection did not close normally. Check exit status, system logs, and changes in cgroup OOM counters to determine the cause.
+
 ## Using Rsdoctor
 
 [Rsdoctor](https://rsdoctor.rs/) is a build analysis tool that can visually display the compilation time of each loaders and plugins.

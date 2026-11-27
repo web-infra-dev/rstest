@@ -1,9 +1,10 @@
-import { isMainThread } from 'node:worker_threads';
+import { isMainThread, threadId } from 'node:worker_threads';
 import {
   isWorkerRequestEnvelope,
   serializeError,
   type WorkerRequest,
   type WorkerResponse,
+  type WorkerRssSample,
   wrapWorkerResponse,
 } from '../../pool/protocol';
 import { LOST_IPC_MESSAGE_HINT } from '../../utils/constants';
@@ -11,6 +12,7 @@ import { ENV } from '../../utils/env';
 import { channel } from './channels';
 import { runInPool } from './runInPool';
 import { cleanupWorkerFixtures } from '../runner/fixtures';
+import { getRealNow, getRealTimers, setRealTimers } from '../realTimers';
 import {
   installForkTerminationPolicy,
   installGracefulExit,
@@ -21,6 +23,38 @@ installGracefulExit();
 
 const send = (response: WorkerResponse): void => {
   channel.send(wrapWorkerResponse(response));
+};
+
+const memoryUsage = process.memoryUsage.bind(process);
+let traceRss = false;
+let memoryTask:
+  Pick<WorkerRssSample, 'taskId' | 'project' | 'testPath'> | undefined;
+const sampleMemory = (event: WorkerRssSample['event']) => {
+  if (!traceRss) return;
+  try {
+    send({
+      type: 'memory',
+      sample: {
+        ...memoryUsage(),
+        pid: process.pid,
+        threadId,
+        sampledAt: getRealNow(),
+        event,
+        ...memoryTask,
+      },
+    });
+  } catch {
+    // Diagnostics must not turn a sampler failure into a failed test file.
+    traceRss = false;
+  }
+};
+const scheduleMemorySample = () => {
+  if (!traceRss) return;
+  const timer = getRealTimers().setTimeout!(() => {
+    sampleMemory('sample');
+    scheduleMemorySample();
+  }, 1000);
+  timer.unref();
 };
 
 let taskHandlesErrors = false;
@@ -102,7 +136,17 @@ channel.onLostWrite = (err) => {
 
 const handleStart = (request: Extract<WorkerRequest, { type: 'start' }>) => {
   process.env[ENV.WORKER_ID] = String(request.workerId);
-  send({ type: 'started', pid: process.pid });
+  traceRss = request.traceRss === true;
+  if (traceRss) {
+    setRealTimers();
+    scheduleMemorySample();
+  }
+  send({
+    type: 'started',
+    pid: process.pid,
+    ...(traceRss ? { threadId } : {}),
+  });
+  sampleMemory('start');
 };
 
 type TaskKind = 'run' | 'collect';
@@ -116,6 +160,14 @@ const runTask = async (
   kind: TaskKind,
   request: Extract<WorkerRequest, { type: 'run' | 'collect' }>,
 ): Promise<void> => {
+  if (traceRss) {
+    memoryTask = {
+      taskId: request.taskId,
+      project: request.options.context.project,
+      testPath: request.options.entryInfo.testPath,
+    };
+    sampleMemory('task:start');
+  }
   try {
     const result = await runInPool(request.options, {
       onTaskErrorHandlingChange: (active) => {
@@ -141,6 +193,8 @@ const runTask = async (
         send({ type: 'testEnvironmentFallback', fallback });
       },
     });
+    sampleMemory('task:end');
+    memoryTask = undefined;
     send({
       type: RESPONSE_TYPE[kind],
       taskId: request.taskId,
@@ -170,7 +224,9 @@ const runTask = async (
 
 const cleanupWorker = async (): Promise<void> => {
   try {
+    sampleMemory('cleanup:start');
     await cleanupWorkerFixtures();
+    sampleMemory('cleanup:end');
     send({ type: 'cleanupFinished' });
   } catch (error) {
     send({ type: 'cleanupFinished', error: serializeError(error) });

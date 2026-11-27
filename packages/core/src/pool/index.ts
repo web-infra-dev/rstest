@@ -1,3 +1,4 @@
+import type { RssTrace } from '../utils/traceRss';
 import { fileURLToPath } from 'node:url';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import { dirname, resolve } from 'pathe';
@@ -382,9 +383,11 @@ const workerErrorToResult = (
 export const createPool = async ({
   context,
   testEnvironmentModules,
+  recordRss,
 }: {
   context: InternalContext;
   testEnvironmentModules?: ReadonlyMap<string, TestEnvironmentModuleReference>;
+  recordRss?: RssTrace['record'];
 }): Promise<{
   runTests: (
     params: PoolDispatchParams & {
@@ -464,6 +467,7 @@ export const createPool = async ({
     memoryLimit,
     maxWorkers,
     minWorkers,
+    recordRss,
     // Node keeps the last value of a single-value flag, so user flags follow
     // host flags; rstest's required flags stay last so users cannot disable them.
     execArgv: [

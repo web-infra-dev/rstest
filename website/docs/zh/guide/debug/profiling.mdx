@@ -64,6 +64,34 @@ Rstest 会向 `<rootPath>/.rstest/` 写入两个文件，并在 watch 模式每�
 借助 Coding Agent 排查性能问题时，把两个文件都交给它：摘要给出排序结果，trace 包含完整事件数据。可配合 [rstest-debugging](#使用-agent-skills) 技能使用。
 :::
 
+## 实验性内存诊断 \{#experimental-memory-diagnostics}
+
+通过 `DEBUG=rstest:memory` 排查编译、测试执行和覆盖率报告阶段的内存增长。这是一项实验调试能力，命名空间和输出格式可能会调整。
+
+```bash
+DEBUG=rstest:memory npx rstest run
+```
+
+排查覆盖率收集和报告生成阶段的内存占用时，可以加上 `--coverage`。
+
+开始采集时，Rstest 会打印 `.rstest/trace-rss-<timestamp>-<pid>.jsonl` 的路径。请在 CI 中保存这个文件，包括运行失败的任务。每条 JSON 记录都会立即写出，因此 Rstest 进程被强杀后，已经写出的记录仍然可读。
+
+日志包含：
+
+- 每秒以及主进程操作边界的 RSS、V8 堆使用量和容量、external 内存、ArrayBuffer 内存，单位均为字节。
+- 各通过 Node.js worker 执行的 project（包括 `node`、`jsdom`、`happy-dom` 和自定义测试环境）的编译开始和结束、附带 project 和测试文件信息的主进程操作，以及覆盖率收集和报告生成阶段。最终各 executor 的覆盖率合并、已收集覆盖率的复制都有独立的操作边界记录。
+- worker 启动后、每秒、每个测试文件前后及 worker fixture 清理前后的内存。worker 记录带有 `role: "worker"`、`workerId`、`pool`、PID、`threadId` 和采样时的 `sampledAt` 时间戳；执行任务时还包含 project 和测试文件路径。`worker:exit` 标记这个 worker 生命周期的结束。
+- `project:assets` 记录各 project 的产物数量和字节数。`jsBytes`、`sourceMapBytes`、`otherBytes`、`totalBytes` 分别表示 JS、独立 source map、其他产物和合计大小。`unavailableAssetCount` 表示未能获取大小的文件数，合计只包含成功统计的文件。内联 source map 计入 `jsBytes`。
+- Linux 上可读取 cgroup v2 文件时，于启动、周期采样、运行报错和停止时记录当前内存用量、限制、可用的峰值数据，以及累计的 `oom` / `oom_kill` 计数，不在每个操作边界读取这些文件。`cgroupPath` 标识采样的 cgroup。
+
+主进程记录带有 `role: "host"`。forks 和 vmForks 的 `rssScope: "worker-process"` 表示独立进程；threads 和 vmThreads 的 `rssScope: "shared-process"` 表示这个 PID 下所有线程共享的进程 RSS，汇总时只计一次。heap 数据属于各自的 V8 isolate，可以分开查看。workerId 会复用，需要结合 PID 和 threadId 区分生命周期。采样异步送达，主线程被阻塞时可能延迟；RSS 相加可能重复计算共享页。浏览器进程、prebundle 进程及测试自行启动的子进程拥有额外内存。cgroup 数据覆盖该组及其子组，可能包含其他进程和此前运行的数据。主线程被阻塞时，定时采样也会暂停；操作开始时写出的记录仍能帮助定位被强杀时正在执行的同步操作。
+
+`DEBUG=rstest:memory` 可以独立使用，也可以与 `--trace` 一起采集耗时信息。
+
+它要求逗号分隔的 `DEBUG` 值中包含完整命名空间，`DEBUG=rstest` 和 `DEBUG=*` 不会启用它。单独开启时，不会启用 verbose 日志或将构建产物写入磁盘。通过 JavaScript API 运行时，该环境变量同样会开启采集，但不会打印文件路径。watch 模式下会一直采集到会话关闭。
+
+采样、文件写入和关闭的异常会被隔离，不会因诊断错误导致测试失败。内存日志会增加采样和同步文件写入开销。缺少最后的 `stop` 记录表示采集未正常关闭，需要结合退出状态、系统日志和 cgroup OOM 计数变化判断原因。
+
 ## 使用 Rsdoctor
 
 [Rsdoctor](https://rsdoctor.rs/) 是一款为 Rspack 生态量身打造的构建分析工具。

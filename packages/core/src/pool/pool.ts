@@ -191,9 +191,10 @@ export class Pool {
       const { task, exclusive } = waiter;
       const {
         reuseKey,
+        worker: pool,
         options: { environmentKey },
       } = task;
-      const fork = task.worker === 'forks' || task.worker === 'vmForks';
+      const fork = pool === 'forks' || pool === 'vmForks';
       // Idle workers keep their heaps; the exclusive attempt waits for them to
       // exit like any stopping worker.
       if (exclusive) {
@@ -254,8 +255,16 @@ export class Pool {
         workerId,
         environmentKey,
         reuseKey,
+        recordRss: this.options.recordRss
+          ? (event, args) =>
+              this.options.recordRss?.(event, {
+                workerId,
+                pool,
+                ...args,
+              })
+          : undefined,
         memoryLimit: this.options.memoryLimit,
-        memoryMetric: task.worker === 'forks' ? 'rss' : 'heapUsed',
+        memoryMetric: pool === 'forks' ? 'rss' : 'heapUsed',
         onTestEnvironmentFallback: this.handleTestEnvironmentFallback,
         onOomKill: fork
           ? () => {

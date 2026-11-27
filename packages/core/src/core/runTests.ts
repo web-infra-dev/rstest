@@ -1,3 +1,4 @@
+import stripAnsi from 'strip-ansi';
 import { BlobReporter } from '../reporter/blob';
 import { exitReporters } from '../reporter';
 import {
@@ -13,6 +14,7 @@ import {
   logger,
   toError,
   type TraceEvent,
+  type TraceController,
 } from '../utils';
 import {
   finalizeRunCycle,
@@ -51,6 +53,43 @@ import {
 } from './watch/watchSession';
 
 export async function runTests(context: Rstest): Promise<void> {
+  const traceController = createTraceController({
+    enabled: context.trace,
+    rootPath: context.rootPath,
+    embedded: context.embedded,
+  });
+  traceController.recordRss?.('run:start', {
+    command: context.command,
+    projects: context.projects.length,
+    pool: context.normalizedConfig.pool.type,
+    coverage: context.normalizedConfig.coverage.enabled
+      ? context.normalizedConfig.coverage.provider
+      : false,
+    version: context.version,
+  });
+  const closeTrace = () =>
+    runLifecycleStep('trace controller cleanup', () => traceController.close());
+  try {
+    await executeTests(context, traceController);
+  } catch (error) {
+    traceController.recordRss?.('run:error', {
+      error: stripAnsi(toError(error).message),
+    });
+    await closeTrace();
+    throw error;
+  }
+  if (context.command === 'watch' && context.closeWatchSession) {
+    const closeSession = context.closeWatchSession;
+    context.closeWatchSession = () => closeSession().finally(closeTrace);
+  } else {
+    await closeTrace();
+  }
+}
+
+async function executeTests(
+  context: Rstest,
+  traceController: TraceController,
+): Promise<void> {
   // High-level flow (post-executor-seam):
   // 1. Split browser/node projects (the single `isBrowserProject` predicate).
   // 2. Resolve the plan first (each side's `modifyRstestConfig` hooks fire and
@@ -107,11 +146,6 @@ export async function runTests(context: Rstest): Promise<void> {
   const { coverage } = context.normalizedConfig;
   const { rootPath, snapshotManager } = context;
 
-  const traceController = createTraceController({
-    enabled: context.trace,
-    rootPath: context.rootPath,
-    embedded: context.embedded,
-  });
   context.getTraceOutput = () => traceController.lastOutput;
   // Pre-allocated so browser events emitted before a cycle adopts a fresh buffer
   // (or in filtered runs where no cycle runs) are not silently dropped.
@@ -130,12 +164,14 @@ export async function runTests(context: Rstest): Promise<void> {
   // here.
   // ===================================================================
   const timer = new RunTimer();
-  const planner = await createTestPlanner(context, {
-    browserProjects,
-    nodeProjects,
-    isWatchMode,
-    onTraceEvents: forwardBrowserTraceEvents,
-  });
+  const planner = await activeTraceRun.span('host:plan', 'host', () =>
+    createTestPlanner(context, {
+      browserProjects,
+      nodeProjects,
+      isWatchMode,
+      onTraceEvents: forwardBrowserTraceEvents,
+    }),
+  );
 
   const hasNodeTestsToRun = planner.hasNodeTestsToRun();
   const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
@@ -266,9 +302,6 @@ export async function runTests(context: Rstest): Promise<void> {
               traceController.waitForExit(),
             );
           }
-          await runLifecycleStep('trace controller cleanup', () =>
-            traceController.close(),
-          );
         } finally {
           process.off('exit', unExpectedExit);
           // API result capture must settle before onExit releases its listeners.
@@ -316,7 +349,8 @@ export async function runTests(context: Rstest): Promise<void> {
         }
         await Promise.all(executors.map((executor) => executor.interrupt?.()));
       },
-      release: releaseRun,
+      // The signal handler exits the process without returning through runTests.
+      release: () => releaseRun().finally(() => traceController.close()),
     });
 
     if (!context.embedded) {
@@ -548,7 +582,6 @@ export async function runTests(context: Rstest): Promise<void> {
   const watchTeardown = createWatchTeardown({
     context,
     executors,
-    traceController,
     getTraceRun: () => activeTraceRun,
   });
   const closeWatchSession = () => watchTeardown.close();
@@ -564,7 +597,8 @@ export async function runTests(context: Rstest): Promise<void> {
       interrupt: async () => {
         await Promise.all(executors.map((executor) => executor.interrupt?.()));
       },
-      release: closeActiveWatchSession,
+      release: () =>
+        closeActiveWatchSession().finally(() => traceController.close()),
     }),
   );
 

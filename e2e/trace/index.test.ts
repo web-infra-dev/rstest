@@ -19,6 +19,7 @@ describe('performance trace', () => {
       options: {
         nodeOptions: {
           cwd: fixtureRoot,
+          env: { DEBUG: 'rstest:memory' },
         },
       },
     });
@@ -41,5 +42,13 @@ describe('performance trace', () => {
     expect(hostEventNames).toContain('host:build-task');
     expect(hostEventNames).toContain('host:get-assets-by-entry');
     expect(hostEventNames).toContain('host:pool-run-test');
+    const memoryPath = cli.stdout.match(/RSS trace file: (.+\.jsonl)/)?.[1];
+    expect(memoryPath).toBeTruthy();
+    const memory = (await readFile(memoryPath!, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line));
+    expect(memory[0].event).toBe('start');
+    expect(memory.at(-1).event).toBe('stop');
   });
 });
