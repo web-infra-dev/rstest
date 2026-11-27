@@ -969,11 +969,7 @@ const run = async () => {
               locator: { steps: [] },
               method: 'captureFailure',
               screenshotTarget: 'page',
-              args: [
-                test.name,
-                {},
-                { testId: test.testId, parentNames: test.parentNames },
-              ],
+              args: [test.name],
             });
           } catch (error) {
             console.warn('Failed to capture browser test screenshot:', error);

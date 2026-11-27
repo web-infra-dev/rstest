@@ -429,8 +429,8 @@ test('rejects a short screenshot stability timeout', async () => {
       .readdirSync(fixtureDir, { recursive: true })
       .map((entry) => path.join(fixtureDir, entry.toString()))
       .find((entry) =>
-        /failure\.test\.ts-captures-the-failed-page-state-[a-f0-9]{16}-\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.png$/.test(
-          entry,
+        /^captures-the-failed-page-state-\d{8}-\d{6}\.png$/.test(
+          path.basename(entry),
         ),
       );
     expect(screenshotPath).toBeDefined();
@@ -560,13 +560,16 @@ test('fails in both projects', () => {
         .readdirSync(fixtureDir, { recursive: true, encoding: 'utf8' })
         .filter((name) => name.endsWith('.png'));
 
-    const env = { RSTEST_TEST_CAPTURE_TIME: '2026-11-27T10:02:45.087Z' };
-    const first = await runScreenshot(args, env);
+    const first = await runScreenshot(args, {
+      RSTEST_TEST_CAPTURE_TIME: '2026-11-27T10:02:45.087Z',
+    });
     await first.cli.exec;
     expect(first.cli.exec.exitCode).toBe(1);
     const original = listScreenshots();
     expect(original).toHaveLength(1);
-    expect(original[0]).toMatch(/-2026-11-27T10-02-45-087Z\.png$/);
+    expect(path.basename(original[0]!)).toBe(
+      'captures-the-failed-page-state-20261127-100245.png',
+    );
     const originalPath = path.join(fixtureDir, original[0]!);
     const originalImage = fs.readFileSync(originalPath);
     const testPath = path.join(fixtureDir, 'tests', 'failure.test.ts');
@@ -576,7 +579,9 @@ test('fails in both projects', () => {
       source.replace('screenshot marker', 'second run'),
     );
 
-    const second = await runScreenshot(args, env);
+    const second = await runScreenshot(args, {
+      RSTEST_TEST_CAPTURE_TIME: '2026-11-27T10:02:45.999Z',
+    });
     await second.cli.exec;
     expect(second.cli.exec.exitCode).toBe(1);
     const screenshots = listScreenshots();
@@ -627,7 +632,7 @@ test('fails in both projects', () => {
         fs
           .readdirSync(fixtureDir, { recursive: true })
           .map((entry) => entry.toString())
-          .filter((entry) => /failure\.test\.ts-.*\.png$/.test(entry));
+          .filter((entry) => entry.endsWith('.png'));
 
       try {
         await result.cli.waitForStdout('Saved failed browser test screenshot:');
@@ -685,8 +690,8 @@ test('fails in both projects', () => {
       fs
         .readdirSync(fixtureDir, { recursive: true })
         .some((entry) =>
-          /teardown-failure\.test\.ts-fails-in-afterEach-.*\.png$/.test(
-            entry.toString(),
+          /^fails-in-afterEach-\d{8}-\d{6}\.png$/.test(
+            path.basename(entry.toString()),
           ),
         ),
     ).toBe(true);
