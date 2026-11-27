@@ -13,6 +13,7 @@
  */
 
 import type { Rspack } from '@rsbuild/core';
+import picomatch from 'picomatch';
 import type { NormalizedConfig } from '../../types';
 import { castArray, getTempRstestOutputDirGlob } from '../../utils';
 
@@ -21,19 +22,41 @@ export const applyRstestWatchIgnored = (
   config: NormalizedConfig,
   extraIgnored: string[] = [],
 ): void => {
-  // TODO: rspack should support `(string | RegExp)[]` type
-  // https://github.com/web-infra-dev/rspack/issues/10596
-  const existing = castArray(rspackConfig.watchOptions?.ignored) as string[];
-  rspackConfig.watchOptions = {
-    ...rspackConfig.watchOptions,
-    ignored: [
-      ...(existing.length ? existing : ['**/.git', '**/node_modules']),
-      getTempRstestOutputDirGlob(config.output.distPath.root),
-      config.coverage.reportsDirectory,
-      '**/*.snap',
-      ...extraIgnored,
-    ],
-  };
+  const watchOptions = (rspackConfig.watchOptions ??= {});
+  const existing = watchOptions.ignored;
+  const rstestIgnored = [
+    getTempRstestOutputDirGlob(config.output.distPath.root),
+    config.coverage.reportsDirectory,
+    '**/*.snap',
+    ...extraIgnored,
+  ];
+  if (typeof existing === 'function') {
+    // Watchers accept a predicate only at the top level. Directory ignores
+    // also cover their descendants, including paths checked individually.
+    const matchesRstestPath = picomatch(
+      rstestIgnored
+        .filter(Boolean)
+        .map(
+          (pattern) =>
+            `${pattern.replaceAll('\\', '/').replace(/[()]/g, '\\$&')}/**`,
+        ),
+      {
+        dot: true,
+        nonegate: true,
+        noext: true,
+        literalBrackets: true,
+        nobrace: true,
+      },
+    );
+    watchOptions.ignored = (file) =>
+      existing(file) || matchesRstestPath(file.replaceAll('\\', '/'));
+    return;
+  }
+  const patterns = castArray(existing);
+  watchOptions.ignored = [
+    ...(patterns.length ? patterns : ['**/.git', '**/node_modules']),
+    ...rstestIgnored,
+  ];
 };
 
 /** Chunk hashes for one entry: stable chunk key -> chunk hash. */

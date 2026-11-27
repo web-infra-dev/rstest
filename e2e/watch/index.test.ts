@@ -39,6 +39,35 @@ const expectRerun = (
 // TODO: The following error occurs only on Windows CI. It should appear in the Rspack version range from 1.5.0 to 1.6.0-beta.0.
 // Error: EBUSY: resource busy or locked, rmdir 'D:\a\rstest\rstest\e2e\watch\fixtures-test-0'
 describe.skipIf(process.platform === 'win32')('watch', () => {
+  it('respects a watch ignore predicate when source files change', async () => {
+    const root = path.join(__dirname, 'fixtures-test-ignored-predicate');
+    const { fs } = await prepareFixtures({
+      fixturesPath: path.join(__dirname, 'fixtures'),
+      fixturesTargetPath: root,
+    });
+    const { cli } = await runRstestCli({
+      command: 'rstest',
+      args: ['watch', '-c', 'rstest.ignored.config.mts'],
+      options: { nodeOptions: { cwd: root } },
+    });
+    try {
+      await cli.waitForStdout('Waiting for file changes...');
+      cli.resetStd();
+      fs.update(path.join(root, 'src/other.ts'), (content) =>
+        content.replace("greet('other')", "greet('ignored')"),
+      );
+      fs.update(path.join(root, 'src/index.ts'), (content) =>
+        content.replace("greet('index')", "greet('watched')"),
+      );
+      await cli.waitForStdout('Waiting for file changes...');
+      expect(cli.stdout).toContain('Hello, watched!');
+      expect(cli.stdout).not.toContain('Hello, ignored!');
+    } finally {
+      await cli.killProcessTree();
+      fs.delete(root);
+    }
+  });
+
   it('exits after a fatal node rebuild', async () => {
     const root = `${__dirname}/fixtures-test-fatal-rebuild`;
     const { fs } = await prepareFixtures({
