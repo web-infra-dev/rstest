@@ -100,6 +100,23 @@ describe('toRstestConfig', () => {
     expect(config.output).toEqual({ module: false });
   });
 
+  it('should allow in-place modification returning void without mutating input config', () => {
+    const config = toRstestConfig({
+      rspackConfig: baseConfig,
+      modifyRspackConfig: (config) => {
+        config.target = 'node';
+        if (config.output) {
+          config.output.module = false;
+        }
+      },
+    });
+
+    expect(config.output).toEqual({ module: false });
+    expect(config.testEnvironment).toBe('node');
+    expect(baseConfig.target).toBe('web');
+    expect(baseConfig.output?.module).toBe(true);
+  });
+
   it('should respect configName', () => {
     const config = toRstestConfig({
       rspackConfig: baseConfig,

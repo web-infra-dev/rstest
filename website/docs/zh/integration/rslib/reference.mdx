@@ -139,17 +139,16 @@ export default defineConfig({
 
 #### `modifyLibConfig`
 
-- **类型：** `(config: RslibConfig) => RslibConfig`
+- **类型：** `(config: RslibConfig) => RslibConfig | void`
 - **默认值：** `undefined`
 
-在将 Rslib 配置转换为 Rstest 配置之前对其进行修改。回调函数必须返回修改后的 `RslibConfig` 对象：
+在将 Rslib 配置转换为 Rstest 配置之前对其进行修改。你可以直接原地修改该配置对象，也可以返回一个新的 `RslibConfig` 对象：
 
 ```ts
 export default defineConfig({
   extends: withRslibConfig({
     modifyLibConfig: (libConfig) => {
       delete libConfig.source?.define;
-      return libConfig;
     },
   }),
 });

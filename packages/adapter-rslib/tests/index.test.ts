@@ -128,6 +128,46 @@ export default defineConfig({
     });
   });
 
+  it('should allow in-place modification returning void without mutating inline config', async () => {
+    const keepPlugin = {
+      name: 'custom-plugin',
+      setup: () => {},
+    };
+    const inlineConfig = {
+      plugins: [keepPlugin],
+      source: {
+        define: {
+          'process.env.NODE_ENV': '"test"',
+          REMOVE_ME: '"yes"',
+        },
+      },
+      output: {
+        target: 'node' as const,
+      },
+    };
+
+    const config = await withRslibConfig({
+      config: inlineConfig,
+      modifyLibConfig: (libConfig) => {
+        delete libConfig.source?.define?.REMOVE_ME;
+        if (libConfig.output) {
+          libConfig.output.target = 'web';
+        }
+      },
+    })({});
+
+    expect(config.source?.define).toEqual({
+      'process.env.NODE_ENV': '"test"',
+    });
+    expect(config.testEnvironment).toBe('happy-dom');
+    expect(config.plugins?.[0]).toBe(keepPlugin);
+    expect(inlineConfig.source.define).toEqual({
+      'process.env.NODE_ENV': '"test"',
+      REMOVE_ME: '"yes"',
+    });
+    expect(inlineConfig.output.target).toBe('node');
+  });
+
   it('should remove build-only plugins in the test environment', async () => {
     const keepPlugin = {
       name: 'custom-plugin',

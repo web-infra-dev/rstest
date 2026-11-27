@@ -29,7 +29,7 @@ export interface WithRsbuildConfigOptions {
   /**
    * Modify rsbuild config before converting to rstest config
    */
-  modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
+  modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig | void;
 }
 
 export function withRsbuildConfig(

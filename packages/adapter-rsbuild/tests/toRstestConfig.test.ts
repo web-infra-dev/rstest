@@ -129,6 +129,25 @@ describe('toRstestConfig', () => {
     });
   });
 
+  it('should allow in-place modification returning void without mutating input config', () => {
+    const config = toRstestConfig({
+      rsbuildConfig,
+      modifyRsbuildConfig: (buildConfig) => {
+        delete buildConfig.source?.define;
+        buildConfig.output = {
+          ...buildConfig.output,
+          target: 'node',
+        };
+      },
+    });
+
+    expect(config.source?.define).toBeUndefined();
+    expect(config.testEnvironment).toBe('node');
+    expect(rsbuildConfig.source?.define).toEqual({
+      'process.env.NODE_ENV': '"common"',
+    });
+  });
+
   it('should add config file dependency and resolve relative build dependencies from configPath', () => {
     const config = toRstestConfig({
       rsbuildConfig,

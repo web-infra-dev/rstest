@@ -131,3 +131,47 @@ export const isNodeTarget = (target: AdapterBuildTarget): boolean => {
 export const resolveTestEnvironmentFromTarget = (
   target: AdapterBuildTarget,
 ): 'node' | 'happy-dom' => (isNodeTarget(target) ? 'node' : 'happy-dom');
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
+const cloneConfigForModify = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    // Shallow-copy arrays so mutating methods like push/splice do not affect
+    // caller-owned config while preserving element identity (e.g. plugin objects).
+    return [...value] as T;
+  }
+
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key,
+        cloneConfigForModify(item),
+      ]),
+    ) as T;
+  }
+
+  return value;
+};
+
+/**
+ * Invoke an adapter's `modify*Config` callback on a cloned copy of the config
+ * so in-place mutations do not leak back to caller-owned inline configs, while
+ * keeping the mutated copy when the callback returns `void`.
+ */
+export const applyModifyConfig = <T extends object>(
+  config: T,
+  modifyConfig?: (config: T) => T | void,
+): T => {
+  if (!modifyConfig) {
+    return config;
+  }
+
+  const draft = cloneConfigForModify(config);
+  return modifyConfig(draft) ?? draft;
+};

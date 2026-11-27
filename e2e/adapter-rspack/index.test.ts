@@ -27,4 +27,26 @@ describe('Rspack adapter', () => {
     expect(cli.stdout).toContain('applies resolve.tsConfig references');
     expect(cli.stdout).toContain('Test Files 1 passed');
   });
+
+  it('should apply in-place modifyRspackConfig mutations returning void', async ({
+    onTestFinished,
+  }) => {
+    const { cli, expectExecSuccess } = await runRstestCli({
+      command: 'rstest',
+      args: ['run', '--config', 'rstest.modify-void.config.mts'],
+      onTestFinished,
+      options: {
+        nodeOptions: {
+          cwd: join(__dirname, 'fixtures'),
+        },
+      },
+    });
+
+    await expectExecSuccess();
+
+    expect(cli.stdout).toContain(
+      'applies in-place modifyRspackConfig mutations returning void',
+    );
+    expect(cli.stdout).toContain('Test Files 1 passed');
+  });
 });

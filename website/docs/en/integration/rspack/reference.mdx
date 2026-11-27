@@ -116,17 +116,16 @@ export default (env) => {
 
 #### `modifyRspackConfig`
 
-- **Type:** `(config: RspackOptions) => RspackOptions`
+- **Type:** `(config: RspackOptions) => RspackOptions | void`
 - **Default:** `undefined`
 
-Modifies the selected Rspack config before conversion. The callback must return an `RspackOptions` object:
+Modifies the selected Rspack config before conversion. You can mutate the config object in place or return a new `RspackOptions` object:
 
 ```ts title="rstest.config.ts"
 export default defineConfig({
   extends: withRspackConfig({
     modifyRspackConfig: (rspackConfig) => {
       delete rspackConfig.resolve?.alias;
-      return rspackConfig;
     },
   }),
 });
