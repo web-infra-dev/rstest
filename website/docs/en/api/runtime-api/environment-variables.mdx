@@ -1,16 +1,16 @@
 ---
-description: Environment variables that Rstest sets in the test process and worker processes.
+description: Environment variables that Rstest sets in the test and worker processes or reads to control runner behavior.
 ---
 
 # Environment variables
 
-Rstest sets a small set of environment variables you can read from tests, setup files, and source code.
+Rstest sets runtime variables in the test and worker processes and reads several optional variables to configure output, agent detection, and debug logging.
 
 ## `NODE_ENV`
 
-Set to `'test'` when the test runner starts (if not already defined). Existing values are preserved, so you can override it from your shell or `package.json` script.
+Set to `'test'` when the test runner starts if not already defined. Existing values are preserved, so you can override it from your shell or `package.json` script.
 
-Available as both `process.env.NODE_ENV` and `import.meta.env.NODE_ENV` across all test environments, including [browser mode](/guide/browser-testing/). Prefer `import.meta.env.NODE_ENV` in ESM source code where `process` may not be available.
+Available as both `process.env.NODE_ENV` and `import.meta.env.NODE_ENV` across all test environments, including [browser mode](/guide/browser-testing/). Prefer `import.meta.env.NODE_ENV` in ESM source code where `process` may not exist.
 
 ```ts
 if (import.meta.env.NODE_ENV === 'test') {
@@ -20,9 +20,7 @@ if (import.meta.env.NODE_ENV === 'test') {
 
 ## `RSTEST`
 
-Available as both `process.env.RSTEST` and `import.meta.env.RSTEST` across all test environments, including [browser mode](/guide/browser-testing/). The value is set to `'true'` whenever the test runner is active, so you can use it to gate test-only branches in source code.
-
-In browser mode, Rstest replaces these expressions at build time but does not add a global `process` object. Prefer `import.meta.env.RSTEST` in browser-compatible ESM source code, and do not guard access with `typeof process !== 'undefined'` because that condition remains `false` in the browser.
+Available as both `process.env.RSTEST` and `import.meta.env.RSTEST` across all test environments, including [browser mode](/guide/browser-testing/). Set to `'true'` while the test runner is active.
 
 ```ts
 if (import.meta.env.RSTEST === 'true') {
@@ -30,15 +28,15 @@ if (import.meta.env.RSTEST === 'true') {
 }
 ```
 
-For production builds, define the expression used by your source code as `false` so the bundler can eliminate the dead branch — see [Detect Rstest environment](/guide/basic/configure-rstest#detect-rstest-environment).
+In browser mode, Rstest replaces these expressions at build time without defining a global `process`, so prefer `import.meta.env.RSTEST` in browser-compatible ESM source code. For browser guard details and production dead-code elimination (`define` as `false`), see [Detect Rstest environment](/guide/basic/configure-rstest#detect-rstest-environment).
 
 For [in-source tests](/config/test/include-source), prefer `import.meta.rstest` — it exposes the Rstest test API directly and is `undefined` in production builds.
 
 ## `RSTEST_WORKER_ID`
 
-A stringified integer that uniquely identifies the worker process running the current test file. The first worker is `'1'`. Equivalent to Jest's [`JEST_WORKER_ID`](https://jestjs.io/docs/environment-variables#jest_worker_id).
+A stringified integer identifying the Node worker running the current test file, starting at `'1'`. Equivalent to Jest's [`JEST_WORKER_ID`](https://jestjs.io/docs/environment-variables#jest_worker_id).
 
-Use it to isolate shared external resources across parallel workers — typically database schemas, ports, temp directories, or any resource that would collide if two workers used the same name.
+Use it to isolate external resources across concurrent workers — such as database schemas, ports, or temporary directories.
 
 ```ts title="db.test.ts"
 import { afterAll, beforeAll, test } from '@rstest/core';
@@ -58,4 +56,26 @@ test('inserts a row', async () => {
 });
 ```
 
-Concurrent workers are always given different IDs, so the value is safe to use as part of a resource name during a worker's lifetime. The maximum number of concurrent workers is bounded by [`pool.maxWorkers`](/config/test/pool); IDs are assigned monotonically as workers spawn and are not recycled within a single Rstest run.
+Worker IDs are bounded to `[1, pool.maxWorkers]`. Rstest assigns the lowest unused ID in that range when spawning a worker and reuses an ID only after the previous worker has fully exited. Under `isolate: false`, a reused idle worker keeps its existing ID. Concurrent workers never share the same ID.
+
+## `RSTEST_NO_AGENT`
+
+Set `RSTEST_NO_AGENT=1` to disable AI coding agent detection.
+
+During CLI runs, when no reporter is configured in config or CLI flags, Rstest detects AI coding agents and automatically switches the default reporter to `md` while disabling default terminal colors. Setting `RSTEST_NO_AGENT=1` falls back to the normal default reporters (`['default']`, or `['default', 'github-actions']` on GitHub Actions) and standard TTY color detection.
+
+```bash
+RSTEST_NO_AGENT=1 npx rstest run
+```
+
+## `DEBUG`
+
+Comma-separated debug scopes (case-insensitive) that enable verbose debug logging, persist temporary build artifacts and resolved configs to disk, and print full error stack traces. Recognized scopes include `rstest`, `rsbuild`, `builder`, and `*`.
+
+Set `DEBUG=rstest:bundle-coverage` alongside V8 coverage to write raw Node.js bundle coverage data to `.rstest/bundle-coverage-<timestamp>.json` (see [Inspect bundle coverage](/guide/debug/debugging#inspect-bundle-coverage)).
+
+```bash
+DEBUG=rstest npx rstest run
+```
+
+See [Debugging](/guide/debug/debugging) and [Profiling](/guide/debug/profiling) for details.

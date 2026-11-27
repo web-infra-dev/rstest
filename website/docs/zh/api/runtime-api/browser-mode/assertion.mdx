@@ -1,6 +1,6 @@
 ---
 title: Assertion
-description: expect.element 是 Browser Mode 中用于 DOM 断言的 API。它接收 Locator 或 DOM Element，返回可链式调用的断言对象。
+description: expect.element 用于在 Browser Mode 中对 Locator 或 DOM Element 执行自动重试的 DOM 断言，toMatchScreenshot 用于视觉截图对比。
 overviewHeaders: [2, 3]
 ---
 
@@ -8,15 +8,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # Assertion
 
-`expect.element` 是 Browser Mode 中用于 DOM 断言的 API。它接收 [Locator](/api/runtime-api/browser-mode/locator) 或 DOM `Element`，返回可链式调用的断言对象。与 `expect(value)` 主要比较 JS 值不同，`expect.element` 面向页面上的真实元素状态，适合验证可见性、文本、表单值、数量等用户可观察结果。
-
-:::tip 自动重试
-使用 Playwright provider 时，所有 `expect.element` matcher 都会自动重试，直到断言通过或超时。你不需要手写 `waitFor` 或轮询逻辑——只需断言期望状态，框架会自动处理等待。
-:::
-
-当你在 Browser Mode 测试里导入 `@rstest/browser`（例如导入 `page`）时，`expect` 会自动具备 `element` 能力。这让查询、交互、断言围绕同一 `Locator` 组织，失败信息更聚焦于元素状态。
-
-下面这个最小示例展示了常见用法：先断言可见，再验证勾选状态变化，最后校验元素属性。
+`expect.element` 用于在 Browser Mode 中对 [Locator](/api/runtime-api/browser-mode/locator) 或 DOM `Element` 创建自动重试的 DOM 断言。在 Browser Mode 测试中导入 `@rstest/browser` 后，`@rstest/core` 的 `expect` 会自动扩展 `expect.element()` 和 `expect(target).toMatchScreenshot()`。
 
 ```ts title="src/assertion.test.ts"
 import { page } from '@rstest/browser';
@@ -37,27 +29,15 @@ test('asserts element states in browser mode', async () => {
 });
 ```
 
-## 类型签名
+## expect.element
 
-```ts
-expect.element(target: Locator | Element): BrowserElementExpect
-```
+- **类型：** `(target: Locator | Element) => BrowserElementExpect`
+
+`BrowserElementExpect` 提供 `.not` 以及下方列出的所有元素 matcher。
 
 ## 自动重试与超时
 
-`expect.element` 的断言行为依赖具体 provider。使用 Playwright provider 时，`expect.element` 的 matcher 是 **web-first assertion**：它们会在超时时间内持续重试，直到断言通过或超时失败。你不需要手写 `waitFor` 或轮询逻辑。
-
-### 超时优先级
-
-断言超时按以下规则决定：
-
-1. **Per-assertion timeout**：直接传给 matcher 的 `timeout` 参数，优先级最高，包括 `0`。使用 Playwright 时，如果当前没有有限的 active test 或 hook deadline，显式传入的 `0` 表示不设置 matcher 自身的超时；在有限的非并发 test 或 hook 中，它会受当前作用域剩余时间限制。
-2. **配置的轮询超时**：未传 matcher timeout 时，断言使用 `expect.poll.timeout`。Node Mode 默认值为 `1000ms`，Browser Mode 默认值为 `5000ms`。
-3. **当前测试或 hook 的剩余时间**：在非并发流程中，隐式断言超时会受当前 test 或 hook 的 deadline 限制，因此不会超过当前作用域。Browser Mode 测试的默认 `testTimeout` 为 `15000ms`。
-
-在非并发流程中，实际断言超时会受当前 test 或 hook 剩余时间限制。未传 matcher timeout 时，取 `expect.poll.timeout` 与剩余时间中较小的值；显式传入 matcher timeout 时，取传入值与剩余时间中较小的值。Browser Mode 的 `5000ms` 默认值可以给异步 UI 更新更充足的时间，同时不会让错误断言等待完整的 `testTimeout`。如果当前没有有限的 active test 或 hook deadline，显式传入 `timeout: 0` 会保留 Playwright 不设置 matcher 超时的语义。
-
-对于 `test.concurrent`，如果断言需要使用该测试自己的剩余时间，请使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`）。Browser 无法可靠识别并发异步流程，因此共享的文件级 `expect` 会使用配置的轮询超时。`describe.concurrent` 内的 hook 也有相同限制：其中的断言使用轮询超时，但外层 hook timeout 仍然可以提前结束断言。
+使用 Playwright provider 时，`expect.element` 的 matcher 是 **web-first assertion**：它们会持续重试直到条件成立或超时，无需手写 `waitFor` 或轮询逻辑。
 
 ```ts
 // 使用 Browser Mode 的 expect.poll.timeout 默认值（5000ms），
@@ -66,14 +46,19 @@ await expect.element(page.getByText('Done')).toBeVisible();
 
 // 覆盖为更长的超时
 await expect.element(page.getByText('Done')).toBeVisible({ timeout: 10000 });
-
-// 禁用测试超时后，element 断言使用配置的轮询超时
-// （Browser Mode 默认 5000ms）
 ```
+
+### 超时优先级
+
+1. **单次断言超时**：直接传给 matcher 的 `options.timeout` 优先级最高，包括 `0`。使用 Playwright 时，如果当前没有有限的 active test 或 hook deadline，显式传入 `0` 表示不设置 matcher 超时；在有限的非并发 test 或 hook 中，仍受当前作用域剩余时间限制。
+2. **配置的轮询超时**：未传 matcher timeout 时，断言使用 `expect.poll.timeout`（Node Mode 默认为 `1000ms`，Browser Mode 默认为 `5000ms`）。
+3. **当前测试或 hook 的剩余时间**：在非并发流程中，实际超时受当前 test 或 hook 的 deadline 限制（Browser Mode 测试默认 `testTimeout` 为 `15000ms`）。未传单次断言超时时取 `min(expect.poll.timeout, 剩余时间)`；显式传入时取 `min(timeout, 剩余时间)`。
+
+对于 `test.concurrent`，请使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`），这样断言才会遵循该测试的剩余时间。由于浏览器无法可靠跟踪并发异步流程，共享的文件级 `expect` 会使用 `expect.poll.timeout`。`describe.concurrent` 内的 hook 遵循相同规则，但外层 hook timeout 仍会提前结束断言。
 
 ### 失败输出
 
-当断言超时失败时，错误信息会包含：期望的元素状态、实际状态、以及超时时间。例如：
+断言超时后，错误信息会输出期望状态、实际状态与超时时间：
 
 ```
 Error: Expected element to be visible
@@ -81,29 +66,16 @@ Error: Expected element to be visible
   Timeout: 5000ms
 ```
 
-### 适用场景
-
-自动重试特别适合处理异步渲染场景——例如等待 loading 消失、等待数据加载完成后的 UI 变化：
-
-```ts
-// 点击后等待异步结果出现
-await page.getByRole('button', { name: 'Submit' }).click();
-await expect.element(page.getByText('Submitted!')).toBeVisible();
-
-// 等待 loading 消失
-await expect.element(page.getByTestId('spinner')).toBeHidden();
-```
-
 ## 输入约束
 
-- 目标必须是 Rstest `Locator` 或当前测试文档中的 DOM `Element`。不支持手写对象或其他库的 locator。
-- 在非 Browser Mode 中，`expect.element` 不可用。因为它依赖 Browser Mode 的浏览器运行时与通信通道来执行元素断言；纯 Node 测试环境只支持普通 `expect(value)` 断言。
+- `target` 必须是 Rstest `Locator` 或当前测试文档中的 DOM `Element`，传入手写对象或其他库的 locator 会抛出错误。
+- `expect.element` 仅在 Browser Mode 中可用；纯 Node 测试请使用常规的 `expect(value)` 断言。
 
 ## DOM 元素 \{#dom-elements}
 
 <ApiMeta addedVersion="0.12.5" />
 
-`expect.element()` 也接受 Testing Library 或原生 DOM 查询返回的元素。它会通过 [`page.elementLocator()`](/api/runtime-api/browser-mode/locator#elementlocator) 转换元素，沿用 Locator 断言的重试和超时行为。
+`expect.element()` 也接受 Testing Library 或原生 DOM 查询返回的元素。它会通过 [`page.elementLocator()`](/api/runtime-api/browser-mode/locator#elementlocator) 转换元素，并沿用 `Locator` 断言的重试和超时规则。
 
 ```ts
 import { getByRole } from '@testing-library/dom';
@@ -113,7 +85,7 @@ await expect.element(button).toBeEnabled();
 await expect.element(button).not.toBeDisabled();
 ```
 
-每次重试都检查同一个元素。如果重渲染替换了节点，请用查询 Locator 查找新节点。不接受其他文档或 iframe 中的元素。
+每次重试都会检查同一 DOM 节点。如果重渲染替换了节点，请使用查询 `Locator` 查找新节点。来自其他文档或 iframe 的元素会被拒绝。
 
 ## 截图匹配 \{#screenshot-matching}
 
@@ -121,39 +93,57 @@ await expect.element(button).not.toBeDisabled();
 
 <ApiMeta addedVersion="0.12.4" />
 
-使用 Playwright provider 时，`toMatchScreenshot()` 可以截取 Locator 或页面，并与 PNG 基线比较。若当前 snapshot 更新模式允许新增基线，首次运行会保存基线。之后的运行会与基线比较；需要替换不匹配的基线时，使用 `--update`。
+- **类型：**
 
-matcher 接收可选的基线名称，以及截图或比较选项。
+```ts
+function toMatchScreenshot(options?: ToMatchScreenshotOptions): Promise<void>;
+function toMatchScreenshot(
+  name?: string,
+  options?: ToMatchScreenshotOptions,
+): Promise<void>;
+```
 
-传入 `@rstest/browser` 的 `Locator` 或 `page` 对象。此 matcher 仅支持 Playwright provider，且不支持 `.not`。
+使用 Playwright provider 时，截取 `Locator` 或 `page` 并与存储的 PNG 基线对比。若当前 snapshot 更新模式允许新增基线，首次运行会保存基线；后续运行会与基线比较，使用 `--update` 可替换不匹配的基线。不支持 `.not`。
 
-默认使用当前测试名称作为基线名称。传入名称可以让多个断言共用一份基线，也可以为同一测试中的多张截图分别命名：
+默认使用当前测试名称作为基线名称。传入 `name` 可以让多个断言共用一份基线，或为同一测试中的多张截图分别命名；只传入选项对象时则继续使用默认基线名称。同一测试中的未命名断言会从 `1` 开始自动编号。在 `test.concurrent` 中，使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`）可继续使用测试名称，使用共享的文件级 `expect` 时需显式传入 `name`。
 
 ```ts
 await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
   'primary-save-button',
 );
-```
 
-同一测试中的未命名断言会自动使用不同的基线。在 `test.concurrent` 中，使用测试作用域内的 `expect` fixture（`async ({ expect }) => ...`）即可继续使用测试名称；若使用共享的文件级 `expect`，则需要显式传入名称。
-
-第二个参数用于设置比较和截图选项。例如，允许最多 20 个像素不同、最多等待一秒让截图稳定，并遮罩每次运行都会变化的时间戳：
-
-```ts
-await expect(page.locator('#profile-card')).toMatchScreenshot('profile-card', {
+await expect(page.locator('#profile-card')).toMatchScreenshot({
   maxDiffPixels: 20,
   stabilityTimeout: 1000,
   mask: [page.locator('[data-testid="updated-at"]')],
 });
 ```
 
-`threshold` 设置单像素颜色距离阈值，范围为 `0`（严格）到 `1`（宽松）。`maxDiffPixels` 设置允许不同的像素数上限；也可以改用 `maxDiffPixelRatio` 设置差异像素比例。默认的 `threshold` 为 `0.1`，且不允许像素差异。`maxDiffPixels` 和 `maxDiffPixelRatio` 只能设置一个。
+已有基线时，只要首张截图在配置的容差范围内匹配基线，普通断言就会立即通过。若首张截图不匹配，Rstest 会等待连续两张截图尺寸相同且差异在容差范围内，再重新与基线比较。创建或更新基线时同样会执行稳定性检查。
 
-`stabilityTimeout` 默认值为 `2000` 毫秒。设为 `0` 可关闭稳定性检查；正数必须至少为 `100` 毫秒，以便 Rstest 有时间进行后续截图。截图时 Rstest 会禁用动画。动态内容可通过 `mask` 遮罩；也可以用 `maskColor` 修改遮罩颜色，或通过 `style` 在截图前注入 CSS。其他截图选项（`caret`、`scale` 和 `omitBackground`）会传给 Playwright screenshot API。`fullPage` 仅适用于页面断言。
+`ToMatchScreenshotOptions` 选项（内部类型，未从 `@rstest/browser` 重新导出）：
+
+| 选项                | 默认值      | 行为                                                                                    |
+| ------------------- | ----------- | --------------------------------------------------------------------------------------- |
+| `threshold`         | `0.1`       | 单像素颜色距离阈值，范围为 `0`（严格）到 `1`（宽松）。                                  |
+| `maxDiffPixels`     | `undefined` | 允许差异的最大像素数。可与 `maxDiffPixelRatio` 同时设置（取更严格的一项）。             |
+| `maxDiffPixelRatio` | `undefined` | 允许差异的最大像素比例（`0` 到 `1`）。可与 `maxDiffPixels` 同时设置（取更严格的一项）。 |
+| `stabilityTimeout`  | `5000`      | 等待连续截图一致的最长时间（毫秒）。设为 `0` 关闭稳定性检查；正数必须至少为 `100`。     |
+| `mask`              | `undefined` | 截图时用于遮罩动态区域的 `Locator[]`。                                                  |
+| `maskColor`         | `'#FF00FF'` | 遮罩区域的填充颜色。                                                                    |
+| `fullPage`          | `false`     | 截取完整可滚动页面而非仅当前视口。仅支持 `page` 断言。                                  |
+| `style`             | `undefined` | 截图前注入的额外 CSS 字符串。                                                           |
+| `caret`             | `'hide'`    | 截图时隐藏（`'hide'`）或保留（`'initial'`）文本光标。                                   |
+| `scale`             | `'device'`  | 截图缩放模式（`'css'` 或 `'device'`）。                                                 |
+| `omitBackground`    | `false`     | 省略默认的白色页面背景，保留透明区域。                                                  |
+
+`maxDiffPixels` 与 `maxDiffPixelRatio` 均未设置时，应用 `threshold` 后不允许有像素差异。Rstest 在截图时会禁用 CSS 动画。基线 PNG 保存在 `__screenshots__` 目录下并按测试文件分组，文件名包含经过路径清理的基线名、浏览器和操作系统（清理后可能冲突的名称会追加稳定哈希后缀）。断言不匹配时，Rstest 会将实际截图和差异图写入同级的 `__failures__` 目录。截图捕获受当前测试剩余超时时间限制；设置 `testTimeout: 0` 时不受测试超时限制，但 `stabilityTimeout` 仍生效。
+
+可通过 [`browser.expect.toMatchScreenshot`](/config/test/browser#expecttomatchscreenshot) 设置项目级 matcher 默认值和基线路径。
 
 #### 元素截图 \{#element-screenshots}
 
-传入 Locator，只截取匹配到的元素：
+传入 `Locator`，仅截取匹配到的元素：
 
 ```ts
 await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
@@ -161,26 +151,22 @@ await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot();
 
 #### 页面截图 \{#page-screenshots}
 
-传入 `@rstest/browser` 的 `page` 对象，默认截取当前视口；设置 `fullPage: true` 可截取整个页面：
+传入 `@rstest/browser` 的 `page` 对象截取当前视口，或设置 `fullPage: true` 截取完整页面：
 
 ```ts
 await expect(page).toMatchScreenshot();
 await expect(page).toMatchScreenshot('full-page', { fullPage: true });
 ```
 
-PNG 基线保存在 `__screenshots__` 目录中，并按测试文件分组。文件名包含经过路径清理的测试名称、浏览器和操作系统；清理后可能冲突的名称会追加稳定后缀。每个未命名断言都会从 `1` 开始编号；显式命名的断言不加序号。断言不匹配时，Rstest 会报告基线路径、实际截图和差异图；实际截图与差异图保存在同级的 `__failures__` 目录中。截图捕获受当前测试剩余超时时间限制。设置 `testTimeout: 0` 后不再受测试超时限制，但 `stabilityTimeout` 仍然生效。
-
-可通过 [`browser.expect.toMatchScreenshot`](/config/test/browser#expecttomatchscreenshot) 设置项目级 matcher 默认值和基线路径。
-
 ## 元素断言
 
-以下列出的 matcher 是当前支持的子集，未列出的 matcher 暂不可用。
+当前仅支持以下列出的 matcher。除非类型签名中另有说明，所有 matcher 均接受可选的 `options?: { timeout?: number }` 参数。
 
 ### not
 
 - **类型：** `BrowserElementExpect`
 
-对后续断言取反。
+对链式调用的 matcher 取反。
 
 ```ts
 await expect
@@ -188,15 +174,11 @@ await expect
   .not.toBeDisabled();
 ```
 
-以下 matcher 都支持可选参数 `options?: { timeout?: number }`（除非类型签名里另有说明）。
-
 ### toBeVisible
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-`Locator` 在 `timeout` 内解析到已挂载且 visible 的元素。
-
-visible 的判定：元素具有非空 bounding box，且 `visibility` 不是 `hidden`。例如 `display: none` 或尺寸为 `0` 不算 visible；`opacity: 0` 仍算 visible。
+断言元素已挂载且可见（bounding box 非空且 `visibility !== 'hidden'`）。`display: none` 和零尺寸元素会失败；`opacity: 0` 仍视为可见。
 
 ```ts
 await expect.element(page.getByRole('button', { name: 'Save' })).toBeVisible();
@@ -206,9 +188,7 @@ await expect.element(page.getByRole('button', { name: 'Save' })).toBeVisible();
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-`Locator` 在 `timeout` 内满足以下任一条件：不匹配任何 DOM 节点，或匹配到 non-visible 节点。
-
-可把它理解为 `toBeVisible` 的反面条件；例如仅设置 `opacity: 0` 通常不会让 `toBeHidden` 通过。
+断言 `Locator` 不匹配任何 DOM 节点或匹配到不可见节点（与 `toBeVisible` 相反）。
 
 ```ts
 await expect.element(page.getByTestId('loading')).toBeHidden();
@@ -218,9 +198,7 @@ await expect.element(page.getByTestId('loading')).toBeHidden();
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-元素不处于 disabled 状态。
-
-disabled 判定：原生表单控件带 `disabled`、处于 `disabled` 的 `fieldset` 中，或处于 `aria-disabled=true` 的语义禁用上下文，都可能被视为 disabled。
+断言元素未被禁用（非 `disabled`、不在禁用的 `fieldset` 内且非 `aria-disabled="true"`）。
 
 ```ts
 await expect
@@ -232,9 +210,7 @@ await expect
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-元素被判定为 disabled。
-
-判定规则与 `toBeEnabled` 相同，只是结果相反；推荐在按钮提交、防重复点击等场景里使用。
+断言元素处于禁用状态（与 `toBeEnabled` 相反）。
 
 ```ts
 await expect
@@ -246,9 +222,7 @@ await expect
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-checkbox 或 radio 的 `checked` 状态为 `true`。
-
-常用于验证用户勾选行为或默认选中状态是否生效。
+断言 checkbox 或 radio 控件的 `checked` 状态为 `true`。
 
 ```ts
 await expect.element(page.getByLabel('Agree')).toBeChecked();
@@ -258,9 +232,7 @@ await expect.element(page.getByLabel('Agree')).toBeChecked();
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-checkbox 或 radio 的 `checked` 状态为 `false`。
-
-适合与 `check` / `uncheck` 连用，验证交互前后状态变化。
+断言 checkbox 或 radio 控件的 `checked` 状态为 `false`。
 
 ```ts
 await expect.element(page.getByLabel('Agree')).toBeUnchecked();
@@ -270,9 +242,7 @@ await expect.element(page.getByLabel('Agree')).toBeUnchecked();
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-`Locator` 指向的节点与 `Document` 或 `ShadowRoot` 保持连接（可理解为 `Node.isConnected === true`）。
-
-这个断言只关注“是否在 DOM 树中”，不要求元素可见。
+断言节点已连接到 `Document` 或 `ShadowRoot`（`Node.isConnected === true`），不要求元素可见。
 
 ```ts
 await expect.element(page.locator('#toast')).toBeAttached();
@@ -282,9 +252,7 @@ await expect.element(page.locator('#toast')).toBeAttached();
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-`Locator` 不再指向已连接的 DOM 节点。
-
-常见于条件渲染、异步卸载或删除操作后的校验。
+断言 `Locator` 不再指向已连接的 DOM 节点。
 
 ```ts
 await expect.element(page.locator('#toast')).toBeDetached();
@@ -294,9 +262,7 @@ await expect.element(page.locator('#toast')).toBeDetached();
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-元素同时满足 enabled 且非 readonly。
-
-readonly 的判断既包括原生 `readonly`，也包括支持该语义的 `aria-readonly=true` 场景。
+断言元素同时满足已启用且非只读（`readonly` 或 `aria-readonly="true"`）。
 
 ```ts
 await expect.element(page.getByLabel('Bio')).toBeEditable();
@@ -306,9 +272,7 @@ await expect.element(page.getByLabel('Bio')).toBeEditable();
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-该元素是当前文档的焦点目标（active element）。
-
-适合验证键盘导航、自动聚焦或表单切换焦点行为。
+断言元素是当前文档的焦点目标。
 
 ```ts
 await expect.element(page.getByLabel('Username')).toBeFocused();
@@ -318,9 +282,7 @@ await expect.element(page.getByLabel('Username')).toBeFocused();
 
 - **类型：** `(options?: { timeout?: number }) => Promise<void>`
 
-可编辑元素内容为空，或普通 DOM 节点没有文本内容。
-
-它关注“内容是否为空”，而不是“元素是否存在”或“是否可见”。
+断言可编辑元素的值为空，或普通元素没有文本内容。
 
 ```ts
 await expect.element(page.locator('#empty-state')).toBeEmpty();
@@ -330,9 +292,7 @@ await expect.element(page.locator('#empty-state')).toBeEmpty();
 
 - **类型：** `(options?: { timeout?: number; ratio?: number }) => Promise<void>`
 
-元素与 viewport 有交集（基于 Intersection Observer 语义）。
-
-`ratio` 表示最小交集比例；例如 `ratio: 0.5` 表示至少一半区域进入视口。
+断言元素基于 Intersection Observer 语义与视口相交。`ratio` 指定最小相交比例（例如 `0.5` 表示至少一半区域在视口内）。
 
 ```ts
 await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
@@ -344,7 +304,7 @@ await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
 
 - **类型：** `(role: string, options?: { timeout?: number }) => Promise<void>`
 
-断言元素的 ARIA role。role 必须完全一致，不按 role 层级匹配。
+断言元素的精确 ARIA role（不按 role 层级匹配）。
 
 ```ts
 await expect.element(page.getByTestId('save')).toHaveRole('button');
@@ -356,7 +316,7 @@ await expect.element(page.getByTestId('save')).toHaveRole('button');
 
 - **类型：** `(name: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-断言元素的可访问名称。字符串会与归一化后的完整名称匹配。
+断言元素的可访问名称。字符串与归一化后的完整名称匹配。
 
 ```ts
 await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
@@ -368,7 +328,7 @@ await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
 
 - **类型：** `(description: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-断言元素的可访问描述。字符串会与归一化后的完整描述匹配。
+断言元素的可访问描述。字符串与归一化后的完整描述匹配。
 
 ```ts
 await expect
@@ -380,9 +340,7 @@ await expect
 
 - **类型：** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-元素文本与期望值完整匹配（支持 `string` / `RegExp`）。
-
-文本计算会包含嵌套子元素内容；当期望值是 `string` 时，会对空白与换行做归一化后再匹配。
+断言元素文本内容（包含后代节点，且空白字符会归一化）完整匹配 `text`。
 
 ```ts
 await expect.element(page.getByRole('status')).toHaveText('Saved');
@@ -392,9 +350,7 @@ await expect.element(page.getByRole('status')).toHaveText('Saved');
 
 - **类型：** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-元素文本包含期望子串，或匹配给定正则。
-
-和 `toHaveText` 的区别是：`toContainText` 做子串匹配，`toHaveText` 做完整匹配。
+断言元素文本内容（空白字符会归一化）包含 `string` 子串或匹配 `RegExp`。
 
 ```ts
 await expect.element(page.getByRole('status')).toContainText('Save');
@@ -404,9 +360,7 @@ await expect.element(page.getByRole('status')).toContainText('Save');
 
 - **类型：** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-表单控件的当前 `value` 与期望值匹配（支持 `string` / `RegExp`）。
-
-适用于 `input`、`textarea`、`select` 等可取值元素。
+断言表单控件（`input`、`textarea`、`select`）的当前 `value` 匹配 `value`。
 
 ```ts
 await expect.element(page.getByLabel('Email')).toHaveValue('dev@rstest.rs');
@@ -418,7 +372,7 @@ await expect.element(page.getByLabel('Email')).toHaveValue('dev@rstest.rs');
 
 - **类型：** `(values: (string | RegExp)[], options?: { timeout?: number }) => Promise<void>`
 
-断言 `<select multiple>` 元素所有已选中选项的值。各项必须按 DOM 顺序与期望数组匹配，支持字符串和正则混用。空数组表示没有选中任何选项。
+断言 `<select multiple>` 元素所有已选中选项的值（按 DOM 顺序）。传入 `[]` 表示未选中任何选项。
 
 ```ts
 const languages = page.getByLabel('Languages');
@@ -430,9 +384,7 @@ await expect.element(languages).toHaveValues(['typescript', /^rust$/]);
 
 - **类型：** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-元素的 `id` 与期望值匹配（支持 `string` / `RegExp`）。
-
-适合校验动态生成 ID 或组件挂载后注入的固定 ID。
+断言元素的 `id` 匹配 `value`。
 
 ```ts
 await expect
@@ -444,9 +396,7 @@ await expect
 
 - **类型：** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-元素 `class` 属性与期望值匹配（支持 `string` / `RegExp`）。
-
-当传入 `string` 时，按整体 `class` 字符串匹配；若只关心某个 class，建议使用更有针对性的正则。
+断言元素的 `class` 属性匹配 `value`。传入字符串时会匹配整个 `class` 字符串；匹配单个类名请使用 `RegExp`。
 
 ```ts
 await expect.element(page.getByRole('alert')).toHaveClass(/error/);
@@ -454,13 +404,9 @@ await expect.element(page.getByRole('alert')).toHaveClass(/error/);
 
 ### toHaveAttribute
 
-- **类型：**
-  - `(name: string, options?: { timeout?: number }) => Promise<void>`
-  - `(name: string, value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **类型：** `(name: string, value?: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-只传 `name` 时，断言属性存在；传 `name + value` 时，断言属性值匹配（`value` 支持 `string` / `RegExp`）。
-
-常见用法是校验 `type`、`disabled`、`aria-*` 等结构性属性。
+省略 `value`（或传入 `undefined`）时断言属性 `name` 存在；传入 `value` 时断言属性值匹配。
 
 ```ts
 await expect
@@ -475,9 +421,7 @@ await expect
 
 - **类型：** `(count: number, options?: { timeout?: number }) => Promise<void>`
 
-`Locator` 解析出的元素数量与 `count` 完全一致。
-
-适合列表渲染、过滤结果和分页条目数等场景。
+断言 `Locator` 精确匹配 `count` 个元素。
 
 ```ts
 await expect.element(page.getByRole('listitem')).toHaveCount(3);
@@ -487,9 +431,7 @@ await expect.element(page.getByRole('listitem')).toHaveCount(3);
 
 - **类型：** `(name: string, value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
 
-元素的 computed style 中，指定 CSS 属性值与期望值匹配。
-
-`name` 必须是非空字符串；`value` 支持 `string` / `RegExp`。
+断言元素 computed style 中 `name`（非空字符串）对应的 CSS 属性值匹配 `value`。
 
 ```ts
 await expect.element(page.getByRole('alert')).toHaveCSS('display', 'block');
@@ -499,9 +441,7 @@ await expect.element(page.getByRole('alert')).toHaveCSS('display', 'block');
 
 - **类型：** `(name: string, value: unknown, options?: { timeout?: number }) => Promise<void>`
 
-元素上的 JS property 与期望值匹配。
-
-`name` 必须是非空字符串；`value` 需要可被 JSON 序列化（断言参数会通过 Browser Mode 通道传输）。
+断言 DOM 元素的 JavaScript 属性 `name`（非空字符串）等于 `value`（`value` 必须可被 JSON 序列化）。
 
 ```ts
 await expect

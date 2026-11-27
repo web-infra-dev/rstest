@@ -1,5 +1,5 @@
 ---
-description: 本指南介绍如何在 Rsbuild 项目中集成 Rstest，并复用已有的 Rsbuild 构建配置。
+description: 在 Rsbuild 项目中集成 Rstest，并复用已有的 Rsbuild 配置运行测试。
 ---
 
 import { PackageManagerTabs } from '@theme';
@@ -45,11 +45,11 @@ export default defineConfig({
 });
 ```
 
-适配器会读取 `rsbuild.config.ts`，转换测试编译需要的选项，将结果与 Rstest 配置合并，并将已加载的配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)，因此当该配置发生变化时，`--changed` 会运行完整测试套件。同时，它会移除 `rsbuild:type-check` plugin，因为测试流程不会执行类型检查。
+适配器会读取 `rsbuild.config.ts`，转换测试编译所需的选项，将结果与 Rstest 配置合并，并将已加载的配置文件加入 [`forceRerunTriggers`](/config/test/force-rerun-triggers)——当该配置发生变化时，`--changed` 会运行完整测试套件。同时，适配器会移除 `rsbuild:type-check` 插件，因为测试链路不会执行类型检查。
 
-它不会复制 `dev`、`server`、`html` 等只用于构建的配置。如果默认配置位置或 environment 不适合当前项目，可以使用 `cwd`、`config` 或 `environmentName`。
+它不会复制 `dev`、`server`、`html` 等仅用于构建的配置。如果默认配置位置或环境与当前项目不匹配，可以使用 `cwd`、`config` 或 `environmentName`。
 
-如果其他工具已经在内存中生成了 Rsbuild 配置对象，可以使用 `toRstestConfig` 直接转换，而不必重新读取配置文件。两种入口、options、配置映射和调试方法请查看[配置参考](./reference)。
+如果其他工具已经在内存中生成了 Rsbuild 配置对象，可以使用 `toRstestConfig` 直接转换，而不必重新读取配置文件。两种入口、选项、配置映射和调试方法请查看[配置参考](./reference)。
 
 ## 相关文档
 

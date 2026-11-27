@@ -4,13 +4,13 @@ description: The environment that will be used for testing.
 
 # testEnvironment
 
-- **Type:** `'node' | 'jsdom' | 'happy-dom' | { name: EnvironmentName, options?: EnvironmentOptions, prebundle?: 'auto' | boolean }`
+- **Type:** `'node' | 'jsdom' | 'happy-dom' | { name: 'node' | 'jsdom' | 'happy-dom'; options?: Record<string, any>; prebundle?: 'auto' | boolean }`
 - **Default:** `'node'`
 - **CLI:** `--testEnvironment=node`
 
-The environment that will be used for testing.
+The runtime environment used for Node-mode test execution.
 
-The default environment in Rstest is a `Node.js` environment. If you are building a web application, you can use a browser-like environment through `jsdom` or `happy-dom` instead.
+Rstest runs tests in Node.js by default. For web apps, set `testEnvironment` to `'jsdom'` or `'happy-dom'` instead.
 
 import { Tab, Tabs } from '@theme';
 import { ApiMeta } from '@components/ApiMeta';
@@ -34,19 +34,7 @@ export default defineConfig({
 
 ### DOM testing
 
-Rstest supports [jsdom](https://github.com/jsdom/jsdom) and [happy-dom](https://github.com/capricorn86/happy-dom) for mocking DOM and browser APIs.
-
-If you want to enable DOM testing, you can use the following configuration:
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  testEnvironment: 'jsdom', // or 'happy-dom'
-});
-```
-
-You also need to install the corresponding package:
+Rstest supports [jsdom](https://github.com/jsdom/jsdom) and [happy-dom](https://github.com/capricorn86/happy-dom) for simulating DOM and browser APIs. Set `testEnvironment` to `'jsdom'` or `'happy-dom'` and install the corresponding package:
 
 import { PackageManagerTabs } from '@theme';
 
@@ -70,7 +58,7 @@ test('DOM test', () => {
 
 #### Environment options
 
-You can also pass options to the test environment. This is useful for configuring `jsdom` or `happy-dom`. For example, you can set the `url` for `jsdom`:
+Pass `options` to configure the environment constructor directly (for example, `url` for `jsdom`):
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -103,7 +91,7 @@ Rstest can prebundle a test environment before workers load it. This reduces rep
 
 The `prebundle` option accepts:
 
-- `'auto'`: prebundle Rstest-tested versions of the built-in `jsdom` and `happy-dom` environments. Unknown versions use native loading.
+- `'auto'` (default): prebundle Rstest-tested versions of the built-in `jsdom` and `happy-dom` environments. Unknown versions use native loading.
 - `true`: always prebundle the selected built-in environment.
 - `false`: disable the prebundle and load the environment natively.
 

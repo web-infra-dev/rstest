@@ -427,40 +427,29 @@ export function createWatchCycleDriver({
 }
 
 /**
- * The executors a watch session drives, in teardown order. `node`/`browser` are
- * present only when that side has tests to run, which is what decides whether a
- * shortcut fans out to it — and, for `t`/`p`, whether the key is offered at all.
+ * One watch-mode execution target (node, browser, or any future runtime).
+ * Shortcut handlers drive targets uniformly in order without branching on
+ * runtime type.
  */
-export interface WatchSessionTargets {
-  node?: {
-    runCycle: (options?: WatchCycleOptions) => Promise<void>;
-    /** Select node entries for the `p` (file filter) shortcut. */
-    globTestEntries: (filters?: string[]) => Promise<string[]>;
-    /** Persist the node-only file selection for later invalidation cycles. */
-    setFileFilters: (fileFilters: string[] | undefined) => void;
-  };
-  browser?: {
-    /** Ask the browser host to schedule a cycle over these paths. */
-    rerun: (
-      testPaths?: string[],
-      updateSnapshot?: SnapshotUpdateState,
-    ) => Promise<void>;
-  };
+export interface WatchTarget {
+  /** Schedule or execute a cycle over the given scope/policy. */
+  rerun: (options?: WatchCycleOptions) => Promise<void>;
+  /** Select this target's test entries matching `filters` (all when omitted). */
+  globTestEntries: (filters?: string[]) => Promise<string[]>;
+  /** Persist this target's resolved file selection for later invalidation cycles. */
+  setFileFilters?: (fileFilters: string[] | undefined) => void;
 }
 
 /**
- * Build the watch-mode shortcut handlers — one implementation for every watch
- * shape: node-only, browser-only, and mixed. `t`/`p` scope the node side only
- * (the browser rerun pipeline takes no filter input), so a run without node
- * tests omits their callbacks and `setupCliShortcuts` renders greyed hints for
- * those keys instead.
+ * Build the watch-mode shortcut handlers — one runtime-agnostic implementation
+ * across every watch shape (node-only, browser-only, and mixed).
  *
  * Returns the handler bag rather than installing it, so the caller keeps
  * `setupCliShortcuts` — the single stdin owner — as its own injection point.
  */
 export function createWatchShortcutHandlers(
   context: Rstest,
-  { node, browser }: WatchSessionTargets,
+  targets: readonly WatchTarget[],
   close: () => Promise<void>,
   /**
    * Whether every executor of this run is past its first cycle. Shortcuts are
@@ -468,11 +457,8 @@ export function createWatchShortcutHandlers(
    * owner), so until it lands a rerun key would reach a node side whose dev
    * server is still coming up — starting a second full startup run — or a
    * browser side whose watch session does not exist yet, which drops the
-   * keystroke in silence. One gate covers every key, the node-only `t`/`p`
-   * included: `p` queues no browser cycle, and its selected paths stay on the
-   * node target. `t`'s pattern crosses the seam only inside the runtime config
-   * the host projects at launch, so a `t` pressed later never reaches the
-   * browser side at all.
+   * keystroke in silence. One gate covers every key, the prompt-opening `t`/`p`
+   * included.
    */
   isArmed: () => boolean = () => true,
 ): Parameters<typeof setupCliShortcuts>[0] {
@@ -501,14 +487,51 @@ export function createWatchShortcutHandlers(
     };
   };
 
-  // Node cycle first, browser cycle second: each finalizes on its own, and that
-  // output order is the shape a mixed watch shortcut has always produced.
-  const fanOut = async (
-    options: WatchCycleOptions,
-    browserPaths?: string[],
+  // Multi-project configs give each project its own `normalizedConfig` object,
+  // and both the node pool and browser host project runtime config per project.
+  const setTestNamePattern = (pattern: string | undefined): void => {
+    context.normalizedConfig.testNamePattern = pattern;
+    for (const project of context.projects) {
+      project.normalizedConfig.testNamePattern = pattern;
+    }
+  };
+
+  const fanOut = async (options?: WatchCycleOptions): Promise<void> => {
+    for (const target of targets) {
+      await target.rerun(options);
+    }
+  };
+
+  const runFilteredTargets = async (
+    filters: string[] | undefined,
+    { persist }: { persist: boolean },
   ): Promise<void> => {
-    await node?.runCycle(options);
-    await browser?.rerun(browserPaths, options.updateSnapshot);
+    const entriesPerTarget = await Promise.all(
+      targets.map((target) => target.globTestEntries(filters)),
+    );
+    if (persist) {
+      targets.forEach((target, index) => {
+        target.setFileFilters?.(filters ? entriesPerTarget[index] : undefined);
+      });
+    }
+
+    if (entriesPerTarget.every((entries) => entries.length === 0)) {
+      logger.log(
+        filters
+          ? color.yellow(
+              `\nNo matching test files to run with current file filters: ${filters.join(',')}\n`,
+            )
+          : color.yellow('\nNo matching test files to run.\n'),
+      );
+      return;
+    }
+
+    for (const [index, target] of targets.entries()) {
+      const entries = entriesPerTarget[index]!;
+      if (entries.length > 0) {
+        await target.rerun(filters ? { fileFilters: entries } : undefined);
+      }
+    }
   };
 
   return {
@@ -516,56 +539,45 @@ export function createWatchShortcutHandlers(
     canRerun,
     runAll: whenArmed(async () => {
       clearScreen();
-      context.normalizedConfig.testNamePattern = undefined;
+      setTestNamePattern(undefined);
       context.fileFilters = undefined;
-      if (node) {
-        node.setFileFilters(undefined);
-        await node.runCycle({ mode: 'all', trigger: 'run-all' });
+      for (const target of targets) {
+        target.setFileFilters?.(undefined);
+        await target.rerun({ mode: 'all', trigger: 'run-all' });
       }
-      await browser?.rerun();
     }),
-    runWithTestNamePattern:
-      node &&
-      whenArmed(async (pattern: string | undefined) => {
-        clearScreen();
-        context.normalizedConfig.testNamePattern = pattern;
+    runWithTestNamePattern: whenArmed(async (pattern: string | undefined) => {
+      clearScreen();
+      setTestNamePattern(pattern);
 
-        if (pattern) {
-          logger.log(
-            `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
-          );
-        } else {
-          logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
-        }
-        await node.runCycle();
-      }),
-    runWithFileFilters:
-      node &&
-      whenArmed(async (filters: string[] | undefined) => {
-        clearScreen();
-        if (filters && filters.length > 0) {
-          logger.log(
-            `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}\n`,
-          );
-        } else {
-          logger.log(`\n${color.dim('Cleared file filters')}\n`);
-        }
+      if (pattern) {
+        logger.log(
+          `\n${color.dim('Applied testNamePattern:')} ${color.bold(pattern)}\n`,
+        );
+      } else {
+        logger.log(`\n${color.dim('Cleared testNamePattern filter')}\n`);
+      }
 
-        const entries = await node.globTestEntries(filters);
-        node.setFileFilters(filters ? entries : undefined);
+      if (context.fileFilters !== undefined) {
+        await runFilteredTargets(context.fileFilters, { persist: false });
+        return;
+      }
 
-        if (!entries.length) {
-          logger.log(
-            filters
-              ? color.yellow(
-                  `\nNo matching test files to run with current file filters: ${filters.join(',')}\n`,
-                )
-              : color.yellow('\nNo matching test files to run.\n'),
-          );
-          return;
-        }
-        await node.runCycle({ fileFilters: entries });
-      }),
+      await fanOut();
+    }),
+    runWithFileFilters: whenArmed(async (filters: string[] | undefined) => {
+      clearScreen();
+      if (filters && filters.length > 0) {
+        logger.log(
+          `\n${color.dim('Applied file filters:')} ${color.bold(filters.join(', '))}\n`,
+        );
+      } else {
+        logger.log(`\n${color.dim('Cleared file filters')}\n`);
+      }
+
+      context.fileFilters = filters;
+      await runFilteredTargets(filters, { persist: true });
+    }),
     runFailedTests: whenArmed(async () => {
       const failedTests = collectFailedTestPaths(context);
 
@@ -577,10 +589,11 @@ export function createWatchShortcutHandlers(
       }
 
       clearScreen();
-      await fanOut(
-        { fileFilters: failedTests, mode: 'all', trigger: 'run-failed' },
-        failedTests,
-      );
+      await fanOut({
+        fileFilters: failedTests,
+        mode: 'all',
+        trigger: 'run-failed',
+      });
     }),
     updateSnapshot: whenArmed(async () => {
       if (!snapshotManager.summary.unmatched) {
@@ -607,14 +620,11 @@ export function createWatchShortcutHandlers(
         snapshotManager.options.updateSnapshot = 'all';
       }
       try {
-        await fanOut(
-          {
-            fileFilters: unmatchedTests,
-            trigger: 'update-snapshot',
-            updateSnapshot: 'all',
-          },
-          unmatchedTests,
-        );
+        await fanOut({
+          fileFilters: unmatchedTests,
+          trigger: 'update-snapshot',
+          updateSnapshot: 'all',
+        });
       } finally {
         if (--updateSnapshotHolds === 0) {
           snapshotManager.options.updateSnapshot = updateSnapshotBeforeHold;

@@ -57,11 +57,7 @@ const plugin = require('./plugin.ts');
 
 ### 原因
 
-Rstest 会转换进入 bundle graph 的文件。但后续交给 Node.js 加载的代码会保留 Node.js 原生 loader 语义。
-
-现代 Node.js 可以从 `.ts` 文件中 strip 掉支持的 TypeScript 语法，但它仍然使用和 JavaScript 文件相同的模块系统规则。在 `type: module` 包中，`.ts` 会像 `.js` 一样默认被视为 ESM。如果这个 `.ts` 文件包含 `module.exports`、`exports` 或 `require` 这类 CommonJS globals，Node.js 不会自动把它改写成 CommonJS。
-
-这和使用 `ts-jest` 的 Jest 项目可能不同，因为 `ts-jest` 可以注册 runtime loader hook，在 Node.js 应用相同原生边界之前先编译文件。它也可能和 Vitest 不同，因为 Vitest 的 transform/runtime 模型可能隐藏了一部分 Node.js loader 边界。
+通过动态 `require()` 加载的 `.ts` 文件位于[bundle graph 之外](#bundle-graph-之外的代码使用-nodejs-原生行为)，Node.js 会按原生模块规则处理它——在 `type: module` 作用域下将 `.ts` 视为 ESM，不会像 `ts-jest` 或 Vitest 运行时转换那样改写 `module.exports`、`require` 等 CommonJS 全局变量。
 
 ### 解决方式
 
@@ -120,9 +116,7 @@ import { create } from 'enhanced-resolve';
 
 ### 原因
 
-有些 CommonJS 包会动态创建导出，例如通过 getter 或 `Object.defineProperty`。TypeScript 类型里仍然可能声明了 named exports，某些工具也可能通过转换或运行时包装让这些 named imports 生效。但 Node.js 原生 ESM interop 更严格：如果 Node.js 不能静态识别这个 named export，`import { create } from 'pkg'` 就会失败，即使 `import pkg from 'pkg'` 可以正常工作。
-
-这不是 Rstest 特有的问题，而是保留 Node.js 执行 bundle graph 之外代码时的结果。从 Vitest 迁移时可能更容易暴露这个差异，因为 Vitest 可能转换了更多依赖路径，并提供了更宽松的 CommonJS interop。
+当 CommonJS 依赖在[bundle graph 之外](#bundle-graph-之外的代码使用-nodejs-原生行为)由 Node.js 执行时，原生 ESM interop 只能暴露 CommonJS lexer 可静态识别的命名导出。通过 getter 或 `Object.defineProperty` 动态挂出导出的包无法使用 `import { create } from 'pkg'`（尽管 `import pkg from 'pkg'` 仍可工作，而 Vitest 可能因转换了更多依赖而屏蔽了该差异）。
 
 ### 解决方式
 

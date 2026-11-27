@@ -8,9 +8,9 @@ description: 清除所有 mock 属性，并将每个 mock 的实现重置为其�
 - **默认值：** `false`
 - **CLI：** `--resetMocks`
 
-清除所有 mock 属性，并将每个 mock 的实现重置为其原始实现。
+在每个测试前清除所有 mock 状态，并将每个 mock 的实现重置为其原始实现。
 
-当启用 `resetMocks` 时，rstest 将在每个测试用例执行之前调用 [.resetAllMocks()](/api/runtime-api/rstest/mock-functions#rsresetallmocks)。
+启用 `resetMocks` 后，Rstest 会在每个测试执行前调用 [rs.resetAllMocks()](/api/runtime-api/rstest/mock-functions#rsresetallmocks)。
 
 import { Tab, Tabs } from '@theme';
 

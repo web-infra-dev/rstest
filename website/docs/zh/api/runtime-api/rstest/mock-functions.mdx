@@ -1,11 +1,11 @@
 ---
 title: Mock functions
-description: Rstest 基于 tinyspy 提供了一些工具方法帮助你进行函数的模拟（mock）。
+description: Rstest 基于 tinyspy 提供用于创建 mock 函数、spy 对象方法和深度 mock 对象的工具方法。
 ---
 
 # Mock functions
 
-Rstest 基于 [tinyspy](https://github.com/tinylibs/tinyspy) 提供了一些工具方法帮助你进行函数的模拟（mock）。
+Rstest 基于 [tinyspy](https://github.com/tinylibs/tinyspy) 提供用于创建 mock 函数、spy 对象方法和深度 mock 对象的工具方法。
 
 ## rs.fn
 
@@ -25,9 +25,9 @@ export interface Mock<
 export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
 ```
 
-创建一个 mock 函数。
+创建一个 mock 函数，可传入可选的默认实现 `fn`。
 
-如果需要为可调用的 mock 函数标注类型，请参考 [`Mock`](/api/javascript-api/types#mock) 类型。
+为可调用 mock 函数标注类型时，请参考 [`Mock`](/api/javascript-api/types#mock) 类型。
 
 ```ts
 const sayHi = rs.fn((name: string) => `hi ${name}`);
@@ -35,7 +35,6 @@ const sayHi = rs.fn((name: string) => `hi ${name}`);
 const res = sayHi('bob');
 
 expect(res).toBe('hi bob');
-
 expect(sayHi).toHaveBeenCalledTimes(1);
 ```
 
@@ -52,7 +51,7 @@ export type SpyFn = <T extends Record<string, any>, K extends keyof T>(
 ) => MockInstance<T[K]>;
 ```
 
-对一个对象的方法进行 mock。
+为对象的方法或属性访问器（通过 `accessType` 指定 `'get'` 或 `'set'`）创建 spy，并在被覆盖前保持原实现。
 
 关于 spy 返回的控制 API，请参考 [`MockInstance`](/api/javascript-api/types#mockinstance) 类型。
 
@@ -65,11 +64,10 @@ const hi = {
 const spy = rs.spyOn(hi, 'sayHi');
 
 expect(hi.sayHi()).toBe('hi');
-
 expect(spy).toHaveBeenCalled();
 ```
 
-对同一个方法重复调用 `rs.spyOn` 时，会返回已有的 spy，而不是重新定义。
+对同一个方法多次调用 `rs.spyOn` 时，会复用已有的 spy 实例，而不会重复包装：
 
 ```ts
 const hi = {
@@ -78,16 +76,15 @@ const hi = {
 rs.spyOn(hi, 'sayHi').mockImplementation(() => 'hello');
 
 expect(hi.sayHi()).toBe('hello');
-
-// 返回的 spy 实例与第一次调用相同
-expect(rs.spyOn(hi, 'sayHi')).toBeCalled();
+// 返回与首次调用相同的 spy 实例
+expect(rs.spyOn(hi, 'sayHi')).toHaveBeenCalled();
 ```
 
 :::note 对 re-export 或第三方模块的导出进行 spy
 
-`rs.spyOn` 能作用于你所导入模块中**直接定义**的导出，但对从其他模块 **re-export**（`export * from '...'`）或由第三方依赖提供的导出可能不生效。
+`rs.spyOn` 可以作用于当前导入模块中直接定义的导出，但对从其他模块 **re-export**（`export * from '...'`）或原生/第三方 ES 模块暴露的只读导出不会生效。
 
-这种情况下，请改用 [`{ spy: true }`](/api/runtime-api/rstest/mock-modules#with-spy-true-option) 来 mock 该模块。它会在保留真实实现的同时，为每个导出装上 spy：
+这种情况下，请改用 [`{ spy: true }`](/api/runtime-api/rstest/mock-modules#with-spy-true-option) 来 mock 该模块，在保留原实现的同时为每个导出装上 spy：
 
 ```ts
 rs.mock('pkg', { spy: true });
@@ -100,7 +97,7 @@ rs.mock('pkg', { spy: true });
 - **别名：** `rstest.isMockFunction`
 - **类型：** `(fn: any) => fn is MockInstance`
 
-判断给定的函数是否为 mock 函数。
+判断 `fn` 是否为 mock 函数，并在 TypeScript 中将其类型收窄为 [`MockInstance`](./mock-instance)。
 
 ## rs.mockObject
 
@@ -114,7 +111,7 @@ type MockObject = <T>(
 ) => MaybeMockedDeep<T>;
 ```
 
-创建一个对象的深度 mock。所有方法都会被替换为 mock 函数，而原始值和普通对象会保留。
+创建对象的深度 mock。函数会被替换为 mock 函数（对普通对象递归处理），原始值和 `Date`、`RegExp`、`Map` 等内置对象会保持不变。
 
 ### 基本用法
 
@@ -133,34 +130,22 @@ const original = {
 
 const mocked = rs.mockObject(original);
 
-// 方法默认返回 undefined
-expect(mocked.method()).toBe(undefined);
-expect(mocked.nested.getValue()).toBe(undefined);
+// 方法会被替换为 mock 函数，默认返回 undefined
+expect(rs.isMockFunction(mocked.method)).toBe(true);
+expect(mocked.method()).toBeUndefined();
+expect(mocked.nested.getValue()).toBeUndefined();
+
+// 可通过标准 Mock 方法配置返回值
+mocked.method.mockReturnValue(100);
+expect(mocked.method()).toBe(100);
 
 // 原始值保持不变
 expect(mocked.prop).toBe('foo');
-
-// 方法是 mock 函数
-expect(rs.isMockFunction(mocked.method)).toBe(true);
-```
-
-### Mock 返回值
-
-你可以配置 mock 方法返回特定的值：
-
-```ts
-const mocked = rs.mockObject({
-  fetchData: () => 'real data',
-});
-
-mocked.fetchData.mockReturnValue('mocked data');
-
-expect(mocked.fetchData()).toBe('mocked data');
 ```
 
 ### Spy 模式
 
-当传入 `{ spy: true }` 作为第二个参数时，原始实现会被保留，同时仍然追踪调用：
+传入 `{ spy: true }` 作为第二个参数时，会保留原始实现并追踪调用：
 
 ```ts
 const original = {
@@ -169,17 +154,14 @@ const original = {
 
 const spied = rs.mockObject(original, { spy: true });
 
-// 保留原始实现
 expect(spied.add(1, 2)).toBe(3);
-
-// 追踪调用
 expect(spied.add).toHaveBeenCalledWith(1, 2);
 expect(spied.add.mock.results[0]).toEqual({ type: 'return', value: 3 });
 ```
 
 ### 数组
 
-默认情况下，数组会被替换为空数组。使用 `{ spy: true }` 时，数组保持其原始值：
+默认情况下，数组会被替换为空数组。传入 `{ spy: true }` 时会保留数组元素（同时对其中的函数和普通对象装上 spy）：
 
 ```ts
 const mocked = rs.mockObject({ array: [1, 2, 3] });
@@ -191,7 +173,7 @@ expect(spied.array).toEqual([1, 2, 3]);
 
 ### Mock 类
 
-你也可以 mock 类构造函数。使用 `{ spy: true }` 可以保留原始类的行为，同时追踪调用：
+传入类构造函数即可 mock 该类。不传 `{ spy: true }` 时，原构造函数逻辑不会执行，原型方法和静态方法会被替换为返回 `undefined` 的 mock 函数（使用 `new` 会返回带有这些 mocked 原型方法的实例）。使用 `{ spy: true }` 时，实例会执行原构造函数并保留原方法作为 spy：
 
 ```ts
 class UserService {
@@ -200,14 +182,11 @@ class UserService {
   }
 }
 
-// 使用 { spy: true } 保留原始实现
 const MockedService = rs.mockObject(UserService, { spy: true });
 const instance = new MockedService();
 
-// 原始方法正常工作
 expect(instance.getUser()).toEqual({ id: 1, name: 'Alice' });
 
-// 覆盖实现
 rs.mocked(instance.getUser).mockImplementation(() => ({ id: 2, name: 'Bob' }));
 expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 ```
@@ -218,21 +197,26 @@ expect(instance.getUser()).toEqual({ id: 2, name: 'Bob' });
 - **类型：**
 
 ```ts
-type MockedFn = <T>(
-  item: T,
-  deepOrOptions?: boolean | { partial?: boolean; deep?: boolean },
-) =>
-  | Mocked<T>
-  | MaybeMockedDeep<T>
-  | MaybePartiallyMocked<T>
-  | MaybePartiallyMockedDeep<T>;
+type MockedFn = (<T>(item: T, deep?: false) => Mocked<T>) &
+  (<T>(item: T, deep: true) => MaybeMockedDeep<T>) &
+  (<T>(item: T, options: { partial?: false; deep?: false }) => Mocked<T>) &
+  (<T>(
+    item: T,
+    options: { partial?: false; deep: true },
+  ) => MaybeMockedDeep<T>) &
+  (<T>(
+    item: T,
+    options: { partial: true; deep?: false },
+  ) => MaybePartiallyMocked<T>) &
+  (<T>(
+    item: T,
+    options: { partial: true; deep: true },
+  ) => MaybePartiallyMockedDeep<T>);
 ```
 
-一个 TypeScript 类型辅助函数，用于将对象包装为 mock 类型而不改变其运行时行为。当你 mock 了一个模块并想要获得正确的 mock 方法类型提示时，这很有用。
+TypeScript 类型辅助函数，运行时原样返回 `item`，仅在类型层面将其方法标记为 mock。传入 `true` 或 `{ deep: true }` 会递归应用 mock 类型；传入 `{ partial: true }` 则使用部分 mock 类型。
 
-推导出的返回类型会随选项变化：`{ deep: true }` 会递归应用 mock 类型，`{ partial: true }` 则使用 partial mock 类型。
-
-如果需要为 mock 对象或模块标注类型，请参考 [`Mocked`](/api/javascript-api/types#mocked) 类型。
+为 mock 对象或模块标注类型时，请参考 [`Mocked`](/api/javascript-api/types#mocked) 类型。
 
 ```ts
 import { myModule } from './myModule';
@@ -245,28 +229,26 @@ const mockedModule = rs.mocked(myModule);
 mockedModule.method.mockReturnValue('mocked');
 ```
 
-该函数在运行时只是返回相同的对象——它只影响 TypeScript 类型。
-
 ## rs.clearAllMocks
 
 - **别名：** `rstest.clearAllMocks`
 - **类型：** `() => RstestUtilities`
 
-清除所有 mock 的 `mock.calls`、`mock.instances`、`mock.contexts` 和 `mock.results` 属性。
+对所有 mock 调用 `.mockClear()`，清除所有调用记录（`mock.calls`、`mock.instances`、`mock.contexts`、`mock.invocationCallOrder`、`mock.lastCall`、`mock.results` 和 `mock.settledResults`）。
 
 ## rs.resetAllMocks
 
 - **别名：** `rstest.resetAllMocks`
 - **类型：** `() => RstestUtilities`
 
-清除所有 mock 属性，并将每个 mock 的实现重置为其原始实现。
+对所有 mock 调用 `.mockReset()`，清除所有调用记录，并将每个 mock 的实现重置为初始状态。
 
 ## rs.restoreAllMocks
 
 - **别名：** `rstest.restoreAllMocks`
 - **类型：** `() => RstestUtilities`
 
-恢复通过 `rs.spyOn()` 替换的对象描述符。此操作不会清除调用记录或重置 mock 实现，也不会影响通过 `rs.fn()` 创建的独立 mock。
+恢复通过 `rs.spyOn()` 替换的原始属性描述符。不会清除调用记录或重置 mock 实现，也不会影响通过 `rs.fn()` 创建的独立 mock。
 
 ## 更多
 

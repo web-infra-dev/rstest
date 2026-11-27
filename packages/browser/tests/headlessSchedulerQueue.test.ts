@@ -83,7 +83,7 @@ describe('expandToRows (launch packing)', () => {
 describe('getMixedLaneConcurrency', () => {
   const files = [{ testPath: '/tests/a.test.ts', projectName: 'web' }];
   const headlessRows = [row('web', 'chromium'), row('web', 'firefox')];
-  const headedRow = row('web', 'webkit');
+  const headedRows = [row('web', 'webkit')];
   const contextWith = (maxWorkers: number) =>
     ({ command: 'run', normalizedConfig: { pool: { maxWorkers } } }) as const;
 
@@ -95,7 +95,18 @@ describe('getMixedLaneConcurrency', () => {
         headlessFiles: files,
         headlessRows,
         headedFiles: files,
-        headedRow,
+        headedRows,
+      }),
+    ).toBe(2);
+  });
+
+  it('counts multiple headed rows in the shared budget', () => {
+    expect(
+      getMixedLaneConcurrency(contextWith(4), {
+        headlessFiles: [],
+        headlessRows: [],
+        headedFiles: files,
+        headedRows: [row('web', 'chromium'), row('web', 'firefox')],
       }),
     ).toBe(2);
   });
@@ -106,7 +117,7 @@ describe('getMixedLaneConcurrency', () => {
         headlessFiles: files,
         headlessRows,
         headedFiles: files,
-        headedRow,
+        headedRows,
       }),
     ).toBe(1);
   });

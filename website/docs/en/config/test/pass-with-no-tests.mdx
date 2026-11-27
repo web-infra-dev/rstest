@@ -1,5 +1,5 @@
 ---
-description: Pass when no tests are found.
+description: Allow test runs to pass when no test files or test cases are found.
 ---
 
 # passWithNoTests
@@ -8,9 +8,11 @@ description: Pass when no tests are found.
 - **Default:** `false`
 - **CLI:** `--passWithNoTests`
 
-Pass when no tests are found.
+Allow Rstest to pass when no test files or test cases are found.
 
-By default, Rstest marks test failures when no test suites are found. You can allow the test to pass when no tests are found by setting `passWithNoTests` to `true`.
+By default, Rstest exits with code `1` when no test files match, and fails any test file or suite that contains no tests. Set `passWithNoTests: true` to exit with code `0` and mark empty files and suites as passed.
+
+When running with `--changed`, `passWithNoTests` defaults to `true` unless explicitly set to `false`.
 
 import { Tab, Tabs } from '@theme';
 

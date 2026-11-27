@@ -28,8 +28,6 @@ For nested suites, `beforeEach` still runs from parent to child, and `afterEach`
 
 Cleanup functions returned by `beforeEach` run after all `afterEach` hooks; those returned by `beforeAll` run after the suite's `afterAll` hooks. They also follow this option: `'stack'` runs them in reverse order of their corresponding setup hooks, while `'list'` runs them in the same order. For nested `beforeEach` hooks, this includes cleanup from both parent and child suites. In `'parallel'` mode, returned cleanup functions also run concurrently, limited by `maxConcurrency`.
 
-v0.12.6 fixes an inconsistency where returned cleanup functions ran in setup order while `afterEach` and `afterAll` ran in reverse order. Returned cleanup functions now also run in reverse setup order by default. This changes their execution order compared with earlier versions.
-
 Use `'parallel'` only when hooks in the same group do not depend on each other's side effects. It applies in both Node Mode and Browser Mode.
 
 In parallel hooks, polling assertions use their configured timeout instead of a shared task deadline. Each hook's own timeout still bounds its execution.

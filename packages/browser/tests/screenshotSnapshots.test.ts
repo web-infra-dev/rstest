@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rstest } from '@rstest/core';
 import { PNG } from 'pngjs';
 import {
   matchBrowserScreenshot,
@@ -52,7 +52,7 @@ describe('matchBrowserScreenshot', () => {
       testName: 'renders a component',
       browserName: 'chromium',
       platform: 'linux',
-      screenshotBase64: createScreenshot(),
+      captureScreenshot: async () => createScreenshot(),
       updateSnapshot: 'all',
       ...overrides,
     });
@@ -78,18 +78,117 @@ describe('matchBrowserScreenshot', () => {
     });
   });
 
+  it('reports a missing read-only reference before capturing', async () => {
+    await withRoot(async (root) => {
+      let captures = 0;
+      await expect(
+        match(root, {
+          updateSnapshot: 'none',
+          rootPath: root,
+          resolvePath: () => 'required.png',
+          captureScreenshot: async () => {
+            captures++;
+            return createScreenshot();
+          },
+        }),
+      ).rejects.toThrow('required.png');
+      expect(captures).toBe(0);
+      await expect(
+        fs.access(path.join(root, 'required.png')),
+      ).rejects.toThrow();
+    });
+  });
+
+  it.each([true, false])(
+    'reuses the decoded read-only reference after a first-frame miss (identical final PNG: %s)',
+    async (identical) => {
+      await withRoot(async (root) => {
+        await match(root);
+        const first = Buffer.from(createScreenshot([255, 0, 0, 255]), 'base64');
+        const final = identical
+          ? createScreenshot()
+          : createScreenshot([21, 80, 180, 255]);
+        using decode = rstest.spyOn(PNG.sync, 'read');
+
+        const result = await match(root, {
+          updateSnapshot: 'none',
+          captureScreenshot: async (matchesReference) => {
+            expect(await matchesReference?.(first)).toBe(false);
+            decode.mockClear();
+            return final;
+          },
+        });
+
+        expect(result).toBe('matched');
+        expect(decode).toHaveBeenCalledTimes(identical ? 0 : 1);
+      });
+    },
+  );
+
+  it('compares against a replacement reference when additions are allowed', async () => {
+    await withRoot(async (root) => {
+      const referencePath = path.join(root, 'reference.png');
+      const resolvePath = () => referencePath;
+      await match(root, { resolvePath });
+      const replacement = Buffer.from(
+        createScreenshot([255, 0, 0, 255]),
+        'base64',
+      );
+      const result = await match(root, {
+        resolvePath,
+        updateSnapshot: 'new',
+        captureScreenshot: async (matchesReference) => {
+          expect(await matchesReference?.(replacement)).toBe(false);
+          await fs.writeFile(referencePath, replacement);
+          return replacement.toString('base64');
+        },
+      });
+      expect(result).toBe('matched');
+    });
+  });
+
   it('reports whether a screenshot was added, updated, or matched', async () => {
     await withRoot(async (root) => {
       expect(await match(root, { updateSnapshot: 'new' })).toBe('added');
       expect(await match(root, { updateSnapshot: 'none' })).toBe('matched');
       expect(
         await match(root, {
-          screenshotBase64: createScreenshot([180, 40, 20, 255]),
+          captureScreenshot: async () => createScreenshot([180, 40, 20, 255]),
           updateSnapshot: 'all',
         }),
       ).toBe('updated');
     });
   });
+
+  it.each([
+    { width: 150, allowed: 1 },
+    { width: 400, allowed: 2 },
+  ])(
+    'allows up to $allowed differing pixels in a $width-pixel screenshot',
+    async ({ width, allowed }) => {
+      await withRoot(async (root) => {
+        const png = new PNG({ width, height: 1 });
+        png.data.fill(255);
+        const captureScreenshot = async () =>
+          PNG.sync.write(png).toString('base64');
+        await match(root, { captureScreenshot });
+        const compare = () =>
+          match(root, {
+            captureScreenshot,
+            options: { maxDiffPixels: 2, maxDiffPixelRatio: 0.01 },
+            updateSnapshot: 'none',
+          });
+        for (let i = 0; i < allowed; i++) {
+          png.data.fill(0, i * 4, i * 4 + 3);
+        }
+        expect(await compare()).toBe('matched');
+        png.data.fill(0, allowed * 4, allowed * 4 + 3);
+        await expect(compare()).rejects.toThrow(
+          `${allowed + 1} pixels differ (allowed: ${allowed})`,
+        );
+      });
+    },
+  );
 
   it('does not persist a baseline after the screenshot deadline', async () => {
     await withRoot(async (root) => {

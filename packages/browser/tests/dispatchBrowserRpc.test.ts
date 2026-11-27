@@ -1,4 +1,4 @@
-import { describe, expect, it } from '@rstest/core';
+import { describe, expect, it, rstest } from '@rstest/core';
 import { PNG } from 'pngjs';
 import type { BrowserRpcRequest } from '../src/protocol';
 import { dispatchPlaywrightBrowserRpc } from '../src/providers/playwright/dispatchBrowserRpc';
@@ -616,6 +616,86 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(fakeLocator.screenshotCalls[0]).not.toHaveProperty('timeout');
   });
 
+  it('skips PNG decoding when consecutive screenshot bytes match', async ({
+    onTestFinished,
+  }) => {
+    const locator = new FakeLocator();
+    const decode = rstest.spyOn(PNG.sync, 'read');
+    onTestFinished(() => decode.mockRestore());
+
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'screenshot',
+        method: 'toMatchScreenshot',
+        args: ['button'],
+      }),
+      timeoutFallbackMs: 2_000,
+    });
+    expect(locator.screenshotCalls).toHaveLength(2);
+    expect(decode).not.toHaveBeenCalled();
+  });
+
+  it.each([{ maxDiffPixels: 1 }, { maxDiffPixelRatio: 0.25 }])(
+    'uses the configured tolerance for same-size consecutive captures (%j)',
+    async (tolerance) => {
+      const first = new PNG({ width: 1, height: 4 });
+      const next = new PNG({ width: 4, height: 1 });
+      first.data.fill(255);
+      next.data.fill(255);
+      const frames = [PNG.sync.write(first), PNG.sync.write(next)];
+      next.data.set([0, 0, 0, 255]);
+      const last = PNG.sync.write(next);
+      frames.push(last);
+      const locator = new FakeLocator();
+      locator.screenshotImplementation = async () => {
+        const frame = frames.shift();
+        if (!frame) throw new Error('Unexpected extra screenshot');
+        return frame;
+      };
+      const result = await dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(locator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          args: ['button', tolerance],
+        }),
+        timeoutFallbackMs: 2_000,
+      });
+      expect(result).toBe(last.toString('base64'));
+      expect(locator.screenshotCalls).toHaveLength(3);
+      expect(locator.screenshotCalls[0]).not.toHaveProperty('maxDiffPixels');
+      expect(locator.screenshotCalls[0]).not.toHaveProperty(
+        'maxDiffPixelRatio',
+      );
+    },
+  );
+
+  it.each([true, false])(
+    'only captures a follow-up when the first reference comparison misses (match: %s)',
+    async (matches) => {
+      const locator = new FakeLocator();
+      const first = await locator.screenshotImplementation();
+      let comparisons = 0;
+      await dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(locator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          args: ['button'],
+        }),
+        matchesScreenshotReference: async (capture) => {
+          comparisons++;
+          expect(capture).toEqual(first);
+          return matches;
+        },
+        timeoutFallbackMs: 2_000,
+      });
+      expect(comparisons).toBe(1);
+      expect(locator.screenshotCalls).toHaveLength(matches ? 1 : 2);
+    },
+  );
+
   it('starts the stability window after the initial capture', async () => {
     const fakeLocator = new FakeLocator();
     let captures = 0;
@@ -644,23 +724,29 @@ describe('dispatchPlaywrightBrowserRpc', () => {
     expect(captures).toBe(2);
   });
 
-  it('allows slow follow-up captures with the default stability timeout', async () => {
-    const fakeLocator = new FakeLocator();
-    await dispatchPlaywrightBrowserRpc({
-      runnerPage: new FakePage(fakeLocator) as any,
-      request: createRequest({
-        kind: 'screenshot',
-        method: 'toMatchScreenshot',
-        timeout: 3000,
-        args: ['button'],
-      }),
-      timeoutFallbackMs: 3000,
-    });
+  it.each([
+    { testTimeout: 10_000, captureTimeout: 5_000 },
+    { testTimeout: 3_000, captureTimeout: 3_000 },
+  ])(
+    'gives follow-up screenshots $captureTimeout ms with a $testTimeout ms test deadline',
+    async ({ testTimeout, captureTimeout }) => {
+      using _clock = rstest.useFakeTimers({ toFake: ['Date'] });
+      const fakeLocator = new FakeLocator();
+      await dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(fakeLocator) as any,
+        request: createRequest({
+          kind: 'screenshot',
+          method: 'toMatchScreenshot',
+          timeout: testTimeout,
+          args: ['button'],
+        }),
+        timeoutFallbackMs: testTimeout,
+      });
 
-    expect(fakeLocator.screenshotCalls).toHaveLength(2);
-    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeGreaterThan(500);
-    expect(fakeLocator.screenshotCalls[1]?.timeout).toBeLessThanOrEqual(2000);
-  });
+      expect(fakeLocator.screenshotCalls).toHaveLength(2);
+      expect(fakeLocator.screenshotCalls[1]?.timeout).toBe(captureTimeout);
+    },
+  );
 
   it('bounds follow-up captures by the remaining stability timeout', async () => {
     const fakeLocator = new FakeLocator();

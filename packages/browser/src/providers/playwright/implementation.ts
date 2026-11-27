@@ -25,19 +25,11 @@ export const playwrightProviderImplementation: BrowserProviderImplementation = {
       ? createPlaywrightV8CoverageCollector()
       : null;
   },
-  async dispatchRpc({
-    containerPage,
-    runnerPage,
-    request,
-    isRequestCurrent,
-    timeoutFallbackMs,
-  }): Promise<unknown> {
+  async dispatchRpc({ containerPage, runnerPage, ...input }): Promise<unknown> {
     return dispatchPlaywrightBrowserRpc({
+      ...input,
       containerPage: containerPage as Page | undefined,
       runnerPage: runnerPage as Page | undefined,
-      request,
-      isRequestCurrent,
-      timeoutFallbackMs,
     });
   },
 };

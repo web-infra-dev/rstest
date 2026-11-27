@@ -227,4 +227,45 @@ describe('Fake timers', () => {
     await timeout;
     expect(called).toBe(true);
   });
+
+  it('should advance fake timers while waiting', async () => {
+    rstest.useFakeTimers({ now: 0 });
+
+    let ready = false;
+    globalThis.setTimeout(() => {
+      ready = true;
+    }, 100);
+
+    await rstest.waitFor(
+      () => {
+        if (!ready) {
+          throw new Error('not ready');
+        }
+      },
+      { timeout: 2_000, interval: 25 },
+    );
+    expect(Date.now()).toBe(100);
+
+    globalThis.setTimeout(() => {
+      ready = false;
+    }, 100);
+
+    await expect(
+      rstest.waitUntil(() => !ready, { timeout: 2_000, interval: 25 }),
+    ).resolves.toBe(true);
+    expect(Date.now()).toBe(200);
+  });
+
+  it('should advance fake timers while an async wait callback is pending', async () => {
+    rstest.useFakeTimers({ now: 0 });
+
+    const callback = async () => {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 100));
+      return Date.now();
+    };
+    const options = { timeout: 2_000, interval: 25 };
+
+    await expect(rstest.waitFor(callback, options)).resolves.toBe(125);
+    await expect(rstest.waitUntil(callback, options)).resolves.toBe(250);
+  });
 });

@@ -209,6 +209,8 @@ export type Test = TestSuite | TestCase;
 export type TestResultStatus = 'skipped' | 'passed' | 'failed' | 'todo';
 
 export interface SerializedError {
+  /** Identifies screenshot artifacts retained by the headed browser UI. */
+  screenshotComparisonId?: string;
   fullStack?: boolean;
   message: string;
   name?: string;

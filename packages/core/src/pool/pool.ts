@@ -16,7 +16,7 @@ export const MAX_OOM_ATTEMPTS = 3;
  *   - one task per worker at a time (concurrentTasksPerWorker=1)
  *   - parallel dispatch up to maxWorkers, slot-waiter blocks excess callers
  *   - isolate=true: fresh runner per task, stopped in the background
- *   - isolate=false: idle runners reused (environment-matched), lazy-spawned
+ *   - isolate=false: idle runners reused, with environment affinity
  */
 export class Pool {
   private readonly options: PoolOptions;
@@ -189,8 +189,12 @@ export class Pool {
     while (this.slotWaiters.length > 0 && !this.isClosing && !this.isClosed) {
       const waiter = this.slotWaiters[0]!;
       const { task, exclusive } = waiter;
-      const { environmentKey } = task.options;
-      const fork = task.worker === 'forks' || task.worker === 'vmForks';
+      const {
+        reuseKey,
+        worker: pool,
+        options: { environmentKey },
+      } = task;
+      const fork = pool === 'forks' || pool === 'vmForks';
       // Idle workers keep their heaps; the exclusive attempt waits for them to
       // exit like any stopping worker.
       if (exclusive) {
@@ -206,17 +210,21 @@ export class Pool {
       )
         return;
 
-      // Prefer reuse of an idle runner (only meaningful when isolate=false,
-      // since isolate=true never returns runners to the idle pool). Most
-      // recently returned first (LIFO) — hottest kept module cache — and
-      // restricted to runners already holding this task's environment, so a
-      // reused worker never has to swap environments mid-life.
-      const reuseIndex = this.idleRunners.findLastIndex(
-        (idle) => idle.environmentKey === environmentKey,
+      // Prefer the most recently used matching environment to keep its cache
+      // hot. VM workers tear down each file's environment, so a different one
+      // can run on the same worker when the process-level settings match.
+      let reuseIndex = this.idleRunners.findLastIndex(
+        (idle) => idle.lastEnvironmentKey === environmentKey,
       );
+      if (reuseIndex === -1 && reuseKey !== environmentKey) {
+        reuseIndex = this.idleRunners.findLastIndex(
+          (idle) => idle.reuseKey === reuseKey,
+        );
+      }
       if (reuseIndex !== -1) {
         const reuse = this.idleRunners.splice(reuseIndex, 1)[0]!;
         if (reuse.isUsable()) {
+          reuse.lastEnvironmentKey = environmentKey;
           this.claimEpochs.set(reuse, this.epoch);
           this.activeRunners.add(reuse);
           if (exclusive) this.exclusiveRunner = reuse;
@@ -231,10 +239,8 @@ export class Pool {
       }
 
       if (this.inFlightCount >= this.options.maxWorkers) {
-        // No idle runner holds this environment. Idle runners still occupy
-        // slots, so shed the coldest one rather than parking behind workers
-        // that can never serve this task; its slot — and this waiter — is
-        // released once the child exits.
+        // Incompatible idle workers still occupy slots. Shed the coldest
+        // one to make room for this task once the child exits.
         if (this.idleRunners.length > 0) {
           this.disposeRunnerInBackground(this.idleRunners.shift()!);
         }
@@ -248,16 +254,17 @@ export class Pool {
       const runner = new PoolRunner(worker, {
         workerId,
         environmentKey,
+        reuseKey,
         recordRss: this.options.recordRss
           ? (event, args) =>
               this.options.recordRss?.(event, {
                 workerId,
-                pool: task.worker,
+                pool,
                 ...args,
               })
           : undefined,
         memoryLimit: this.options.memoryLimit,
-        memoryMetric: task.worker === 'forks' ? 'rss' : 'heapUsed',
+        memoryMetric: pool === 'forks' ? 'rss' : 'heapUsed',
         onTestEnvironmentFallback: this.handleTestEnvironmentFallback,
         onOomKill: fork
           ? () => {
@@ -346,17 +353,14 @@ export class Pool {
     //      `minWorkers` — keep the runner around as steady-state capacity.
     // Otherwise the idle pool is already at the floor, so shed this runner.
     //
-    // The floor is counted per environment, because reuse is environment-
-    // matched: idle runners holding a different environment can never serve
-    // this one, so counting them would let a cold environment's leftovers
-    // squat the floor and force this environment to respawn every task.
+    // Only workers that can serve the same tasks count toward the idle floor.
     const minWorkers = Math.max(this.options.minWorkers, 0);
     const hasWaiter = this.slotWaiters.length > 0;
-    const idleForEnvironment = this.idleRunners.filter(
-      (idle) => idle.environmentKey === runner.environmentKey,
-    ).length;
-
-    if (hasWaiter || idleForEnvironment < minWorkers) {
+    if (
+      hasWaiter ||
+      this.idleRunners.filter((idle) => idle.reuseKey === runner.reuseKey)
+        .length < minWorkers
+    ) {
       this.idleRunners.push(runner);
       if (hasWaiter) {
         // Idle slot is immediately consumable — wake one waiter now.

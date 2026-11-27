@@ -7,14 +7,20 @@ import {
   appendSuiteSegment,
   caseKey,
   emptyKey,
+  suiteKey,
   projectKey as toProjectKey,
 } from '../core/treeNodeKey';
-import type { BrowserProjectWireRow, TestFileInfo } from '../types';
+import type {
+  BrowserProjectWireRow,
+  TestFileInfo,
+  TestSelection,
+} from '../types';
 import { openInEditor, toRelativePath } from '../utils';
 import {
   CASE_STATUS_META,
   type CaseInfo,
   type CaseStatus,
+  type FileState,
   STATUS_META,
   type TestStatus,
 } from '../utils/constants';
@@ -26,22 +32,29 @@ import { TestSuiteTitle } from './TestSuiteTitle';
 // Types
 // ============================================================================
 
+type SelectableNode = DataNode & { selection?: TestSelection };
+
 type TestFilesTreeProps = {
   testFiles: TestFileInfo[];
-  statusMap: Record<string, TestStatus>;
+  fileStates: Record<string, FileState>;
   caseMap: Record<string, Record<string, CaseInfo>>;
   rootPath?: string;
   projects: BrowserProjectWireRow[];
   loading: boolean;
   connected: boolean;
   openFiles: string[];
-  activeFile: string | null;
+  selection: TestSelection | null;
+  selectedCase?: CaseInfo;
   token: GlobalToken;
   filterText: string;
   onExpandChange: (keys: string[]) => void;
-  onSelect: (file: string) => void;
+  onSelect: (selection: TestSelection) => void;
   onRerunFile: (file: string) => void;
-  onRerunTestCase: (file: string, testName: string) => void;
+  onRerunTestCase: (
+    file: string,
+    testNamePattern: string,
+    caseId?: string,
+  ) => void;
 };
 
 // ============================================================================
@@ -56,20 +69,29 @@ type TreeNode = {
   status: CaseStatus;
 };
 
+const rerunPattern = (names: string[], type: 'case' | 'suite'): string => {
+  // A literal " > " selects the runner's suite-qualified name format.
+  const separator = ' > ';
+  const fullName = names.filter(Boolean).join(separator);
+  const literal = fullName.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&');
+  return `^${literal}${type === 'suite' ? separator : '$'}`;
+};
+
 // ============================================================================
 // TestFilesTree Component
 // ============================================================================
 
 export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
   testFiles,
-  statusMap,
+  fileStates,
   caseMap,
   rootPath,
   projects,
   loading,
   connected,
   openFiles,
-  activeFile,
+  selection,
+  selectedCase,
   token,
   filterText,
   onExpandChange,
@@ -119,7 +141,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
 
   // Build nested tree structure from flat cases
   const buildNestedTree = useCallback(
-    (file: string, cases: CaseInfo[]): DataNode[] => {
+    (file: string, cases: CaseInfo[]): SelectableNode[] => {
       if (cases.length === 0) {
         return [
           {
@@ -184,8 +206,11 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
         return 'idle';
       };
 
-      const toDataNodes = (node: TreeNode, keyPrefix: string): DataNode[] => {
-        const result: DataNode[] = [];
+      const toDataNodes = (
+        node: TreeNode,
+        keyPrefix: string,
+      ): SelectableNode[] => {
+        const result: SelectableNode[] = [];
 
         for (const child of node.children.values()) {
           const suiteStatus = calcStatus(child);
@@ -205,7 +230,10 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
                 onRerun={
                   connected
                     ? () => {
-                        onRerunTestCase(file, suiteFullName);
+                        onRerunTestCase(
+                          file,
+                          rerunPattern(child.fullPath, 'suite'),
+                        );
                       }
                     : undefined
                 }
@@ -221,6 +249,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
           const caseMeta = CASE_STATUS_META[testCase.status];
           result.push({
             key: caseKey(keyPrefix, testCase.id),
+            selection: { file, caseId: testCase.id },
             title: (
               <TestCaseTitle
                 icon={caseMeta.icon}
@@ -231,7 +260,14 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
                 onRerun={
                   connected
                     ? () => {
-                        onRerunTestCase(file, testCase.fullName);
+                        onRerunTestCase(
+                          file,
+                          rerunPattern(
+                            [...testCase.parentNames, testCase.name],
+                            'case',
+                          ),
+                          testCase.id,
+                        );
                       }
                     : undefined
                 }
@@ -239,7 +275,6 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
               />
             ),
             isLeaf: true,
-            selectable: false,
           });
         }
 
@@ -251,7 +286,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
     [connected, onRerunTestCase, token.colorTextSecondary],
   );
 
-  const treeData: DataNode[] = useMemo(() => {
+  const treeData: SelectableNode[] = useMemo(() => {
     // Get unique project names from test files
     const projectNames = [
       ...new Set(filteredTestFiles.map((f) => f.projectName)),
@@ -267,9 +302,9 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
     const buildFileNode = (
       fileInfo: TestFileInfo,
       projectRoot?: string,
-    ): DataNode => {
+    ): SelectableNode => {
       const filePath = fileInfo.testPath;
-      const status = statusMap[filePath] ?? 'idle';
+      const status = fileStates[filePath]?.status ?? 'idle';
       const meta = STATUS_META[status];
       // Use projectRoot if available, otherwise fall back to rootPath
       const relativePath = toRelativePath(filePath, projectRoot ?? rootPath);
@@ -277,6 +312,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
 
       return {
         key: filePath,
+        selection: { file: filePath },
         title: (
           <TestFileTitle
             icon={meta.icon}
@@ -311,7 +347,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
 
         // Calculate project status based on file statuses
         const fileStatuses = projectFiles.map(
-          (f) => statusMap[f.testPath] ?? 'idle',
+          (f) => fileStates[f.testPath]?.status ?? 'idle',
         );
         let projectStatus: TestStatus = 'idle';
         if (fileStatuses.some((s) => s === 'failed')) {
@@ -363,7 +399,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
     onRerunFile,
     projects,
     rootPath,
-    statusMap,
+    fileStates,
     filteredTestFiles,
     token,
   ]);
@@ -417,9 +453,18 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
     );
   }
 
+  const selectedKey =
+    selection &&
+    (selectedCase
+      ? caseKey(
+          suiteKey(selection.file, selectedCase.parentNames),
+          selectedCase.id,
+        )
+      : selection.file);
+
   // Normal tree view
   return (
-    <Tree
+    <Tree<SelectableNode>
       blockNode
       data-testid="test-files-tree"
       showLine={false}
@@ -433,7 +478,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
       showIcon
       expandAction="click"
       expandedKeys={openFiles}
-      selectedKeys={activeFile ? [activeFile] : []}
+      selectedKeys={selectedKey ? [selectedKey] : []}
       onExpand={(keys) =>
         onExpandChange(
           (keys as React.Key[]).filter(
@@ -442,11 +487,7 @@ export const TestFilesTree: React.FC<TestFilesTreeProps> = ({
         )
       }
       onSelect={(_keys, info) => {
-        const key = info.node.key;
-        const testPaths = filteredTestFiles.map((f) => f.testPath);
-        if (typeof key === 'string' && testPaths.includes(key)) {
-          onSelect(key);
-        }
+        if (info.node.selection) onSelect(info.node.selection);
       }}
       treeData={treeData}
       className="bg-transparent"

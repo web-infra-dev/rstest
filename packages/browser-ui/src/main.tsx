@@ -1,3 +1,4 @@
+import type { RawTestResult } from '@rstest/core/internal/browser-runtime';
 import {
   DISPATCH_NAMESPACE_RUNNER,
   DISPATCH_RPC_REQUEST_TYPE,
@@ -17,6 +18,7 @@ import React, {
 import ReactDOM from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import { EmptyPreviewOverlay } from './components/EmptyPreviewOverlay';
+import { RunResults } from './components/RunResults';
 import { PreviewHeader } from './components/PreviewHeader';
 import { ResizablePanel, ResizablePanelGroup } from './components/Resizable';
 import { SidebarHeader } from './components/SidebarHeader';
@@ -34,19 +36,18 @@ import { createFrameLeaseTable } from './core/frames';
 import { createRunnerUrl, resolveRunnerBase } from './core/runtime';
 import { useRpc } from './hooks/useRpc';
 import type {
-  BrowserClientFileResult,
-  BrowserClientTestResult,
   BrowserDispatchRequest,
   BrowserHostConfig,
   TestCaseStartPayload,
   TestFileReadyPayload,
+  TestSelection,
   VersionedTestFileSet,
 } from './types';
 import type {
   CaseInfo,
   CaseStatus,
   ContainerWindow,
-  TestStatus,
+  FileState,
 } from './utils/constants';
 import { logger } from './utils/logger';
 import {
@@ -84,8 +85,11 @@ const BrowserRunner: React.FC<{
     version: 0,
   });
   const testFiles = fileSet.files;
-  const [active, setActive] = useState<string | null>(null);
-  const [statusMap, setStatusMap] = useState<Record<string, TestStatus>>({});
+  // Undefined follows failures automatically; null explicitly opens the run summary.
+  const [inspection, setSelection] = useState<TestSelection | null>();
+  const [view, setView] = useState<'results' | 'preview'>('results');
+  const [grantedFile, setGrantedFile] = useState<string>();
+  const [fileStates, setFileStates] = useState<Record<string, FileState>>({});
   const [caseMap, setCaseMap] = useState<
     Record<string, Record<string, CaseInfo>>
   >({});
@@ -102,14 +106,17 @@ const BrowserRunner: React.FC<{
 
   const viewportStorageKey = useCallback(
     (projectName: string) => {
-      // Keep key stable but reasonably unique per workspace.
+      const storageId =
+        options.projects?.find((project) => project.name === projectName)
+          ?.instanceName || projectName;
+      // Keep key stable but reasonably unique per workspace and browser instance.
       let hash = 5381;
       for (let i = 0; i < options.rootPath.length; i++) {
         hash = (hash * 33) ^ options.rootPath.charCodeAt(i);
       }
-      return `rstest-viewport:${(hash >>> 0).toString(16)}:${projectName}`;
+      return `rstest-viewport:${(hash >>> 0).toString(16)}:${storageId}`;
     },
-    [options.rootPath],
+    [options.projects, options.rootPath],
   );
 
   const readStoredViewport = useCallback(
@@ -216,6 +223,23 @@ const BrowserRunner: React.FC<{
     });
   }, [options.projects, readStoredViewport]);
 
+  const markFileRunning = useCallback((file: string) => {
+    setFileStates((prev) => ({ ...prev, [file]: { status: 'running' } }));
+    setCaseMap((prev) => {
+      const prevFile = prev[file] ?? {};
+      const updatedCases: Record<string, CaseInfo> = {};
+      for (const [key, caseInfo] of Object.entries(prevFile)) {
+        updatedCases[key] = {
+          ...caseInfo,
+          status: 'running',
+          errors: undefined,
+          duration: undefined,
+        };
+      }
+      return { ...prev, [file]: updatedCases };
+    });
+  }, []);
+
   const handleReloadTestFile = useCallback(
     async (testFile: string, runId: string, testNamePattern?: string) => {
       logger.debug(
@@ -225,7 +249,7 @@ const BrowserRunner: React.FC<{
         testFile,
         testNamePattern ?? '',
       );
-      setActive(testFile);
+
       setTestViewports((previous) => {
         if (!previous[testFile]) return previous;
         const next = { ...previous };
@@ -238,35 +262,33 @@ const BrowserRunner: React.FC<{
       // full reload, a stray in-flight one) reads this lease and confers the
       // current identity on whatever document booted.
       leasesRef.current.grant(testFile, runId, testNamePattern);
+      setGrantedFile(testFile);
       bumpLeases();
 
-      setStatusMap((prev) => ({ ...prev, [testFile]: 'running' }));
-      setCaseMap((prev) => {
-        const prevFile = prev[testFile] ?? {};
-        const updatedCases: Record<string, CaseInfo> = {};
-        for (const [key, caseInfo] of Object.entries(prevFile)) {
-          updatedCases[key] = { ...caseInfo, status: 'running' };
-        }
-        return { ...prev, [testFile]: updatedCases };
-      });
+      markFileRunning(testFile);
     },
-    [],
+    [markFileRunning],
   );
+
+  const containerId =
+    options.containerId ??
+    new URLSearchParams(window.location.search).get('containerId') ??
+    undefined;
 
   const { rpc, loading, connected } = useRpc(
     setFileSet,
     options?.wsPort,
     handleReloadTestFile,
+    containerId,
   );
 
   // Consolidated effect for handling testFiles changes
-  // Handles statusMap, caseMap, openFiles initialization and cleanup
+  // Handles fileStates, caseMap, openFiles initialization and cleanup
   useEffect(() => {
-    // Update statusMap: preserve existing status, set new files to 'idle'
-    setStatusMap((prev) => {
-      const next: Record<string, TestStatus> = {};
+    setFileStates((prev) => {
+      const next: Record<string, FileState> = {};
       for (const file of testFiles) {
-        next[file.testPath] = prev[file.testPath] ?? 'idle';
+        next[file.testPath] = prev[file.testPath] ?? { status: 'idle' };
       }
       return next;
     });
@@ -288,16 +310,8 @@ const BrowserRunner: React.FC<{
     bumpLeases();
     setOpenFiles((prev) => prev.filter((file) => testPaths.includes(file)));
 
-    // Auto-select first file if none selected
-    setActive((prev) => {
-      if (!prev && testFiles.length > 0) {
-        return testFiles[0]!.testPath;
-      }
-      // If current active file was removed, select first file
-      if (prev && !testPaths.includes(prev) && testFiles.length > 0) {
-        return testFiles[0]!.testPath;
-      }
-      return prev;
+    setSelection((prev) => {
+      return prev && !testPaths.includes(prev.file) ? undefined : prev;
     });
   }, [testFiles]);
 
@@ -314,7 +328,7 @@ const BrowserRunner: React.FC<{
   }, [rpc, connected, fileSet]);
 
   const mapCaseStatus = useCallback(
-    (status?: BrowserClientTestResult['status']): CaseStatus => {
+    (status?: RawTestResult['status']): CaseStatus => {
       if (status === 'passed') return 'passed';
       if (status === 'failed') return 'failed';
       if (status === 'skipped' || status === 'todo') return 'skipped';
@@ -323,12 +337,8 @@ const BrowserRunner: React.FC<{
     [],
   );
 
-  const handleSelect = useCallback((file: string) => {
-    setActive(file);
-  }, []);
-
   const upsertCase = useCallback(
-    (filePath: string, payload: BrowserClientTestResult) => {
+    (filePath: string, payload: RawTestResult) => {
       // Project via the shared owner WITHOUT previousCase so the three-tier
       // filePath / location?? fallback collapses to the two-tier
       // `testPath || filePath` and bare `location` this path has always used.
@@ -390,7 +400,7 @@ const BrowserRunner: React.FC<{
 
   const handleRerunFile = useCallback(
     (file: string) => {
-      setActive(file);
+      setSelection({ file });
       if (rpc && connected) {
         void rpc.rerunTest(file);
       }
@@ -399,10 +409,10 @@ const BrowserRunner: React.FC<{
   );
 
   const handleRerunTestCase = useCallback(
-    (file: string, testName: string) => {
-      setActive(file);
+    (file: string, testNamePattern: string, caseId?: string) => {
+      setSelection({ file, caseId });
       if (rpc && connected) {
-        void rpc.rerunTest(file, testName);
+        void rpc.rerunTest(file, testNamePattern);
       }
     },
     [rpc, connected],
@@ -483,7 +493,16 @@ const BrowserRunner: React.FC<{
           }
         }
 
-        void forwardDispatchRpcRequest(rpc, dispatchRequest, event.source);
+        const file = dispatchRequest.target?.testFile;
+        const lease = file ? leasesRef.current.get(file) : undefined;
+        void forwardDispatchRpcRequest(
+          rpc,
+          dispatchRequest,
+          event.source,
+          lease && lease.runId === dispatchRequest.runId
+            ? lease.comparisons
+            : undefined,
+        );
         return;
       }
 
@@ -496,30 +515,25 @@ const BrowserRunner: React.FC<{
         };
         const testPath = payload.testPath;
         if (typeof testPath === 'string') {
-          setStatusMap((prev) => ({ ...prev, [testPath]: 'running' }));
-          setCaseMap((prev) => {
-            const prevFile = prev[testPath] ?? {};
-            const updatedCases: Record<string, CaseInfo> = {};
-            for (const [key, caseInfo] of Object.entries(prevFile)) {
-              updatedCases[key] = { ...caseInfo, status: 'running' };
-            }
-            return { ...prev, [testPath]: updatedCases };
-          });
+          markFileRunning(testPath);
         }
       } else if (message.type === 'case-result') {
-        const payload = message.payload as BrowserClientTestResult;
+        const payload = message.payload;
         if (payload?.testPath) {
           upsertCase(payload.testPath, payload);
         }
       } else if (message.type === 'file-complete') {
-        const payload = message.payload as BrowserClientFileResult;
+        const payload = message.payload;
         const testPath = payload.testPath;
         if (typeof testPath === 'string') {
           const passed =
             payload.status === 'passed' || payload.status === 'skipped';
-          setStatusMap((prev) => ({
+          setFileStates((prev) => ({
             ...prev,
-            [testPath]: passed ? 'passed' : 'failed',
+            [testPath]: {
+              status: passed ? 'passed' : 'failed',
+              errors: payload.errors,
+            },
           }));
           setCaseMap((prev) => {
             const newCases: Record<string, CaseInfo> = {};
@@ -539,8 +553,17 @@ const BrowserRunner: React.FC<{
           });
         }
       } else if (message.type === 'fatal') {
-        if (active) {
-          setStatusMap((prev) => ({ ...prev, [active]: 'failed' }));
+        const frame = Array.from(
+          document.querySelectorAll<HTMLIFrameElement>(
+            'iframe[data-test-file]',
+          ),
+        ).find((iframe) => iframe.contentWindow === event.source);
+        const file = frame?.dataset.testFile;
+        if (file) {
+          setFileStates((prev) => ({
+            ...prev,
+            [file]: { status: 'failed', errors: [message.payload] },
+          }));
         }
       }
 
@@ -553,7 +576,7 @@ const BrowserRunner: React.FC<{
     window.addEventListener('message', listener);
     return () => window.removeEventListener('message', listener);
   }, [
-    active,
+    markFileRunning,
     upsertCase,
     mapCaseStatus,
     rpc,
@@ -576,10 +599,48 @@ const BrowserRunner: React.FC<{
     };
   }, [caseMap]);
 
-  const isAnyFileRunning = useMemo(
-    () => Object.values(statusMap).some((s) => s === 'running'),
-    [statusMap],
+  const runningFile =
+    grantedFile && fileStates[grantedFile]?.status === 'running'
+      ? grantedFile
+      : undefined;
+  const failedFile = testFiles.find(
+    (file) => fileStates[file.testPath]?.status === 'failed',
   );
+  const failedCase =
+    failedFile &&
+    Object.values(caseMap[failedFile.testPath] ?? {}).find(
+      (test) => test.status === 'failed',
+    );
+  const selection =
+    inspection === undefined
+      ? failedFile && { file: failedFile.testPath, caseId: failedCase?.id }
+      : inspection;
+  // Playwright needs the executing frame exposed for pointer actions and screenshots.
+  const visibleView = runningFile ? 'preview' : view;
+  const active = runningFile ?? selection?.file;
+  const inspectedCase = selection?.caseId
+    ? caseMap[selection.file]?.[selection.caseId]
+    : undefined;
+
+  useEffect(() => {
+    if (!inspectedCase) return;
+    const file = testFiles.find((entry) => entry.testPath === selection?.file);
+    if (!file) return;
+    const ancestors = [file.testPath];
+    if (testFiles.some((entry) => entry.projectName !== file.projectName)) {
+      ancestors.push(toProjectKey(file.projectName));
+    }
+    for (let i = 1; i <= inspectedCase.parentNames.length; i++) {
+      ancestors.push(
+        suiteKey(file.testPath, inspectedCase.parentNames.slice(0, i)),
+      );
+    }
+    setOpenFiles((previous) =>
+      ancestors.every((key) => previous.includes(key))
+        ? previous
+        : [...new Set([...previous, ...ancestors])],
+    );
+  }, [inspectedCase, selection?.file, testFiles]);
 
   // Collect all expandable node keys for expand/collapse all functionality
   const allExpandableKeys = useMemo(() => {
@@ -617,8 +678,9 @@ const BrowserRunner: React.FC<{
     return [...new Set(keys)]; // Deduplicate
   }, [testFiles, caseMap]);
 
-  // Generate project-specific storage key for split position
+  // Generate instance-specific storage key for split position
   const projectKey =
+    options.projects?.[0]?.instanceName ||
     options.projects?.[0]?.name ||
     options.rootPath.split('/').filter(Boolean).pop() ||
     'default';
@@ -713,6 +775,7 @@ const BrowserRunner: React.FC<{
               isConnected={connected}
               token={token}
               counts={caseCounts}
+              instanceLabel={options.projects?.[0]?.instanceName}
             />
 
             <TestFilesHeader
@@ -736,7 +799,7 @@ const BrowserRunner: React.FC<{
               }}
               onRerun={connected ? handleRerunAll : undefined}
               counts={caseCounts}
-              isRunning={isAnyFileRunning}
+              isRunning={Boolean(runningFile)}
             />
 
             <div
@@ -745,18 +808,19 @@ const BrowserRunner: React.FC<{
             >
               <TestFilesTree
                 testFiles={testFiles}
-                statusMap={statusMap}
+                fileStates={fileStates}
                 caseMap={caseMap}
                 rootPath={options.rootPath}
                 projects={options.projects}
                 loading={loading}
                 connected={connected}
                 openFiles={openFiles}
-                activeFile={active}
+                selection={selection ?? null}
+                selectedCase={inspectedCase}
                 token={token}
                 filterText={filterText}
                 onExpandChange={setOpenFiles}
-                onSelect={handleSelect}
+                onSelect={setSelection}
                 onRerunFile={handleRerunFile}
                 onRerunTestCase={handleRerunTestCase}
               />
@@ -773,15 +837,53 @@ const BrowserRunner: React.FC<{
               token={token}
               activeFile={active ?? undefined}
               rootPath={options.rootPath}
-              status={active ? (statusMap[active] ?? 'idle') : undefined}
-              viewport={activeProjectName ? activeViewport : undefined}
+              status={
+                active ? (fileStates[active]?.status ?? 'idle') : undefined
+              }
+              view={visibleView}
+              running={Boolean(runningFile)}
+              hasFiles={testFiles.length > 0}
+              onViewChange={(next) => {
+                if (next === 'preview' && !selection && testFiles[0]) {
+                  setSelection({ file: testFiles[0].testPath });
+                } else {
+                  setSelection(selection ?? null);
+                }
+                setView(next);
+              }}
+              viewport={
+                visibleView === 'preview' && activeProjectName
+                  ? activeViewport
+                  : undefined
+              }
               onViewportChange={
                 activeProjectName ? handleViewportChange : undefined
               }
             />
 
+            {visibleView === 'results' && (
+              <RunResults
+                testFiles={testFiles}
+                rootPath={options.rootPath}
+                fileStates={fileStates}
+                caseMap={caseMap}
+                counts={caseCounts}
+                file={active}
+                selectedCase={inspectedCase}
+                comparisons={
+                  active
+                    ? leasesRef.current.get(active)?.comparisons
+                    : undefined
+                }
+                onSelect={setSelection}
+              />
+            )}
             <div
-              className="relative min-h-0 flex-1 overflow-auto"
+              className={
+                visibleView === 'preview'
+                  ? 'relative min-h-0 flex-1 overflow-auto'
+                  : 'hidden'
+              }
               style={{ background: token.colorBgLayout }}
             >
               {!active && (
@@ -954,14 +1056,15 @@ const App: React.FC = () => {
   }
 
   const isDark = theme === 'dark';
-  const projectName =
+  const instanceName =
+    options.projects?.[0]?.instanceName ||
     options.projects?.[0]?.name ||
     options.rootPath.split('/').filter(Boolean).pop() ||
     'rstest';
 
   useEffect(() => {
-    document.title = `${projectName} [RSTEST BROWSER]`;
-  }, [projectName]);
+    document.title = `${instanceName} [RSTEST BROWSER]`;
+  }, [instanceName]);
 
   return (
     <ConfigProvider

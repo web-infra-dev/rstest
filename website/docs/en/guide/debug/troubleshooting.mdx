@@ -57,11 +57,7 @@ On Node.js versions that support running `.ts` files directly, `require('./plugi
 
 ### Cause
 
-Rstest transforms files that are part of the bundle graph. However, code that is loaded later by Node.js keeps Node.js native loader semantics.
-
-Modern Node.js can strip supported TypeScript syntax from `.ts` files, but it still uses the same module-system rules as JavaScript files. In a `type: module` package, `.ts` is treated like `.js`: it is ESM by default. If that `.ts` file contains CommonJS globals such as `module.exports`, `exports`, or `require`, Node.js does not rewrite it into CommonJS for you.
-
-This can be different from Jest setups that use `ts-jest`, because `ts-jest` can register a runtime loader hook and compile the file before Node.js applies the same native boundary. It can also be different from Vitest, because Vitest's transform/runtime model may hide some of these Node.js loader boundaries.
+Because the dynamically `require()`d `.ts` file is loaded by Node.js [outside the bundle graph](#code-outside-the-bundle-graph-uses-native-nodejs-behavior), Node.js strips TypeScript syntax under its native module rules—treating `.ts` inside a `type: module` scope as ESM rather than rewriting CommonJS globals (`module.exports`, `require`), unlike `ts-jest` or Vitest runtime transforms.
 
 ### Solution
 
@@ -120,9 +116,7 @@ When the dependency is executed by Node.js as native ESM, the import may fail be
 
 ### Cause
 
-Some CommonJS packages create exports dynamically, for example through getters or `Object.defineProperty`. TypeScript types may still declare named exports, and some tools may make those named imports work by transforming or wrapping the dependency at runtime. Native Node.js ESM interop is stricter: if Node.js cannot statically detect the named export, `import { create } from 'pkg'` fails even though `import pkg from 'pkg'` can work.
-
-This is not specific to Rstest. It is a consequence of letting Node.js execute code that stayed outside the bundle graph. It may become visible during migration from Vitest because Vitest may transform more of the dependency path and provide more permissive CommonJS interop.
+When a CommonJS dependency runs in Node.js [outside the bundle graph](#code-outside-the-bundle-graph-uses-native-nodejs-behavior), native ESM interop only exposes named exports that Node's CommonJS lexer can statically detect. Packages that define exports dynamically (via getters or `Object.defineProperty`) fail with `import { create } from 'pkg'`, even though `import pkg from 'pkg'` works (whereas Vitest may transform more dependencies to hide this).
 
 ### Solution
 

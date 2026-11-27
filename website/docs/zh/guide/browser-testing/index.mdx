@@ -25,7 +25,7 @@ Rstest 提供了浏览器模式（Browser Mode），允许你在真实浏览器�
 
 ## 什么是浏览器模式？
 
-浏览器模式使用 [Playwright](https://playwright.dev/) 在真实浏览器（Chromium、Firefox 或 WebKit）中执行你的测试代码。这意味着你的测试将在与生产环境完全一致的浏览器 API 和行为下运行。
+浏览器模式使用 [Playwright](https://playwright.dev/) 在真实浏览器（Chromium、Firefox 或 WebKit）中执行测试代码，运行在与生产环境一致的浏览器 API 和行为下。
 
 :::note
 与 Node 模式一致，当有未处理的错误或 Promise rejection 从测试文件中逸出时，即使该文件中的所有测试都通过，浏览器模式也会将该文件判定为失败。如果某个 rejection 是预期的，请在测试内 `await` 该 Promise 或为其挂上处理函数，避免它逸出到页面。
@@ -33,32 +33,9 @@ Rstest 提供了浏览器模式（Browser Mode），允许你在真实浏览器�
 
 ## Locator API
 
-Browser Mode 现在支持 Playwright 风格的 Locator 工作流：你可以使用 `page.getBy*` 进行元素定位，再通过 `expect.element(locator)` 完成自动等待断言。
-
-这种写法适合希望使用语义化定位（role/label/text）和链式断言的场景，让组件测试和 DOM 测试更接近真实用户交互语义。
+浏览器模式提供 Playwright 风格的 Locator 工作流：使用 `page.getBy*` 查询元素，再通过 `expect.element(locator)` 执行自动等待断言。
 
 详细用法见 [浏览器交互](/guide/browser-testing/user-interactions#locator-api)。
-
-## 何时使用浏览器模式
-
-使用以下决策树来判断是否需要浏览器模式：
-
-```
-依赖真实浏览器 API? ─── 是 ─▶ ✅ 浏览器模式
-         │ 否
-         ▼
-需要跨浏览器测试?  ─── 是 ─▶ ✅ 浏览器模式
-         │ 否
-         ▼
-jsdom 中行为异常?  ─── 是 ─▶ ✅ 浏览器模式
-         │ 否
-         ▼
-    💡 可用 jsdom
-```
-
-:::tip 推荐
-即使你的测试在 jsdom 中能正常运行，我们仍然**推荐使用浏览器模式**。具体优势见下方对比表。
-:::
 
 ## 浏览器模式 vs jsdom/happy-dom
 
@@ -79,21 +56,23 @@ jsdom 中行为异常?  ─── 是 ─▶ ✅ 浏览器模式
 
 大部分配置项在浏览器模式下的行为与 Node 模式一致。下表集中列出了例外情况——被忽略的 node-only 配置（设置为非默认值时会触发一次性警告）、暂不支持的能力，以及调度语义不同的选项：
 
-| 配置项 / API                                                                                     | 浏览器模式下的行为                                                                                                                                                                                                                                                                                                                                                   |
-| ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [coverage.provider: 'v8'](/config/test/coverage#provider)                                        | 使用 Playwright provider 的 headless、非 watch Chromium 运行中，page renderer 脚本属于稳定支持范围，但不会收集独立 worker。headed 和 watch 运行仍为实验性能力，不保证隔离非活跃 runner frame，也不保证 rebuild 前后的 script 与 source map 严格配对。Firefox 和 WebKit 必须使用 `istanbul`。                                                                         |
-| [isolate](/config/test/isolate)                                                                  | `true` 时每个文件使用全新的浏览器 context/page。设置为 `false` 时，headless browser worker 会在分配给它的文件间复用 context/page，因此 worker scope fixture 可以跨文件存活；包含 `setupFiles` 的 project 仍按文件隔离，以确保 setup module 在每个文件执行；headed 模式仍保持可见文件 frame 隔离。启用 `bail` 时文件会逐个执行，worker scope fixture 不会跨文件复用。 |
-| [pool.type / pool.execArgv](/config/test/pool)                                                   | 被忽略——它们是 node 进程机制。                                                                                                                                                                                                                                                                                                                                       |
-| [pool.maxWorkers](/config/test/pool)                                                             | headless 运行时，测试文件在最多 `maxWorkers` 个浏览器 context 中并行执行；headed 运行时测试文件始终串行执行，因为所有测试共享同一个可见的容器页面。                                                                                                                                                                                                                  |
-| [testEnvironment](/config/test/test-environment)                                                 | 被忽略——真实浏览器本身就是运行环境。                                                                                                                                                                                                                                                                                                                                 |
-| [detectAsyncLeaks](/config/test/detect-async-leaks)、[logHeapUsage](/config/test/log-heap-usage) | 被忽略——node-only 机制。                                                                                                                                                                                                                                                                                                                                             |
-| [bail](/config/test/bail)                                                                        | headless 运行下支持：达到失败上限后，Rstest 停止调度剩余文件。已在并行执行中的文件会先跑完，所以仍可能出现少量新结果。headed 调试 UI（`headless: false`）不应用 bail。                                                                                                                                                                                               |
+| 配置项 / API                                                                                            | 浏览器模式下的行为                                                                                                                                                                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [coverage.provider: 'v8'](/config/test/coverage#provider)                                               | 使用 Playwright provider 的 headless、非 watch Chromium 运行中，page renderer 脚本属于稳定支持范围，但不会收集独立 worker。headed 和 watch 运行仍为实验性能力，不保证隔离非活跃 runner frame，也不保证 rebuild 前后的 script 与 source map 严格配对。Firefox 和 WebKit 必须使用 `istanbul`。                                                                         |
+| [isolate](/config/test/isolate)                                                                         | `true` 时每个文件使用全新的浏览器 context/page。设置为 `false` 时，headless browser worker 会在分配给它的文件间复用 context/page，因此 worker scope fixture 可以跨文件存活；包含 `setupFiles` 的 project 仍按文件隔离，以确保 setup module 在每个文件执行；headed 模式仍保持可见文件 frame 隔离。启用 `bail` 时文件会逐个执行，worker scope fixture 不会跨文件复用。 |
+| [pool.type / pool.execArgv](/config/test/pool)                                                          | 被忽略——它们是 node 进程机制。                                                                                                                                                                                                                                                                                                                                       |
+| [pool.maxWorkers](/config/test/pool)                                                                    | headless 运行时，测试文件在最多 `maxWorkers` 个浏览器 context 中并行执行；单个 headed 窗口内的测试文件串行执行；多个 headed 窗口或 headed 与 headless 混跑时，所有活跃 lane 共用同一个 `maxWorkers` 文件并发预算。                                                                                                                                                   |
+| [testEnvironment](/config/test/test-environment)                                                        | 被忽略——真实浏览器本身就是运行环境。                                                                                                                                                                                                                                                                                                                                 |
+| [detectAsyncLeaks](/config/test/detect-async-leaks)、[logHeapUsage](/config/test/log-heap-usage)        | 被忽略——node-only 机制。                                                                                                                                                                                                                                                                                                                                             |
+| [bail](/config/test/bail)                                                                               | headless 运行下支持：达到失败上限后，Rstest 停止调度剩余文件。已在并行执行中的文件会先跑完，所以仍可能出现少量新结果。headed 调试 UI（`headless: false`）不应用 bail。                                                                                                                                                                                               |
+| [output.bundleDependencies](/config/build/output#outputbundledependencies)                              | 设为 `false` 会抛出配置错误——浏览器模式始终打包依赖。                                                                                                                                                                                                                                                                                                                |
+| [browser.headless](/config/test/browser#headless) / [browser.instances](/config/test/browser#instances) | 支持多个 `(project, browser)` 组合同时以 headed 模式（`headless: false`）运行，各自打开独立的 Browser UI 窗口；`run` 与 `watch` 模式均支持混用 headed 和 headless 浏览器。参见[启动规则](/config/test/browser#launch-rules)。                                                                                                                                        |
 
 模块 mock（[rs.mock 系列](/api/runtime-api/rstest/mock-modules)），包括[通过 `resolve.alias` 配置的虚拟模块](/api/runtime-api/rstest/mock-modules#mock-虚拟模块)，与 [includeSource](/config/test/include-source) 源码内测试的行为都与 Node 模式一致。`rs.mockRequire` 在浏览器测试中同样可用，但它面向 CommonJS 互操作场景——编写浏览器测试时优先使用 `rs.mock` / `rs.doMock`。
 
 ## 下一步
 
 - [快速开始](/guide/browser-testing/getting-started) - 配置并运行你的第一个浏览器测试
-- [浏览器交互](/guide/browser-testing/user-interactions#locator-api) - 使用 `page` + `expect.element` 编写语义化测试
-- [框架集成](/guide/browser-testing/framework-guides) - 各框架的完整配置和组件测试示例
-- [用户交互](/guide/browser-testing/user-interactions) - 模拟用户点击、输入等操作
+- [浏览器交互](/guide/browser-testing/user-interactions) - 使用 Locator API、Testing Library 或原生 DOM API 模拟用户交互
+- [框架集成](/guide/browser-testing/framework-guides) - React 与 Vanilla JS/TS 的配置和组件测试示例
+- [浏览器模式 API](/api/runtime-api/browser-mode/) - `page`、`Locator`、`expect.element` 和 `@rstest/browser-react` 的 API 参考

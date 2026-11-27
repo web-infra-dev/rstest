@@ -1,6 +1,6 @@
 ---
 title: Locator
-description: Locator 是 Browser Mode 的元素查询与交互核心 API。你可以通过 page.getBy* 或 page.locator() 构建查询链，再执行交互操作。具体执行语义由 browser provider 决定。
+description: Locator 是 Browser Mode 中用于元素查询与交互的核心 API。
 overviewHeaders: [2, 3]
 ---
 
@@ -8,13 +8,11 @@ import { ApiMeta } from '@components/ApiMeta';
 
 # Locator
 
-`Locator` 是 Browser Mode 的元素查询与交互核心 API。你可以通过 `page.getBy*` 或 `page.locator()` 构建查询链，再执行交互操作。具体执行语义由 browser `provider` 决定。
+`Locator` 是 Browser Mode 中用于元素查询与交互的核心 API。通过 `page.getBy*` 或 `page.locator()` 构建查询链后，可调用交互方法或将其传给 [`expect.element`](/api/runtime-api/browser-mode/assertion) 执行断言。具体执行语义由配置的 browser `provider` 决定。
 
 :::tip 自动等待
-使用 Playwright provider 时，Locator 交互方法（如 `click`、`fill`、`check`）会自动等待元素进入可操作状态（可见、启用、稳定）后再执行，你不需要在操作前手动等待元素。这与 `expect.element` 断言的[自动重试](/api/runtime-api/browser-mode/assertion#自动重试与超时)机制不同。
+使用 Playwright provider 时，`Locator` 交互方法（如 `click`、`fill`、`check`）会在执行前自动等待元素进入可操作状态（可见、启用、稳定）。这与 `expect.element` 断言的[自动重试](/api/runtime-api/browser-mode/assertion#自动重试与超时)机制不同。
 :::
-
-下面的示例展示了典型工作流：查询元素、执行交互，并配合 [expect.element](/api/runtime-api/browser-mode/assertion) 进行断言。
 
 ```ts title="src/locator.test.ts"
 import { page } from '@rstest/browser';
@@ -33,15 +31,12 @@ test('interacts with a form using locator', async () => {
 
 - **类型：** `BrowserPage`
 
-`page` 是测试里的起点：先用 `page` 定位元素，再在返回的 `Locator` 上执行交互和断言。
-
-通过查询方法创建 `Locator`。要向当前焦点发送键盘输入，请使用 [`page.keyboard`](/api/runtime-api/browser-mode/keyboard)。
+测试中定位元素的起点。调用 `page` 上的查询方法创建 `Locator`，然后链式调用交互方法或传给 `expect.element(...)`。需要基于当前焦点发送键盘输入时，请使用 [`page.keyboard`](/api/runtime-api/browser-mode/keyboard)。
 
 ```ts
 const submitButton = page.getByRole('button', { name: 'Submit' });
+await submitButton.click();
 ```
-
-上面的 `submitButton` 是一个 `Locator`，后续可以继续链式调用（例如 `.click()`）或传给 `expect.element(...)` 做断言。
 
 ## BrowserPage
 
@@ -65,9 +60,7 @@ type BrowserPage = Pick<
 };
 ```
 
-`BrowserPage` 是 `page` 的类型，提供元素查询、DOM 到 Locator 的转换、[`keyboard`](/api/runtime-api/browser-mode/keyboard) 键盘输入和 `viewport` 视口调整。`click`、`fill` 等元素交互方法由 `Locator` 提供。
-
-要对元素执行交互或断言，请先通过 `page` 获得 `Locator`。
+`page` 的类型，提供元素查询、DOM 到 Locator 的转换、[`keyboard`](/api/runtime-api/browser-mode/keyboard) 键盘输入和 `viewport` 视口调整。`click`、`fill` 等元素操作由 `Locator` 提供。
 
 ## page.viewport
 
@@ -89,23 +82,23 @@ test('uses the tablet layout', async () => {
 
 Rstest 会在每次测试执行结束后恢复初始视口，包括重试（`retry`）和重复执行（`repeats`）。恢复会等到失败截图、`afterEach`、fixture 清理、`onTestFinished` 和 `onTestFailed` 回调完成后再执行。没有修改视口的测试会跳过恢复。
 
-headless 模式会恢复当前浏览器实例的初始视口尺寸。headed 模式会恢复 UI 原先选择的视口模式。在 `afterAll` 或 `beforeAll` 返回的清理函数中修改视口，也会在这组测试结束后恢复。
+headless 模式会恢复当前浏览器实例的初始视口尺寸，headed 模式会恢复 UI 原先选择的视口模式。在 `afterAll` 或 `beforeAll` 返回的清理函数中修改视口，也会在这组测试结束后恢复。
 
 要让一组测试使用相同尺寸，可以配置 [`browser.viewport`](/config/test/browser#viewport)，或在 `beforeEach` 中调用 `page.viewport()`。在 `beforeAll` 中设置的尺寸会在第一次测试执行结束后恢复，之后的重试、重复执行和其他测试不会自动沿用这个尺寸。
 
-并发测试共享视口，因此不能调用 `page.viewport()`。如果测试组内有会执行的并发测试，组内的 `beforeAll`、`afterAll` 及清理函数也不能调用该 API。这些调用都会抛出错误。
+并发测试共享视口，因此不能调用 `page.viewport()`。如果测试组内有会执行的并发测试，组内的 `beforeAll`、`afterAll` 及清理函数同样不能调用该 API，否则会抛出错误。
 
 在 headless 模式下，Playwright 调整视口时还会更新 `window.screen`。恢复视口时，通过 `browser.providerOptions.context.screen` 配置的屏幕尺寸不会还原。
 
 ## 查询 API
 
-以下 API 都会返回新的 `Locator`，可继续链式调用。
+以下查询方法均返回 `Locator`，可继续链式调用。
 
 ### locator
 
 - **类型：** `(selector: string) => Locator`
 
-通过 CSS selector 查询元素。
+按 CSS selector 查询元素。
 
 ```ts
 const item = page.locator('.todo-item');
@@ -115,9 +108,7 @@ const item = page.locator('.todo-item');
 
 - **类型：** `(role: string, options?: LocatorGetByRoleOptions) => Locator`
 
-按语义角色查询元素，推荐优先使用。
-
-`LocatorGetByRoleOptions` 支持：`name`、`exact`、`checked`、`disabled`、`expanded`、`selected`、`pressed`、`includeHidden`、`level`。
+按 ARIA 语义角色查询元素。当语义角色可用时，优先使用此方法，而不是 CSS selector 或 test ID。
 
 ```ts
 const saveBtn = page.getByRole('button', { name: 'Save' });
@@ -125,9 +116,9 @@ const saveBtn = page.getByRole('button', { name: 'Save' });
 
 ### getByText
 
-- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **类型：** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-按可见文本查询。
+按可见文本查询元素。
 
 ```ts
 const successMessage = page.getByText('Saved successfully');
@@ -135,9 +126,9 @@ const successMessage = page.getByText('Saved successfully');
 
 ### getByLabel
 
-- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **类型：** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-按表单 label 查询。
+按表单 label 文本查询控件。
 
 ```ts
 const emailInput = page.getByLabel('Email');
@@ -145,9 +136,9 @@ const emailInput = page.getByLabel('Email');
 
 ### getByPlaceholder
 
-- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **类型：** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-按 placeholder 查询。
+按 placeholder 文本查询输入框。
 
 ```ts
 const searchInput = page.getByPlaceholder('Search');
@@ -155,9 +146,9 @@ const searchInput = page.getByPlaceholder('Search');
 
 ### getByAltText
 
-- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **类型：** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-按 `alt` 文本查询。
+按 `alt` 文本查询元素。
 
 ```ts
 const avatarImage = page.getByAltText('User avatar');
@@ -165,9 +156,9 @@ const avatarImage = page.getByAltText('User avatar');
 
 ### getByTitle
 
-- **类型：** `(text: string | RegExp, options?: { exact?: boolean }) => Locator`
+- **类型：** `(text: string | RegExp, options?: LocatorTextOptions) => Locator`
 
-按 `title` 查询。
+按 `title` 属性查询元素。
 
 ```ts
 const helpIcon = page.getByTitle('Help');
@@ -177,7 +168,7 @@ const helpIcon = page.getByTitle('Help');
 
 - **类型：** `(text: string | RegExp) => Locator`
 
-按 test id 查询。
+按 test ID 属性查询元素（默认为 `data-testid`，可通过 [`setTestIdAttribute`](#settestidattribute) 自定义）。
 
 ```ts
 const settingsPanel = page.getByTestId('settings-panel');
@@ -189,7 +180,7 @@ const settingsPanel = page.getByTestId('settings-panel');
 
 - **类型：** `(element: Element) => Locator`
 
-将当前测试文档中的 DOM `Element` 同步转换为 Locator。这样可以把 Testing Library 或第三方工具返回的元素用于真实浏览器操作和 Rstest 断言，支持 HTML、SVG 以及 shadow DOM 中的元素。
+将当前测试文档中的 DOM `Element` 同步转换为 `Locator`，用于对 Testing Library 或原生 DOM 查询返回的元素执行浏览器操作和断言。支持 HTML、SVG 以及 shadow DOM 中的元素。
 
 ```ts
 import { getByRole } from '@testing-library/dom';
@@ -199,9 +190,9 @@ await page.elementLocator(button).click();
 await expect.element(button).toBeEnabled();
 ```
 
-Locator 始终指向原始元素，不会修改 DOM 属性。组件替换节点后，这个 Locator 仍指向旧节点：断言元素已卸载会通过，交互操作会等待原节点重新挂载或超时。如果需要在重渲染后重新查找元素，请使用 `page.getByRole()` 等查询 Locator。
+`Locator` 始终指向原始 DOM 节点，不会修改 DOM 属性。如果重渲染替换了节点，该 `Locator` 仍指向旧节点：已卸载断言会通过，交互操作会等待原节点重新挂载或超时。需要在重渲染后重新查找元素时，请改用 `page.getByRole()` 等查询 Locator。
 
-不接受其他文档或 iframe 中的元素。当前文档中尚未挂载的元素可以提前转换。
+传入其他文档或 iframe 中的元素会抛出错误。当前文档中尚未挂载的元素可以提前转换。
 
 ## 配置 API
 
@@ -209,21 +200,9 @@ Locator 始终指向原始元素，不会修改 DOM 属性。组件替换节点�
 
 - **类型：** `(attribute: string) => Promise<void>`
 
-设置 `getByTestId()` 使用的属性名。默认值是 `data-testid`。
+设置 `getByTestId()` 使用的属性名，默认为 `'data-testid'`。该设置会转发给浏览器 provider（例如 Playwright 的 `selectors.setTestIdAttribute()`）。
 
-这个配置会通过 Browser Mode 通道转发到 host provider（例如 Playwright 的 `selectors.setTestIdAttribute()`）。
-
-这是全局配置，建议在测试 setup 阶段统一设置一次，避免在用例执行中途修改导致查询行为不一致。
-
-```ts
-import { page, setTestIdAttribute } from '@rstest/browser';
-
-await setTestIdAttribute('data-test');
-await page.getByTestId('settings-panel').click();
-```
-
-:::tip
-建议在 setup 文件中配置 `setTestIdAttribute`，确保所有测试统一生效：
+由于这是全局配置，建议在 [setup 文件](/config/test/setup-files)中统一设置一次，避免在测试执行中途修改：
 
 ```ts title="rstest.setup.ts"
 import { setTestIdAttribute } from '@rstest/browser';
@@ -231,15 +210,13 @@ import { setTestIdAttribute } from '@rstest/browser';
 await setTestIdAttribute('data-qa');
 ```
 
-然后在配置中引用：
-
 ```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
+
 export default defineConfig({
   setupFiles: ['./rstest.setup.ts'],
 });
 ```
-
-:::
 
 ## 组合 API
 
@@ -247,23 +224,14 @@ export default defineConfig({
 
 - **类型：** `(options: LocatorFilterOptions) => Locator`
 
-`LocatorFilterOptions` 支持：
-
-- `hasText?: string | RegExp`：保留文本匹配的元素
-- `hasNotText?: string | RegExp`：排除文本匹配的元素
-- `has?: Locator`：保留包含子 Locator 的元素
-- `hasNot?: Locator`：排除包含子 Locator 的元素
-
-用于在已有查询结果上做二次过滤。
+基于文本或子 `Locator` 条件对已有 `Locator` 做二次过滤。
 
 ```ts
 const profileSave = page
   .locator('section')
   .filter({ has: page.getByRole('heading', { name: 'Profile' }) })
   .getByRole('button', { name: 'Save' });
-```
 
-```ts
 const visibleItems = page.locator('li').filter({
   hasNotText: /archived/i,
   hasNot: page.getByRole('img', { name: 'Locked' }),
@@ -274,7 +242,7 @@ const visibleItems = page.locator('li').filter({
 
 - **类型：** `(other: Locator) => Locator`
 
-合并两个 Locator 条件。
+组合两个 `Locator` 条件（`and` 匹配同时满足两者的元素；`or` 匹配满足任一条件的元素）。
 
 ```ts
 const byRole = page.getByRole('button', { name: 'Submit' });
@@ -290,34 +258,21 @@ const exactOne = byRole.and(byId);
   - `first(): Locator`
   - `last(): Locator`
 
-在匹配集合中选择指定元素。
+当 `Locator` 匹配多个元素时，按从 `0` 开始的下标、首个匹配或最后一个匹配选择单个元素。
 
 ## 交互 API
 
-以下 API 会触发实际浏览器操作，并返回 `Promise<void>`。
+交互方法会执行浏览器操作并返回 `Promise<void>`。
 
 :::warning 严格模式
-Locator 是严格的。如果交互操作（如 `click`、`fill`）匹配到多个元素，会抛出错误。当查询匹配多个元素时，请使用 [`first()`](#nth--first--last)、[`last()`](#nth--first--last) 或 [`nth()`](#nth--first--last) 显式选择单个元素。
+Locator 默认处于严格模式。如果交互操作（如 `click`、`fill`）匹配到多个元素，会抛出错误。请使用 [`first()`](#nth--first--last)、[`last()`](#nth--first--last) 或 [`nth()`](#nth--first--last) 显式选择单个元素。
 :::
-
-这些 `*Options` 类型表示 Browser Mode 当前稳定支持的一组选项：
-
-- `LocatorClickOptions` / `LocatorDblclickOptions`: `button`、`delay`、`force`、`modifiers`、`position`、`timeout`、`trial`（`click` 额外支持 `clickCount`）
-- `LocatorHoverOptions`: `force`、`modifiers`、`position`、`timeout`、`trial`
-- `LocatorDragToOptions`: `force`、`sourcePosition`、`targetPosition`、`timeout`、`trial`
-- `LocatorPressOptions`: `delay`、`timeout`
-- `LocatorFillOptions`: `force`、`timeout`
-- `LocatorCheckOptions`: `force`、`position`、`timeout`、`trial`
-- `LocatorFocusOptions` / `LocatorBlurOptions` / `LocatorScrollIntoViewIfNeededOptions`: `timeout`
-- `LocatorWaitForOptions`: `state`（`attached` / `detached` / `visible` / `hidden`）与 `timeout`
-- `LocatorSelectOptionOptions`: `force`、`timeout`
-- `LocatorSetInputFilesOptions`: `timeout`
 
 ### click
 
 - **类型：** `(options?: LocatorClickOptions) => Promise<void>`
 
-点击当前 Locator 匹配到的元素。
+点击匹配到的元素。
 
 ```ts
 await page.getByRole('button', { name: 'Submit' }).click();
@@ -327,7 +282,7 @@ await page.getByRole('button', { name: 'Submit' }).click();
 
 - **类型：** `(options?: LocatorDblclickOptions) => Promise<void>`
 
-对元素执行双击操作。
+双击匹配到的元素。
 
 ```ts
 await page.getByText('Open details').dblclick();
@@ -339,7 +294,7 @@ await page.getByText('Open details').dblclick();
 
 - **类型：** `(target: Locator, options?: LocatorDragToOptions) => Promise<void>`
 
-将当前元素拖到目标 Locator。`sourcePosition` 和 `targetPosition` 分别相对于源元素和目标元素的左上角内边距边界。
+将当前元素拖到目标 `Locator`。`sourcePosition` 和 `targetPosition` 分别相对于源元素和目标元素左上角内边距边界计算。
 
 ```ts
 await page.getByTestId('card').dragTo(page.getByTestId('column'));
@@ -349,7 +304,7 @@ await page.getByTestId('card').dragTo(page.getByTestId('column'));
 
 - **类型：** `(options?: LocatorHoverOptions) => Promise<void>`
 
-将鼠标悬停到元素上，常用于触发 hover 菜单或 tooltip。
+将指针悬停到匹配到的元素上。
 
 ```ts
 await page.getByRole('button', { name: 'More' }).hover();
@@ -359,7 +314,7 @@ await page.getByRole('button', { name: 'More' }).hover();
 
 - **类型：** `(key: string, options?: LocatorPressOptions) => Promise<void>`
 
-在元素上发送键盘按键。
+聚焦匹配到的元素并按下指定按键或组合键（例如 `'Enter'` 或 `'ControlOrMeta+A'`）。
 
 ```ts
 await page.getByLabel('Search').press('Enter');
@@ -369,7 +324,7 @@ await page.getByLabel('Search').press('Enter');
 
 - **类型：** `(text: string, options?: LocatorPressOptions) => Promise<void>`
 
-逐个字符地向元素输入 `text`，并为每个字符发送一次键盘按键。适用于需要响应单个按键事件的元素，例如自动补全输入框或键盘快捷键；其他情况下优先使用 [`fill`](#fill)。`delay` 用于设置每次按键之间的等待时间（毫秒）。
+逐个字符输入 `text`，为每个字符触发按键事件。适用于需要响应单个按键事件的控件（如自动补全输入框或快捷键）；其他场景优先使用 [`fill`](#fill)。`delay` 用于设置按键之间的等待时间（毫秒）。
 
 ```ts
 await page.getByLabel('Search').pressSequentially('rstest');
@@ -379,7 +334,7 @@ await page.getByLabel('Search').pressSequentially('rstest');
 
 - **类型：** `(value: string, options?: LocatorFillOptions) => Promise<void>`
 
-设置输入框值，适用于 `input`、`textarea` 等可输入元素。
+设置 `input`、`textarea` 或 `contenteditable` 元素的值。
 
 ```ts
 await page.getByPlaceholder('Email').fill('dev@rstest.rs');
@@ -389,7 +344,7 @@ await page.getByPlaceholder('Email').fill('dev@rstest.rs');
 
 - **类型：** `() => Promise<void>`
 
-清空当前输入元素的值。
+清空输入元素的值。
 
 ```ts
 await page.getByPlaceholder('Email').clear();
@@ -399,7 +354,7 @@ await page.getByPlaceholder('Email').clear();
 
 - **类型：** `(options?: LocatorFocusOptions) => Promise<void>`
 
-让元素获得焦点。
+使匹配到的元素获得焦点。
 
 ```ts
 await page.getByLabel('Username').focus();
@@ -409,7 +364,7 @@ await page.getByLabel('Username').focus();
 
 - **类型：** `(options?: LocatorBlurOptions) => Promise<void>`
 
-让元素失去焦点。
+使匹配到的元素失去焦点。
 
 ```ts
 await page.getByLabel('Username').blur();
@@ -439,7 +394,7 @@ await page.getByLabel('Agree').uncheck();
 
 - **类型：** `(options?: LocatorScrollIntoViewIfNeededOptions) => Promise<void>`
 
-必要时滚动页面，使元素进入可视区域。
+必要时滚动页面，使匹配到的元素进入可视区域。
 
 ```ts
 await page.getByRole('button', { name: 'Load more' }).scrollIntoViewIfNeeded();
@@ -449,7 +404,7 @@ await page.getByRole('button', { name: 'Load more' }).scrollIntoViewIfNeeded();
 
 - **类型：** `(options?: LocatorWaitForOptions) => Promise<void>`
 
-等待 Locator 满足条件后继续执行，适合处理异步渲染。
+等待匹配到的元素满足指定 `state`（`'attached'`、`'detached'`、`'visible'` 或 `'hidden'`）。
 
 ```ts
 await page.getByText('Ready').waitFor();
@@ -459,7 +414,7 @@ await page.getByText('Ready').waitFor();
 
 - **类型：** `(type: string, eventInit?: LocatorDispatchEventInit) => Promise<void>`
 
-在元素上派发自定义事件或原生事件。
+在匹配到的元素上派发 DOM 事件。`type` 必须是非空字符串，`eventInit` 必须可被 JSON 序列化（`BrowserSerializable`）。
 
 ```ts
 await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
@@ -469,7 +424,7 @@ await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
 
 - **类型：** `(value: string | string[], options?: LocatorSelectOptionOptions) => Promise<void>`
 
-选择 `select` 元素的 option。当前只支持 `string` 或 `string[]` 作为 value。
+选择 `<select>` 元素的选项。当前仅支持 `string` 或 `string[]` 作为值。
 
 ```ts
 await page.getByLabel('Choice').selectOption('b');
@@ -479,21 +434,137 @@ await page.getByLabel('Choice').selectOption('b');
 
 - **类型：** `(files: string | string[], options?: LocatorSetInputFilesOptions) => Promise<void>`
 
-为 `input[type="file"]` 设置文件。当前只支持文件路径 `string` 或 `string[]`。
+为 `<input type="file">` 元素设置文件。当前仅支持 `string` 或 `string[]` 形式的文件路径。
 
 ```ts
 await page.locator('#upload').setInputFiles('/tmp/demo.txt');
 ```
 
+## 选项与辅助类型
+
+以下选项与辅助类型均从 `@rstest/browser` 导出：
+
+```ts
+type LocatorTextOptions = {
+  exact?: boolean;
+};
+
+type LocatorGetByRoleOptions = {
+  name?: string | RegExp;
+  exact?: boolean;
+  checked?: boolean;
+  disabled?: boolean;
+  expanded?: boolean;
+  selected?: boolean;
+  pressed?: boolean;
+  includeHidden?: boolean;
+  level?: number;
+};
+
+type LocatorFilterOptions = {
+  hasText?: string | RegExp;
+  hasNotText?: string | RegExp;
+  has?: Locator;
+  hasNot?: Locator;
+};
+
+type LocatorKeyboardModifier =
+  'Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift';
+
+type LocatorMouseButton = 'left' | 'right' | 'middle';
+
+type LocatorPosition = {
+  x: number;
+  y: number;
+};
+
+type LocatorClickOptions = {
+  button?: LocatorMouseButton;
+  clickCount?: number;
+  delay?: number;
+  force?: boolean;
+  modifiers?: LocatorKeyboardModifier[];
+  position?: LocatorPosition;
+  timeout?: number;
+  trial?: boolean;
+};
+
+type LocatorDblclickOptions = Omit<LocatorClickOptions, 'clickCount'>;
+
+type LocatorHoverOptions = Pick<
+  LocatorClickOptions,
+  'force' | 'modifiers' | 'position' | 'timeout' | 'trial'
+>;
+
+type LocatorDragToOptions = {
+  force?: boolean;
+  sourcePosition?: LocatorPosition;
+  targetPosition?: LocatorPosition;
+  timeout?: number;
+  trial?: boolean;
+};
+
+type LocatorPressOptions = {
+  delay?: number;
+  timeout?: number;
+};
+
+type LocatorFillOptions = {
+  force?: boolean;
+  timeout?: number;
+};
+
+type LocatorCheckOptions = {
+  force?: boolean;
+  position?: LocatorPosition;
+  timeout?: number;
+  trial?: boolean;
+};
+
+type LocatorFocusOptions = {
+  timeout?: number;
+};
+
+type LocatorBlurOptions = {
+  timeout?: number;
+};
+
+type LocatorScrollIntoViewIfNeededOptions = {
+  timeout?: number;
+};
+
+type LocatorWaitForOptions = {
+  state?: 'attached' | 'detached' | 'visible' | 'hidden';
+  timeout?: number;
+};
+
+type BrowserSerializable =
+  | null
+  | boolean
+  | number
+  | string
+  | BrowserSerializable[]
+  | { [key: string]: BrowserSerializable };
+
+type LocatorDispatchEventInit = BrowserSerializable;
+
+type LocatorSelectOptionOptions = {
+  force?: boolean;
+  timeout?: number;
+};
+
+type LocatorSetInputFilesOptions = {
+  timeout?: number;
+};
+```
+
 ## 使用约束
 
-- 本页列出的 API 是当前支持的 Playwright Locator API 子集，未列出的 API 暂不可用
-- `and` / `or` / `filter({ has | hasNot })` 的参数必须是 `@rstest/browser` 返回的 `Locator`
-- `dispatchEvent(type, eventInit?)` 的 `type` 必须是非空字符串
-- `selectOption` 目前仅支持 `string` 或 `string[]`
-- `setInputFiles` 目前仅支持文件路径 `string` 或 `string[]`
-- 部分参数会通过 Browser Mode 通信通道传输，建议保持可被 JSON 序列化
+- 当前仅支持本页列出的 Playwright `Locator` API 子集。
+- `and()`、`or()`、`dragTo()` 以及 `filter({ has | hasNot })` 的参数必须是 `@rstest/browser` 返回的 `Locator`。
+- `dispatchEvent(type, eventInit?)` 的 `type` 必须是非空字符串，`eventInit` 必须可被 JSON 序列化。
+- `selectOption()` 和 `setInputFiles()` 仅接受 `string` 或 `string[]`。
 
 ## 与 expect.element 配合
 
-`Locator` 一般与 `expect.element(locator)` 配合使用。完整断言列表见 [Assertion](/api/runtime-api/browser-mode/assertion)。
+将任意 `Locator` 传给 `expect.element(locator)` 即可执行自动重试断言，详见 [Assertion](/api/runtime-api/browser-mode/assertion)。

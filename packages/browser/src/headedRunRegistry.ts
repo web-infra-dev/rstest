@@ -153,6 +153,10 @@ export const createHeadedRunRegistry = () => {
       return true;
     },
 
+    has(runId: string): boolean {
+      return runsById.has(runId);
+    },
+
     isCurrent(runId: string): boolean {
       return runsById.get(runId)?.phase === 'open';
     },

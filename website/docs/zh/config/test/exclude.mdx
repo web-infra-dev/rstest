@@ -7,20 +7,20 @@ overviewHeaders: []
 
 - **类型：** `string[] | { patterns: string[]; override?: boolean }`
 - **默认值：** `['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**']`
-- **CLI：** `--exclude "**/node_modules/**"`
+- **CLI：** `--exclude "**/fixtures/**"`
 
-匹配 glob 规则的文件将不会被视为测试文件。
+从测试文件发现阶段排除的 glob 模式列表，相对于 [root](/config/test/root) 解析。Rstest 还会自动排除临时构建输出目录（[`output.distPath.root`](/config/build/output#outputdistpath)，默认为 `dist/.rstest-temp`）。
 
 ## 示例
 
-排除 `node_modules` 下的测试文件：
+排除 `fixtures` 目录下的测试文件：
 
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
   ```bash
-  npx rstest --exclude "**/node_modules/**"
+  npx rstest --exclude "**/fixtures/**"
   ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -28,8 +28,7 @@ import { Tab, Tabs } from '@theme';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-  exclude: ['**/node_modules/**'],
+  exclude: ['**/fixtures/**'],
 });
 ```
   </Tab>
@@ -37,13 +36,12 @@ export default defineConfig({
 
 ## 覆盖默认值
 
-默认情况下，Rstest 会将你的自定义配置与默认配置进行合并。如果你希望覆盖默认的 `exclude` 配置，可以将 `override` 设置为 `true`。
+默认情况下，Rstest 会将自定义规则与默认规则合并。需要替换默认 `exclude` 规则时，将 `override` 设为 `true`：
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
   exclude: {
     patterns: ['**/node_modules/**'],
     override: true,

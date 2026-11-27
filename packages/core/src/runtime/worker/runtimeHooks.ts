@@ -20,7 +20,7 @@ export const RSTEST_IMPORT_META_RESOLVE_HOOK =
 /**
  * The federation fallback, parked while a non-federation file runs. Worker-wide,
  * matching the lifetime of the global it is taken from, and single-slot because
- * `mockRuntimeCode.js` installs under `hook = hook || fallback` — once one
+ * `federationRuntimeCode.js` installs under `hook = hook || fallback` — once one
  * project's runtime chunk has installed the fallback, every later project sees a
  * truthy global and skips its own.
  */

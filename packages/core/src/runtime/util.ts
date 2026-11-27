@@ -134,6 +134,10 @@ export const formatTestErrors = async (
         stack: typeof error.stack === 'string' ? error.stack : undefined,
       };
 
+      if (typeof error.screenshotComparisonId === 'string') {
+        errObj.screenshotComparisonId = error.screenshotComparisonId;
+      }
+
       if (error instanceof TestRegisterError && test?.type === 'case') {
         errObj.message = `Can't nest describe or test inside a test. ${error.message} because it is nested within test '${test.name}'`;
       }

@@ -247,6 +247,42 @@ const buildRstestUtilities = async (): Promise<{
     pendingWaits.clear();
   };
 
+  // Like Vitest, keep moving fake time forward every interval while an async
+  // callback is pending, so a callback that awaits a fake timer can settle.
+  // Stop at the deadline: from then on, the wait only waits for the callback.
+  const advanceFakeTimersWhilePending = (
+    result: unknown,
+    controller: WaitController,
+    interval: number,
+    isTimedOut: () => boolean,
+  ): void => {
+    if (
+      !rstest.isFakeTimers() ||
+      typeof result !== 'object' ||
+      result === null ||
+      !('then' in result) ||
+      typeof result.then !== 'function'
+    ) {
+      return;
+    }
+
+    let settled = false;
+    const settle = () => {
+      settled = true;
+    };
+    const tick = () => {
+      if (settled || isTimedOut()) {
+        return;
+      }
+      controller.schedule(tick, interval);
+      if (rstest.isFakeTimers()) {
+        rstest.advanceTimersByTime(interval);
+      }
+    };
+    result.then(settle, settle);
+    controller.schedule(tick, interval);
+  };
+
   // The compat path (browser runtime and `src/`) owns its chunk import here;
   // the Node worker build resolves the class lazily from a bundled CJS chunk
   // instead, so this is a no-op there (see `./fakeTimersLoader`).
@@ -680,8 +716,21 @@ const buildRstestUtilities = async (): Promise<{
             throw lastError ?? createWaitForTimeoutError(timeout);
           }
 
+          // Like Vitest, move fake time forward by one interval before each
+          // check, so the timers the callback is waiting on can fire.
+          if (rstest.isFakeTimers()) {
+            rstest.advanceTimersByTime(interval);
+          }
+
           try {
-            const value = await callback();
+            const result = callback();
+            advanceFakeTimersWhilePending(
+              result,
+              controller,
+              interval,
+              () => timedOut,
+            );
+            const value = await result;
             if (controller.cancelled) {
               return createCancelledWaitResult();
             }
@@ -726,9 +775,20 @@ const buildRstestUtilities = async (): Promise<{
             throw createWaitUntilTimeoutError(timeout);
           }
 
+          if (rstest.isFakeTimers()) {
+            rstest.advanceTimersByTime(interval);
+          }
+
           let value: Awaited<ReturnType<typeof callback>>;
           try {
-            value = await callback();
+            const result = callback();
+            advanceFakeTimersWhilePending(
+              result,
+              controller,
+              interval,
+              () => timedOut,
+            );
+            value = await result;
           } catch (error) {
             if (controller.cancelled) {
               return createCancelledWaitResult();

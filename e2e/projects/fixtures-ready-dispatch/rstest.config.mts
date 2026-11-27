@@ -1,6 +1,6 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { setTimeout } from 'node:timers/promises';
-import type { Rspack } from '@rsbuild/core';
+import type { RsbuildPlugin, Rspack } from '@rsbuild/core';
 import { defineConfig } from '@rstest/core';
 import {
   checkFallback,
@@ -52,6 +52,17 @@ export default defineConfig({
   projects: [
     {
       name: 'fast',
+      // These fixtures deliberately have one compiler wait for the other.
+      plugins: [
+        {
+          name: 'allow-overlapping-builds',
+          setup(api) {
+            api.onBeforeCreateCompiler(({ bundlerConfigs }) => {
+              Object.assign(bundlerConfigs, { parallelism: 2 });
+            });
+          },
+        } satisfies RsbuildPlugin,
+      ],
       include: ['fast.test.ts'],
       tools: {
         rspack(config) {

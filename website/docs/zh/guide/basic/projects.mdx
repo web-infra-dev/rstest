@@ -1,31 +1,31 @@
 ---
-description: Rstest 支持在单个 Rstest 进程中同时运行多个测试项目，这些项目可以有不同的测试配置和环境。
+description: 在单个 Rstest 进程中同时运行多个具有独立配置和环境的测试项目。
 ---
 
 # 多项目测试
 
-Rstest 支持在单个 Rstest 进程中同时运行多个测试项目，这些项目可以有不同的测试配置和环境。
+Rstest 支持在单个进程中同时运行多个测试项目，每个项目可以有独立的测试配置与运行环境。
 
-在 Node.js 模式下单次全量运行时，如果没有开启覆盖率、bail 或失败筛选，先完成构建的项目可以在其他项目构建期间开始测试。配置了全局 setup 或使用需要在 `onTestRunStart` 接收完整文件清单的 reporter 时，Rstest 会等所有项目构建完成再派发测试。
+在 Node.js 模式下单次全量运行时，如果没有开启覆盖率、bail 或失败筛选，先完成构建的项目可以在其他项目构建期间开始测试。配置了 `globalSetup` 或使用需要在 `onTestRunStart` 接收完整文件清单的 reporter 时，Rstest 会等所有项目构建完成再派发测试。
+
+在 Node.js 模式下，默认同时构建的环境数最多为可用 CPU 数。`pool.maxWorkers` 控制执行测试文件的 worker 数量。
 
 ## 适用场景
 
-- Monorepo 项目：当你的代码库包含多个子包或模块时，每个子项目可能有不同的测试配置需求。
-- 不同环境：不同 / 同一个子项目可能需要在不同的环境下运行（例如，Node 环境和浏览器环境）。
-- 针对特定文件的测试：你可以为特定的测试文件 / 目录指定不同的测试或构建配置。
+- **Monorepo 项目**：各子包或应用需要各自的测试配置与构建设置。
+- **混合测试环境**：在同一仓库里同时运行 Node.js、`jsdom` 与 Browser Mode 测试。
+- **按目录区分配置**：为不同测试目录指定不同的超时时间、setup 文件或插件。
 
 ## 示例
 
-通过 [projects](/config/test/projects) 字段在 monorepo 中将每个子项目定义为一个 project，每个子项目有自己的测试配置。
+在根配置中通过 [projects](/config/test/projects) 指定工作区目录。Rstest 会把匹配的每个子目录识别为独立测试项目，并加载子目录中的 [rstest.config.ts](/guide/basic/configure-rstest#配置文件)（如果存在）：
 
-Rstest 会自动识别 `packages` 目录下的每个子目录作为一个独立的测试项目，并根据子目录中的 [rstest.config.ts](/guide/basic/configure-rstest#配置文件) 文件（如果存在）配置进行测试。
-
-```ts name='rstest.config.ts'
-import { defineConfig, defineInlineProject } from '@rstest/core';
+```ts title="rstest.config.ts"
+import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   projects: [
-    // A monorepo: each package directory is a project
+    // 将 packages 下的每个子目录作为独立测试项目
     'packages/*',
   ],
 });
@@ -33,38 +33,40 @@ export default defineConfig({
 
 ## 配置说明
 
-你可以通过 [projects](/config/test/projects) 字段定义多个测试项目。Rstest 将会按照各个项目定义的配置运行对应的测试，所有项目的测试结果将会合并展示。
+配置了 [projects](/config/test/projects) 后，Rstest 会按各个项目的配置运行对应测试，并把结果合并输出。
 
-如果没有 `projects` 字段，`rstest` 会将当前目录视为单个项目。
+- 未配置 `projects` 时，Rstest 将当前目录视为单个项目。
+- 将 `projects` 设为空数组（`[]`）时，Rstest 会抛出 `No projects found` 错误。
+- 所有解析出的项目必须具有唯一的 `name`，重名会在启动时报错并列出冲突项目。
 
 ### 配置语法
 
-`projects` 字段支持以下几种配置方式：
+`projects` 支持以下配置形式：
 
-- 目录路径：指定一个目录，Rstest 会自动识别该目录下的所有子目录作为项目。
-- 配置文件路径：指定一个配置文件路径，Rstest 会根据该文件的配置运行测试。
-- glob 模式：使用 glob 模式匹配多个目录或文件，Rstest 会根据匹配结果作为项目。
-- 内联配置对象：直接在 `projects` 字段中定义项目的配置对象。这允许你在单个项目下定义多个测试项目，而无需为每个测试项目创建单独的配置文件
-- 嵌套 projects：在子项目的 rstest config 中嵌套定义 projects。
+- **目录路径**：加载指定目录下的项目及其配置文件（如果存在）。
+- **配置文件路径**：按指定配置文件运行一个项目。
+- **glob 模式**：批量匹配多个项目目录或配置文件。
+- **内联配置对象**：通过 `defineInlineProject` 直接在 `projects` 中声明项目配置，无需单独新建配置文件。
+- **嵌套 projects**：在子项目的配置文件中继续定义 `projects`。
 
-```ts name='rstest.config.ts'
+```ts title="rstest.config.ts"
 import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
   projects: [
-    // A monorepo: each package directory is a project
+    // packages 下的每个子目录作为一个项目
     'packages/*',
 
-    // All projects under the apps directory that provide an rstest config file
+    // apps 目录下所有包含 rstest 配置文件的项目
     'apps/**/rstest.config.ts',
 
-    // A specific project directory
+    // 指定的项目目录
     '<rootDir>/services/auth',
 
-    // A specific project's config file
+    // 指定的项目配置文件
     './projects/web/rstest.config.ts',
 
-    // inline project configs
+    // 内联项目配置
     defineInlineProject({
       name: 'node',
       include: ['tests/node/**/*.{test,spec}.{js,cjs,mjs,ts,tsx}'],
@@ -80,11 +82,11 @@ export default defineConfig({
 
 ### 根目录配置
 
-当根目录的 rstest config 文件中存在 projects 字段时，Rstest 不会将其视为一个测试项目，此时，根目录的 rstest.config 文件仅用于定义 `projects` 和[全局配置](#全局配置)。
+当根目录的配置文件声明了 `projects` 时，根目录本身不再作为测试项目，该文件仅用于定义 `projects` 和[全局配置](#全局配置)。
 
-如果你希望将根目录也视为一个项目，可以在 `projects` 中定义根目录下的测试配置。
+如果需要同时运行根目录下的测试，可以在 `projects` 中为根目录添加一个内联项目：
 
-```ts name='rstest.config.ts'
+```ts title="rstest.config.ts"
 import { defineConfig, defineInlineProject } from '@rstest/core';
 
 export default defineConfig({
@@ -100,31 +102,30 @@ export default defineConfig({
 
 #### 全局配置
 
-以下配置为全局配置，在 project 中配置无效。如果你需要修改全局配置，需要在根项目的 rstest config 中配置或通过 CLI 选项覆盖。
+以下选项属于全局配置，在单个 project 中设置无效。请在根目录配置文件中设置，或通过对应的 [CLI 选项](/guide/basic/cli#cli-选项)（如 `--reporters`、`--pool`、`--isolate`、`--coverage`、`--bail`、`--teardownTimeout`）在命令行覆盖：
 
-- `reporters`：全局 reporters 配置。
-- `pool`：全局 pool 配置。
-- `isolate`：全局 isolate 配置。
-- `coverage`：全局 coverage 配置。
-- `bail`：全局 bail 配置。
-- `teardownTimeout`：CLI 进程退出超时。
-- `resolveSnapshotPath`：快照文件路径解析函数。
-- `onConsoleLog`：控制台日志过滤函数。
-- `output.distPath`：全局输出目录路径。
+- `reporters`：全局报告器配置。
+- `pool`：worker pool 配置。
+- `isolate`：环境隔离开关。
+- `coverage`：代码覆盖率配置。
+- `bail`：失败次数达到阈值时提前中止运行。
+- `teardownTimeout`：`rstest run` 结束后的进程退出超时时间。
+- `resolveSnapshotPath`：快照文件路径解析函数（仅配置文件支持）。
+- `onConsoleLog`：控制台日志过滤函数（仅配置文件支持）。
+- `output.distPath`：全局输出目录路径（仅配置文件支持）。
 
 ### Project 配置
 
 #### 配置定义
 
-Project 配置是 Rstest 配置对象的一个子集，支持大部分配置选项，但不支持 `reporters` 等[全局配置](#全局配置)。
+Project 配置支持除[全局配置](#全局配置)之外的大部分 Rstest 选项。
 
-任何 `projects` 数组里的对象项，包括嵌套 `projects`，都建议使用 [defineInlineProject](/api/javascript-api/rstest-core#defineinlineproject)。[defineProject](/api/javascript-api/rstest-core#defineproject) 只用于项目配置文件的顶层导出。
+在任何 `projects` 数组（包括嵌套 `projects`）中声明内联项目时，请使用 [defineInlineProject](/api/javascript-api/rstest-core#defineinlineproject)；在独立项目配置文件的顶层导出时，请使用 [defineProject](/api/javascript-api/rstest-core#defineproject)。
 
-两者最主要的区别在于 `name` 的处理方式。`defineProject` 允许顶层导出的 project 省略 `name`，Rstest 会按 [name](/config/test/name) 配置项的规则自动推导。`defineInlineProject` 则要求每个 inline project 都显式提供 `name`。
+- `defineProject` 接受配置对象或同步/异步工厂函数（`() => ...` / `async () => ...`），且可省略 `name`（Rstest 会按 [name](/config/test/name) 规则自动推导）。
+- `defineInlineProject` 要求每个内联项目都显式提供 `name`。
 
-你可以通过 [defineProject](/api/javascript-api/rstest-core#defineproject) 辅助函数来定义 Project 配置：
-
-```ts title='packages/pkg-a/rstest.config.ts'
+```ts title="packages/pkg-a/rstest.config.ts"
 import { defineProject } from '@rstest/core';
 
 export default defineProject({
@@ -135,33 +136,31 @@ export default defineProject({
 
 #### 配置复用
 
-Project 配置并不会继承根目录下的配置，根目录下仅 projects 字段和[全局配置](#全局配置)生效。
+Project 配置不会继承根目录的配置，根配置中只有 `projects` 和[全局配置](#全局配置)对整个运行生效。
 
-如果你的子项目间存在可复用的配置项，可以抽取 shared 配置，并分别在子项目中引入：
+如需在多个子项目间复用配置，可以抽离共享配置并通过 [mergeProjectConfig](/api/javascript-api/rstest-core#mergeprojectconfig) 或 [mergeRstestConfig](/api/javascript-api/rstest-core#mergerstestconfig) 合并：
 
-```ts title='packages/pkg-a/rstest.config.ts'
-import { defineConfig, mergeRstestConfig } from '@rstest/core';
+```ts title="packages/pkg-a/rstest.config.ts"
+import { mergeProjectConfig } from '@rstest/core';
 import sharedConfig from '../shared/rstest.config';
 
-export default mergeRstestConfig(sharedConfig, {
+export default mergeProjectConfig(sharedConfig, {
   name: 'pkg-a',
 });
 ```
 
-可通过 [CLI 选项](/guide/basic/cli#cli-选项) 覆盖所有项目配置。
+通过 [CLI 选项](/guide/basic/cli#cli-选项)（例如 `--testTimeout`、`--testEnvironment`、`--globals`）传入的参数会覆盖所有项目中的对应字段。
 
 ### 嵌套 projects
 
-Rstest 支持在子项目的 rstest config 中嵌套定义 projects。这允许你在子项目中定义更多的测试项目，而无需在根项目中定义所有项目。
+子项目的配置文件也可以嵌套定义 `projects`，无需把所有变体都写在根目录配置里。
 
-这尤其适用于你的子项目需要同时支持多个测试环境或多份配置的情况。
+例如，在 `packages/pkg-a` 下拆分 Node.js 和 `jsdom` 两个测试项目：
 
-如，为 `packages/pkg-a` 定义 Node.js 和浏览器两个测试环境：
+```ts title="packages/pkg-a/rstest.config.ts"
+import { defineProject, defineInlineProject } from '@rstest/core';
 
-```ts title='packages/pkg-a/rstest.config.ts'
-import { defineConfig, defineInlineProject } from '@rstest/core';
-
-export default defineConfig({
+export default defineProject({
   projects: [
     defineInlineProject({
       name: 'node',
@@ -178,60 +177,55 @@ export default defineConfig({
 
 ### Browser mode 中的 projects
 
-如果你在 Browser Mode 下使用 `projects`，每个项目都会按自己的构建配置独立编译与执行。这样可以在一个仓库里同时管理不同技术栈或不同构建配置，同时仍然在同一个 Rstest 进程中运行。
+每个 Browser Mode 项目都会使用各自的构建配置独立编译并运行，不同技术栈或插件配置的项目可以在同一个 Rstest 进程中执行。
 
-但在同一次 run 中，Browser 启动配置必须保持一致：
+目前唯一支持的 `provider` 是 `'playwright'`。同一次运行中可以通过 `browser.instances` 在不同项目间使用不同浏览器，在 `run` 与 `watch` 下同时打开多个 headed 调试窗口或混用 headed 与 headless instance，也可以将 Browser Mode 项目与 `testEnvironment: 'node'` / `'jsdom'` 项目混跑，但需满足以下约束：
 
-- `provider`
-- `browser`
-- `headless`
-
-也就是说，目前不支持在同一次 run 里混用多个 provider，或同时配置多个 browser 类型。
+- **汇报名称不能冲突**：运行多个浏览器的项目会以 `<project> (<browser>)` 汇报，请避免与其他项目的 `name` 重复，详见[多浏览器的 reporter 表现](/config/test/browser#多浏览器的-reporter-表现)。
+- **V8 覆盖率需要 Chromium**：当 `coverage.provider` 为 `'v8'` 时，选中的浏览器必须全部为 Chromium，详见[启动规则](/config/test/browser#launch-rules)。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  projects: ['./project-b/rstest.config.ts', './project-a/rstest.config.ts'],
+  projects: ['./project-a/rstest.config.ts', './project-b/rstest.config.ts'],
 });
 ```
 
 ```ts title="project-a/rstest.config.ts"
 import { pluginReact } from '@rsbuild/plugin-react';
-import { defineConfig } from '@rstest/core';
+import { defineProject } from '@rstest/core';
 
-export default defineConfig({
+export default defineProject({
   name: 'project-a',
   plugins: [pluginReact()],
   include: ['tests/**/*.test.tsx'],
   browser: {
     enabled: true,
     provider: 'playwright',
+    instances: [{ browserName: 'chromium' }],
   },
 });
 ```
 
 ```ts title="project-b/rstest.config.ts"
-import { defineConfig } from '@rstest/core';
+import { defineProject } from '@rstest/core';
 
-export default defineConfig({
+export default defineProject({
   name: 'project-b',
   include: ['tests/**/*.test.ts'],
   browser: {
     enabled: true,
     provider: 'playwright',
+    instances: [{ browserName: 'firefox', headless: true }],
   },
 });
 ```
 
-你也可以在同一个 `projects` 列表里混合 Browser Mode 与 `testEnvironment: 'node'` 或 `'jsdom'` 项目，最终会合并输出测试结果。
-
 ### 查看配置
 
-如果你希望查看 Rstest 最终生效的配置，可以通过 `DEBUG=rstest` 环境变量开启[调试模式](/guide/debug/debugging#开启调试模式)，Rstest 会将最终生效的 Rstest 配置及构建配置写入到产物目录下。
+如需查看各项目最终生效的配置，可通过 `DEBUG=rstest` 开启[调试模式](/guide/debug/debugging#开启调试模式)，Rstest 会把最终的 Rstest 配置和构建配置写入输出目录。
 
 ## 过滤项目
 
-你可以通过 [--project](/guide/basic/test-filter#根据项目名称过滤) CLI 选项来过滤项目，也可以直接通过过滤文件名或文件路径的方式来过滤运行项目下的特定文件。
-
-更多介绍请参考 [测试过滤](/guide/basic/test-filter) 章节。
+可通过 [`--project`](/guide/basic/test-filter#根据项目名称过滤) 按名称或通配符筛选项目，也可以结合文件名或路径筛选具体测试文件。详见[过滤测试](/guide/basic/test-filter)。

@@ -1,3 +1,4 @@
+import { availableParallelism } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
@@ -19,6 +20,9 @@ describe('test projects inline projectConfig', () => {
     });
 
     await expectExecSuccess();
+    expect(cli.stdout).toContain(
+      `Compiler parallelism: ${Math.min(2, availableParallelism())}`,
+    );
     const logs = cli.stdout.split('\n').filter(Boolean);
 
     // test log print

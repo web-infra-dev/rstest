@@ -41,7 +41,7 @@ import picomatch from 'picomatch';
 import sirv from 'sirv';
 import { WebSocketServer } from 'ws';
 import { validateBrowserConfig } from './configValidation';
-import type { ContainerRpcManager } from './containerRpc';
+import type { ContainerRpcHub } from './containerRpc';
 import type { HeadedRunRegistry } from './headedRunRegistry';
 import { createDeferredPromise } from './hostPayloads';
 import {
@@ -163,6 +163,18 @@ export type BrowserProjectServer = {
   manifestPath: string;
 };
 
+/**
+ * Per-container headed watch state. Lives on `BrowserWatchState` keyed by
+ * `containerId` so controller re-entry reuses each headed window's page,
+ * context, open run registry, and monotonic file-set version independently.
+ */
+type HeadedContainerState = {
+  runs: HeadedRunRegistry;
+  fileSetVersion: number;
+  page?: BrowserProviderPage;
+  context?: BrowserProviderContext;
+};
+
 // Watch diff/rerun state. Lives on the BrowserRuntime (one per set of
 // per-project compilers, surviving controller re-entry that reuses the
 // runtime) instead of module scope, so its lifetime always matches the
@@ -185,20 +197,12 @@ type BrowserWatchState = {
    */
   signalFatalCompile?: (error: Error) => void;
   /**
-   * The headed run registry (identity + settlement owner). Lives here so a
-   * re-entering controller adopts the previous entry's still-open runs
-   * instead of orphaning them in a discarded closure.
+   * Persistent per-container state (page, context, run registry, file-set
+   * version), keyed by `containerId`. Surviving controller re-entry here keeps
+   * each headed window's open runs and monotonic version space intact across
+   * config restarts.
    */
-  headedRuns?: HeadedRunRegistry;
-  /**
-   * The committed file set's monotonic version. Lives here for the same reason
-   * the registry does: the frame set it versions is the container's, and the
-   * container outlives any one controller entry. A per-entry counter would
-   * restart at 1 and become indistinguishable from the previous entry's
-   * in-flight acks — the exact ABA the version replaced a content signature to
-   * avoid.
-   */
-  headedFileSetVersion: number;
+  headedContainers: Map<string, HeadedContainerState>;
   // Diff baselines keyed per project: sibling projects have isolated
   // compilers, so a shared flat baseline would let one project's compile
   // clobber another's (missed reruns) and collide on compiler-local chunk
@@ -222,7 +226,7 @@ type BrowserWatchState = {
 const createBrowserWatchState = (): BrowserWatchState => ({
   lastTestFiles: [],
   hooksEnabled: false,
-  headedFileSetVersion: 1,
+  headedContainers: new Map(),
   invalidation: new Map(),
   pendingAffectedTestFiles: new Map(),
   pendingDeletedTestFiles: [],
@@ -278,13 +282,14 @@ export type BrowserRuntime = {
   launchPool: LaunchPool;
   wsPort: number;
   tempDir: string;
-  containerPage?: BrowserProviderPage;
-  containerContext?: BrowserProviderContext;
-  setContainerOptions: (options: BrowserHostConfig) => void;
+  setContainerOptions: (
+    options: BrowserHostConfig,
+    containerId?: string,
+  ) => void;
   // Reserved extension seam for host-side dispatch capabilities.
   dispatchHandlers: Map<string, BrowserDispatchHandler>;
   wss: WebSocketServer;
-  rpcManager?: ContainerRpcManager;
+  rpcHub?: ContainerRpcHub;
   projectEntries: BrowserProjectEntries[];
   watchState: BrowserWatchState;
 };
@@ -382,10 +387,9 @@ const createBrowserLazyCompilationConfig = (
  * incremental — HMR is only the client push transport.
  *
  * The gate reads the project's resolved instances, not the project-level
- * `headless`: an instance can override it, and a project whose instances are
- * all headless must not get HMR just because the project-level default is
- * headed. Watch forbids mixing headed and headless, so "every" instance headed
- * and "any" instance headed agree.
+ * `headless`: an instance can override it, and a project with any headless
+ * instance must not get HMR so headless pages never receive HMR pushes;
+ * headed iframes in a mixed project still reload via host watch reruns.
  */
 export const shouldEnableBrowserHmr = (
   isWatchMode: boolean,
@@ -910,7 +914,10 @@ export const collectProjectEntries = async (
   // back to re-deriving from `context` for internal callers (e.g. the watch
   // plugin) that do not carry the plan's project list.
   browserProjects: InternalProjectContext[] = getBrowserProjects(context),
+  options?: { applyFileFilters?: boolean },
 ): Promise<BrowserProjectEntries[]> => {
+  const fileFilters =
+    options?.applyFileFilters === false ? undefined : context.fileFilters;
   return Promise.all(
     browserProjects.map(async (project) => {
       const {
@@ -923,7 +930,7 @@ export const collectProjectEntries = async (
         includeSource,
         rootPath: context.rootPath,
         projectRoot: project.rootPath,
-        fileFilters: context.fileFilters,
+        fileFilters,
       });
 
       const setup = materializeVirtualSetupFiles(
@@ -1306,21 +1313,40 @@ export const createBrowserRuntime = async ({
     ? await fs.readFile(join(containerDistPath, 'index.html'), 'utf-8')
     : null;
 
-  let injectedContainerHtml: string | null = null;
-  let serializedOptions = 'null';
+  type ContainerPayload = { serialized: string; html: string | null };
+  const containersById = new Map<string, ContainerPayload>();
+  let defaultContainer: ContainerPayload = { serialized: 'null', html: null };
   // Reserved extension seam for future browser-side capabilities.
   const dispatchHandlers = new Map<string, BrowserDispatchHandler>();
   const waitForBuilds: (() => Promise<void>)[] = [];
   let buildGeneration = 0;
 
-  const setContainerOptions = (options: BrowserHostConfig): void => {
-    serializedOptions = serializeForInlineScript(options);
-    if (containerHtmlTemplate) {
-      injectedContainerHtml = containerHtmlTemplate.replace(
-        OPTIONS_PLACEHOLDER,
-        serializedOptions,
-      );
+  const setContainerOptions = (
+    options: BrowserHostConfig,
+    containerId?: string,
+  ): void => {
+    const serialized = serializeForInlineScript(options);
+    const payload: ContainerPayload = {
+      serialized,
+      html: containerHtmlTemplate
+        ? containerHtmlTemplate.replace(OPTIONS_PLACEHOLDER, serialized)
+        : null,
+    };
+    if (containerId !== undefined) {
+      containersById.set(containerId, payload);
+    } else {
+      defaultContainer = payload;
     }
+  };
+
+  const resolveContainer = (containerId: string | null): ContainerPayload => {
+    if (containerId) {
+      return containersById.get(containerId) ?? defaultContainer;
+    }
+    if (containersById.size === 1) {
+      return containersById.values().next().value!;
+    }
+    return defaultContainer;
   };
 
   // Launch specs resolve once at the caller (the fields that would change
@@ -1414,6 +1440,7 @@ export const createBrowserRuntime = async ({
       context,
       updatedShardedEntries,
       browserProjects,
+      { applyFileFilters: !isWatchMode || Boolean(configOnly) },
     );
     for (const manifestModule of manifestModules) {
       refreshManifestModule(manifestModule);
@@ -1475,7 +1502,10 @@ export const createBrowserRuntime = async ({
       }
 
       let html = await response.text();
-      html = html.replace(OPTIONS_PLACEHOLDER, serializedOptions);
+      html = html.replace(
+        OPTIONS_PLACEHOLDER,
+        resolveContainer(url.searchParams.get('containerId')).serialized,
+      );
 
       copyProxyResponseHeaders(response, res);
       res.setHeader('Content-Type', 'text/html');
@@ -1533,7 +1563,7 @@ export const createBrowserRuntime = async ({
       }
 
       const html =
-        injectedContainerHtml ||
+        resolveContainer(url.searchParams.get('containerId')).html ??
         containerHtmlTemplate?.replace(OPTIONS_PLACEHOLDER, 'null');
 
       if (html) {
@@ -1921,11 +1951,14 @@ export const createBrowserRuntime = async ({
               }
               // Collect hashes even during initial build to establish baseline
               if (stats) {
-                // This compiler only ever holds this project's entries; the
-                // diff baseline is keyed per project accordingly.
-                const [projectEntry] = await collectProjectEntries(context, [
-                  project,
-                ]);
+                // This compiler only ever holds this project's entries; keep
+                // the hash baseline unfiltered so interactive `p` filter
+                // changes never drop untouched files from the diff baseline.
+                const [projectEntry] = await collectProjectEntries(
+                  context,
+                  [project],
+                  { applyFileFilters: false },
+                );
                 const entryTestFiles = new Set<string>(
                   collectWatchTestFiles(projectEntry ? [projectEntry] : []).map(
                     (file) => file.testPath,
@@ -2184,6 +2217,7 @@ export async function resolveProjectEntries(
   context: InternalContext,
   shardedEntries: Map<string, { entries: Record<string, string> }> | undefined,
   browserProjects: InternalProjectContext[],
+  options?: { applyFileFilters?: boolean },
 ): Promise<BrowserProjectEntries[]> {
   if (shardedEntries) {
     const projectEntries: BrowserProjectEntries[] = [];
@@ -2213,5 +2247,5 @@ export async function resolveProjectEntries(
     }
     return projectEntries;
   }
-  return collectProjectEntries(context, browserProjects);
+  return collectProjectEntries(context, browserProjects, options);
 }

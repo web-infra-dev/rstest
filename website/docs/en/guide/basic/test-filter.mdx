@@ -1,10 +1,10 @@
 ---
-description: Rstest provides a variety of flexible ways to filter and select which test files and test cases to run.
+description: Filter which test files, projects, and test cases Rstest runs using CLI flags, configuration options, and test APIs.
 ---
 
 # Filtering tests
 
-Rstest provides a variety of flexible ways to filter and select which test files and test cases to run. You can precisely control the test scope via configuration files, command-line arguments, and test APIs.
+Select which test files, projects, and test cases Rstest runs via CLI filters, configuration options, watch shortcuts, or test API modifiers.
 
 ## Filter by file name
 
@@ -14,98 +14,76 @@ Run all tests:
 rstest
 ```
 
-Match an exact test file path. The shell removes one layer of quotes, so use two layers:
+Positional filters accept substrings, relative or absolute file paths, and directory paths (multiple filters match any of them):
+
+```bash
+rstest foo
+rstest test/foo.test.ts test/bar.test.ts
+rstest packages/core
+```
+
+Wrap a filter in quotes for exact whole-path matching (for example, to avoid matching `foo.test.tsx` when targeting `foo.test.ts`). Because the shell strips one layer of quotes, pass two layers:
 
 ```bash
 rstest '"test/foo.test.ts"'
 ```
 
-Use `--include` for glob patterns, with quotes to prevent shell expansion:
+Rstest does not parse positional filters as glob patterns. Use `--include` for glob patterns, quoted to prevent shell expansion:
 
 ```bash
 rstest --include "test/**/*.test.ts"
 ```
 
-Positional filters use case-insensitive substring matching by default. Run test files with `foo` in the path, such as `foo.test.ts`, `foo/index.test.ts`, `foo-bar/index.test.ts`, etc.:
-
-```bash
-rstest foo
-```
-
-You can also specify multiple file filters:
-
-```bash
-rstest test/foo.test.ts test/bar.test.ts
-```
-
-### Filter by file path
-
-Rstest does not interpret positional filters as glob patterns. An unquoted pattern may be expanded by your shell, but this behavior varies between shells; use `--include` for glob matching.
-
-This method also applies to filtering by file path.
-
-File paths can be absolute or relative to the Rstest root directory.
-
-```bash
-# Filtering by absolute path
-rstest /Users/userName/Desktop/projects/rstest/packages/core/tests/index.test.ts
-
-# Filtering by relative path
-rstest packages/core/tests/index.test.ts
-
-# Filtering by project directory
-rstest packages/core
-```
-
 ### include/exclude
 
-When you pass positional filters, such as `rstest foo`, Rstest applies them to the files selected by the [include](/config/test/include) and [exclude](/config/test/exclude) configuration.
-You can modify the test file scope using the `include` and `exclude` options.
-
-For example, to match test files named `index` in the `test/a` directory:
+Positional filters apply on top of the files matched by the [`include`](/config/test/include) and [`exclude`](/config/test/exclude) configuration. You can also override `include` and `exclude` from the CLI:
 
 ```bash
+# Match test files named index under test/a
 rstest index --include "test/a/*.test.ts"
-```
 
-To match test files in `test/a` or `test/b` directories:
-
-```bash
+# Match test files under test/a or test/b
 rstest --include "test/a/*.test.ts" --include "test/b/*.test.ts"
+
+# Exclude a directory
+rstest --exclude "test/legacy/**"
 ```
+
+By default, Rstest exits with an error when no matching test files are found. Pass `--passWithNoTests` (or enable [`passWithNoTests`](/config/test/pass-with-no-tests) in your config) to exit with code `0` instead.
 
 ## Filter by test name
 
-If you only want to run some test cases, you can use the `--testNamePattern` (`-t` for short) option. It will run tests with names that match the given pattern.
+Use `--testNamePattern` (`-t` for short) or the [`testNamePattern`](/config/test/test-name-pattern) config option to run only tests whose names match a string or regular expression.
 
 ### Match by keyword
 
-This is the simplest way. It will run test cases or test suites whose full names contain the given keyword.
-
-For example, to only run test cases whose names contain "bar":
+Pass a keyword to run any test case or suite whose name contains it. If a suite name matches, all tests inside that suite run:
 
 ```bash
 rstest -t bar
 ```
 
-If a suite name matches, all tests inside it will be run.
-
-You can also provide multiple keywords separated by spaces. This will match test cases where all keywords appear in the full name. For example, to run tests where `'suite-bar'` appears in the suite path and `'test-baz'` is in the test name:
+Rstest compiles `-t` / `testNamePattern` into a single `RegExp`. When the pattern does not contain `>`, Rstest joins outer-to-inner suite names and the test name with a single space (`suite-foo suite-bar test-baz`). As a result, a space-separated string matches that exact consecutive sequence across suite and test boundaries:
 
 ```bash
+# Matches "suite-foo > suite-bar > test-baz",
+# not "suite-foo > suite-bar > suite-bar1 > test-baz"
 rstest -t 'suite-bar test-baz'
+```
+
+To match non-adjacent keywords across nested suites, join them with `.*`:
+
+```bash
+rstest -t 'suite-bar.*test-baz'
 ```
 
 ### Match by full test name
 
-You can also provide a full test name to run a specific test case.
+In terminal output, Rstest joins outer-to-inner suite names and the test case name with `>`. When a pattern contains `>`, Rstest matches against that `>`-delimited full name.
 
-Rstest uses `>` to connect test suite and test case names for better output readability. The full test name is the concatenation of the names of the test suites from the outside in and the test case name, separated by `>`.
+Consider the following test file and its output:
 
-For example, consider the following test structure and its output:
-
-```ts
-// foo.test.ts
+```ts title="foo.test.ts"
 import { describe, test } from '@rstest/core';
 
 describe('suite-foo', () => {
@@ -131,7 +109,7 @@ Output:
   ✓ suite-foo > suite-bar > suite-bar1 > test-baz
 ```
 
-To run only the `test-baz` test case in `suite-bar`, you can use:
+To run only the `test-baz` test directly inside `suite-bar`:
 
 ```bash
 rstest foo.test.ts -t 'suite-foo > suite-bar > test-baz'
@@ -139,94 +117,78 @@ rstest foo.test.ts -t 'suite-foo > suite-bar > test-baz'
 
 ### Match by regular expression
 
-The pattern is treated as a regular expression. You can use this for more complex filtering.
-
-For example, if you want to precisely match `suite-bar > test-baz`, rather than any test containing this string, you can use the regex start `^` and end `$` anchors:
+Because the pattern is evaluated as a regular expression, you can use anchors such as `^` and `$` to match a full test name exactly instead of any substring match:
 
 ```bash
-rstest foo.test.ts -t '^suite-bar > test-baz$'
+rstest foo.test.ts -t '^suite-foo > suite-bar > test-baz$'
 ```
+
+You can also set a `RegExp` directly in `rstest.config.ts` via [`testNamePattern`](/config/test/test-name-pattern), such as `/^(?!.*slow).*$/` to exclude tests containing `slow`.
 
 ## Filter by project name
 
-Rstest supports defining multiple test projects via [projects](/config/test/projects). You can filter to run specific projects with the `--project` option.
+In a multi-project workspace configured with [`projects`](/config/test/projects), use `--project` to select projects by their [`name`](/config/test/name).
 
-For example, to match projects whose [name](/config/test/name) is `@test/a` or `@test/b`:
+Match specific project names:
 
 ```bash
 rstest --project '@test/a' --project '@test/b'
 ```
 
-You can also use wildcards to match project names:
+Match project names with `*` wildcards:
 
 ```bash
 rstest --project '@test/*'
 ```
 
-You can exclude certain projects by negation:
+Exclude projects with a leading `!`:
 
 ```bash
 rstest --project '!@test/a'
 ```
 
+## Failed tests, changes, and shards
+
+- **Re-run failed test files:** Pass `-f` or `--onlyFailures` (see [`onlyFailures`](/config/test/only-failures)) to re-run only test files that failed in the previous full run.
+- **Run tests related to source files:** Pass `--related` (or `--findRelatedTests`) with source file paths to run tests that depend on them; see [Run related tests](/guide/basic/cli#run-related-tests).
+- **Run tests for Git changes:** Pass `--changed` to run tests affected by local or committed Git changes; see [Run changed tests](/guide/basic/cli#run-changed-tests).
+- **Split tests across CI jobs:** Pass `--shard <index>/<count>` to distribute test files across shards; see [Sharding tests](/guide/basic/cli#sharding-tests).
+- **Interactive watch filtering:** In watch mode, press `t` to filter by test name pattern, `p` to filter by file filters, `f` to re-run failed files, or `a` to clear active filters and re-run all tests; see [CLI shortcuts](/guide/basic/cli#cli-shortcuts).
+
 ## Combined filtering
 
-All filtering methods can be combined. For example:
+File, project, and test name filters can be combined:
 
 ```bash
 rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePattern login
 ```
 
-In this case, rstest will only run test cases whose names contain login in all `.test.ts` files under the `test` directory, while excluding the `test/legacy` directory.
-
-## Common usage
-
-- **Run a specific file only**: `rstest '"test/foo.test.ts"'`
-
-- **Run tests in a specific directory only**: `rstest --include "test/api/*.test.ts"`
-
-- **Exclude certain tests**: `rstest --exclude "test/legacy/**"`
-
-- **Run only tests whose names contain login**: `rstest -t login`
-
-- **Combined filtering**: `rstest --include "test/**/*.test.ts" --exclude "test/legacy/**" --testNamePattern login`
+This command runs only tests whose names contain `login` across `.test.ts` files under `test/`, excluding `test/legacy/`.
 
 ## Filter via test API
 
-Use the `.only` modifier to run only certain test suites or cases.
+Control which suites and test cases run directly in test code with [`test`](/api/runtime-api/test-api/test) and [`describe`](/api/runtime-api/test-api/describe) modifiers:
 
-For example, only the test cases in `suite A` and `case A` will be run:
+- `.only`: runs only the marked suites or test cases inside the current file (combine with a CLI file filter to isolate one file).
+- `.skip` / `.todo`: skips suites or test cases, or marks them as todo.
+- `.skipIf(condition)` / `.runIf(condition)`: conditionally skips or runs suites or test cases.
+- `context.skip()`: skips a test dynamically during execution.
 
 ```ts
+import { describe, test } from '@rstest/core';
+
 describe.only('suite A', () => {
-  // ...
+  test('runs only this suite in the file', () => {});
 });
 
-describe('suite B', () => {
-  // ...
-});
+describe.skip('suite B', () => {});
+test.todo('pending case');
+test.skipIf(process.platform === 'win32')('POSIX only', () => {});
+test.runIf(Boolean(process.env.CI))('CI only', () => {});
 
-test.only('case A', () => {
-  // ...
-});
-
-test('case B', () => {
-  // ...
-});
-```
-
-:::note
-It should be noted that the `.only` flag only applies to the current test file. If you want to execute specific test cases within a specific file, you can use a combination of "filter by file name" and "filter via test API".
-:::
-
-Use `.skip` or `.todo` to skip certain test suites or cases.
-
-```ts
-describe.skip('suite A', () => {
-  // ...
-});
-
-test.todo('case A', () => {
-  // ...
+test('skips dynamically', (context) => {
+  if (!process.env.API_TOKEN) {
+    context.skip();
+  }
 });
 ```

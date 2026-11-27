@@ -4,6 +4,7 @@ import type {
   JsonReporterOptions,
   NormalizedConfig,
   Reporter,
+  SerializedError,
   SnapshotSummary,
   TestFileInfo,
   TestFileResult,
@@ -40,7 +41,7 @@ type JsonReport = {
   consoleLogs?: Array<
     Omit<UserConsoleLog, 'relativeTestPath'> & { testPath: string }
   >;
-  unhandledErrors?: { message: string; stack?: string; name?: string }[];
+  unhandledErrors?: SerializedError[];
 };
 
 export class JsonReporter implements Reporter {
@@ -111,11 +112,9 @@ export class JsonReporter implements Reporter {
             testPath: relativeTestPath,
           }))
         : undefined,
-      unhandledErrors: unhandledErrors.map((error) => ({
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      })),
+      // Already plain serialized errors, written as is like the errors in
+      // `files` and `tests`, so each keeps its `cause` chain.
+      unhandledErrors,
     };
   }
 

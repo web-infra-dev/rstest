@@ -1,13 +1,13 @@
 ---
 title: Describe
-description: describe 用于定义测试套件（test suite），支持链式修饰符和参数化方法，便于灵活有序地组织测试。
+description: 使用 describe 定义测试套件，支持链式修饰符、套件级选项和参数化表格测试。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Describe
 
-`describe` 用于定义测试套件（test suite），支持链式修饰符和参数化方法，便于灵活有序地组织测试。
+`describe` 用于将测试用例或嵌套套件组织为一个测试套件。
 
 ## describe
 
@@ -18,34 +18,14 @@ import { ApiMeta } from '@components/ApiMeta';
 (name: string | Function, options: TestOptions, fn?: () => void | Promise<void>): void;
 ```
 
-定义一个测试套件，可以包含多个测试用例或嵌套的 describe。
-回调可以是异步函数；Rstest 会在收集阶段等待它完成，然后再运行其中声明的测试。
-
-<ApiMeta addedVersion="0.12.3" />
-
-也可以将函数作为 suite 名称传入。Rstest 会使用它的 `name` 属性，不会调用该函数；匿名函数会显示为 `<anonymous>`。`describe.each` 和 `describe.for` 也支持这种写法。
-
-```ts
-function add(a: number, b: number) {
-  return a + b;
-}
-
-describe(add, () => {
-  test('adds numbers', () => {
-    expect(add(1, 2)).toBe(3);
-  });
-});
-```
+定义一个测试套件，可包含多个测试用例或嵌套的 `describe`。如果 `fn` 是异步函数，Rstest 会在收集阶段等待它完成，再执行内部声明的测试。
 
 ```ts
 import { describe, expect, test } from '@rstest/core';
 
 describe('math', () => {
   test('add', () => {
-    // ...
-  });
-  test('sub', () => {
-    // ...
+    expect(1 + 2).toBe(3);
   });
 });
 ```
@@ -60,36 +40,32 @@ describe('async setup', async () => {
 });
 ```
 
-### TestOptions
+<ApiMeta addedVersion="0.12.3" />
 
-<ApiMeta addedVersion="0.11.0" />
-
-将 `TestOptions` 对象作为**第二个参数**（位于套件函数之前）传入，用于为套件内的所有测试设置默认值：
+可以直接将函数作为 `name` 传入。Rstest 会读取它的 `name` 属性而不会调用该函数（匿名函数显示为 `<anonymous>`）。`describe.each` 和 `describe.for` 也支持此写法。
 
 ```ts
-describe('flaky integration', { retry: 3, timeout: 10000 }, () => {
-  test('reaches the server', async () => {
-    /* 继承 retry: 3 与 timeout: 10000 */
+function add(a: number, b: number) {
+  return a + b;
+}
+
+describe(add, () => {
+  test('adds numbers', () => {
+    expect(add(1, 2)).toBe(3);
   });
 });
 ```
 
-作为简写，你仍可以将数字作为**最后一个参数**传入，仅用于设置超时（等价于 `{ timeout: n }`）：
+### TestOptions
 
-```ts
-describe('slow suite', () => {
-  test('within budget', async () => {
-    /* ... */
-  });
-}, 10000);
-```
+<ApiMeta addedVersion="0.11.0" />
 
-`TestOptions` 支持的字段与 [`test`](/api/runtime-api/test-api/test#testoptions) 上一致：`timeout`、`retry`、`repeats`、`meta`（`meta` 为 0.11.1 新增）。这些选项会作为**可继承的默认值**向子套件和测试传播：
+将 [`TestOptions`](/api/runtime-api/test-api/test#testoptions) 对象作为**第二个参数**（位于套件函数之前）传入，为子套件和测试用例设置可继承的默认值（`timeout`、`retry`、`repeats` 与 `meta`）。将数字作为**最后一个参数**传入等价于 `{ timeout: n }`。
 
 - 测试级别的选项始终优先于套件级别的值。
-- 嵌套的 `describe` 会继承父级选项，最终以最近一层的值为准。
-- 未单独设置 `timeout` 的测试，回退到最近一层套件的 `timeout`，再回退到 [`test.testTimeout`](/config/test/test-timeout)。
-- 元数据会从父套件向子套件或测试合并；子级顶层同名字段会覆盖父级字段，继承值会为每个子级复制。
+- 嵌套的 `describe` 会继承父级选项，由最内层的值覆盖外层。
+- 若测试和外层套件均未设置 `timeout`，则回退到 [`test.testTimeout`](/config/test/test-timeout)。
+- `meta` <ApiMeta sup addedVersion="0.11.1" /> 会从父套件向子套件或测试合并：子级顶层同名字段覆盖父级字段，继承值会为每个子级创建独立副本。详见[为套件添加 metadata](/guide/advanced/metadata#为套件添加-metadata)。
 
 ```ts
 describe('parent', { retry: 2, timeout: 100 }, () => {
@@ -109,29 +85,9 @@ describe('parent', { retry: 2, timeout: 100 }, () => {
 });
 ```
 
-```ts
-describe(
-  'mutation run',
-  { meta: { runner: 'stryker', shared: 'suite' } },
-  () => {
-    test('inherits suite metadata', ({ task }) => {
-      // task.meta 为 { runner: 'stryker', shared: 'suite' }
-    });
-
-    test(
-      'overrides suite metadata',
-      { meta: { shared: 'test' } },
-      ({ task }) => {
-        // task.meta 为 { runner: 'stryker', shared: 'test' }
-      },
-    );
-  },
-);
-```
-
 ## describe.only
 
-只运行被 only 标记的 describe 块。
+只运行当前文件中标记了 `only` 的 `describe` 块。
 
 ```ts
 describe.only('只运行这个套件', () => {
@@ -141,21 +97,21 @@ describe.only('只运行这个套件', () => {
 
 ## describe.skip
 
-跳过被 skip 标记的 describe 块里的测试用例。
+将 `describe` 块中的所有测试标记为跳过。
 
 ```ts
-describe.skip('跳过这个套件里的测试用例', () => {
+describe.skip('跳过这个套件', () => {
   // ...
 });
 ```
 
-需要注意的是，skip 标记仅用于跳过测试用例，describe 块内的代码仍会执行。这是因为 Rstest 需要收集测试用例的信息，以确保所有功能正常运行，即使它们被标记为跳过。例如，在快照测试中判断快照是过时还是被标记为 skipped。
+套件回调本身仍会在收集阶段执行，以便 Rstest 收集其中的跳过测试并追踪快照，但内部的测试体不会运行：
 
 ```ts
 describe.skip('a', () => {
-  console.log('will run');
+  console.log('收集阶段会执行');
   test('b', () => {
-    console.log('will not run');
+    console.log('不会执行');
     expect(0).toBe(0);
   });
 });
@@ -163,7 +119,7 @@ describe.skip('a', () => {
 
 ## describe.todo
 
-标记为待办的 describe 块。
+将 `describe` 块标记为待办。
 
 ```ts
 describe.todo('should implement this suite');
@@ -174,15 +130,34 @@ describe.todo('should implement this suite');
 - **类型：**
 
 ```ts
-// Every row is an array: the row is spread into the arguments
-describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (...args: [...T]) => void | Promise<void>, timeout?: number): void;
-describe.each<T extends readonly unknown[]>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (...args: [...T]) => void | Promise<void>): void;
-// Otherwise: the row is passed as a single argument
-describe.each<T>(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.each<T>(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+type DescribeCall<Fn> = {
+  (name: string | Function, fn?: Fn, timeout?: number): void;
+  (name: string | Function, options: TestOptions, fn?: Fn): void;
+};
+
+// 对象行：整行作为单个参数传入
+describe.each<T extends Record<string, unknown>>(
+  cases: readonly T[],
+): DescribeCall<(param: T) => void | Promise<void>>;
+// 元组或数组行：每一行都是数组时，展开为多个参数
+describe.each<T extends readonly [unknown, ...unknown[]]>(
+  cases: readonly T[],
+): DescribeCall<(...args: [...T]) => void | Promise<void>>;
+describe.each<T extends readonly unknown[]>(
+  cases: readonly T[],
+): DescribeCall<(...args: [...T]) => void | Promise<void>>;
+// 混合或基本类型行：整行作为单个参数传入
+describe.each<T>(
+  cases: readonly T[],
+): DescribeCall<(param: T) => void | Promise<void>>;
+// 标签模板字面量表格
+describe.each<T extends Record<string, unknown>>(
+  strings: TemplateStringsArray,
+  ...expressions: unknown[]
+): DescribeCall<(param: T) => void | Promise<void>>;
 ```
 
-为数组中的每一项生成一个 describe 块。与 `describe` 一样，它的第二个参数可选地接受一个 [`TestOptions`](#testoptions) 对象，并作用于生成的每个套件。
+为 `cases` 或标签模板表格中的每一项生成一个 `describe` 块。第二个参数同样可选接受 [`TestOptions`](#testoptions)，并作用于生成的每个套件。
 
 ```ts
 describe.each([
@@ -195,23 +170,9 @@ describe.each([
 });
 ```
 
-只有当表格的每一行都是数组时，行才会展开成套件函数的多个参数。只要有一行不是数组，每一行都会整体作为单个参数传入，混合表中的数组行会原样传给套件函数。
+只有当每一行都是数组时，行元素才会展开为 `fn` 的多个参数；只要存在非数组行，每一行都会整体作为单个参数传入。
 
-你也可以使用标签模板字面量的表格语法：
-
-```ts
-describe.each`
-  a    | b    | expected
-  ${1} | ${2} | ${3}
-  ${2} | ${3} | ${5}
-`('$a + $b = $expected', ({ a, b, expected }) => {
-  test('add', () => {
-    expect(a + b).toBe(expected);
-  });
-});
-```
-
-你可以通过显式泛型参数来获得类型支持：
+使用标签模板字面量时，可传入显式泛型参数为行属性提供类型推导：
 
 ```ts
 describe.each<{ a: number; b: number; expected: number }>`
@@ -230,11 +191,21 @@ describe.each<{ a: number; b: number; expected: number }>`
 - **类型：**
 
 ```ts
-describe.for(cases: ReadonlyArray<T>)(name: string | Function, fn?: (param: T) => void | Promise<void>, timeout?: number): void;
-describe.for(cases: ReadonlyArray<T>)(name: string | Function, options: TestOptions, fn?: (param: T) => void | Promise<void>): void;
+type DescribeCall<Fn> = {
+  (name: string | Function, fn?: Fn, timeout?: number): void;
+  (name: string | Function, options: TestOptions, fn?: Fn): void;
+};
+
+describe.for<T>(
+  cases: readonly T[],
+): DescribeCall<(param: T) => void | Promise<void>>;
+describe.for<T extends Record<string, unknown>>(
+  strings: TemplateStringsArray,
+  ...expressions: unknown[]
+): DescribeCall<(param: T) => void | Promise<void>>;
 ```
 
-类似 each，但参数类型更灵活。它同样接受可选的 [`TestOptions`](#testoptions) 第二个参数。
+`describe.each` 的替代方法，始终将每条用例整体作为单个 `param` 参数传入，不会展开数组行。第二个参数同样可选接受 [`TestOptions`](#testoptions)。
 
 ```ts
 describe.for([
@@ -247,21 +218,7 @@ describe.for([
 });
 ```
 
-`describe.for` 同样支持标签模板字面量的表格语法：
-
-```ts
-describe.for`
-  a    | b    | expected
-  ${1} | ${2} | ${3}
-  ${2} | ${3} | ${5}
-`('$a + $b = $expected', ({ a, b, expected }) => {
-  test('add', () => {
-    expect(a + b).toBe(expected);
-  });
-});
-```
-
-你可以通过显式泛型参数来获得类型支持：
+同样支持标签模板字面量以及可选的显式泛型参数：
 
 ```ts
 describe.for<{ a: number; b: number; expected: number }>`
@@ -277,17 +234,17 @@ describe.for<{ a: number; b: number; expected: number }>`
 
 ## describe.runIf
 
-仅当条件为 true 时运行该 describe 块。
+仅当 `condition` 为真值时运行该 `describe` 块。
 
 ```ts
-describe.runIf(process.env.RUN_EXTRA === '1')('有条件地运行', () => {
+describe.runIf(process.env.RUN_EXTRA === '1')('有条件运行', () => {
   // ...
 });
 ```
 
 ## describe.skipIf
 
-当条件为 true 时跳过该 describe 块。
+当 `condition` 为真值时跳过该 `describe` 块。
 
 ```ts
 describe.skipIf(process.platform === 'win32')('Windows 下跳过', () => {
@@ -297,7 +254,7 @@ describe.skipIf(process.platform === 'win32')('Windows 下跳过', () => {
 
 ## describe.concurrent
 
-并发运行该 describe 下的测试。
+并发运行该 `describe` 块内的测试。
 
 ```ts
 describe.concurrent('并发套件', () => {
@@ -312,7 +269,7 @@ describe.concurrent('并发套件', () => {
 
 ## describe.sequential
 
-顺序运行该 describe 下的测试（默认行为）。
+顺序运行该 `describe` 块内的测试（默认行为）。
 
 ```ts
 describe.sequential('顺序套件', () => {
@@ -324,3 +281,13 @@ describe.sequential('顺序套件', () => {
   });
 });
 ```
+
+## 链式修饰符
+
+`describe` 的修饰符（`.only`、`.skip`、`.runIf`、`.skipIf`、`.concurrent`、`.sequential`）支持按任意顺序链式组合，也可以放在 `.each(cases)` / `.for(cases)` 之前（修饰符必须位于 `.each` / `.for` 之前）：
+
+- `describe.only.runIf(condition)` / `describe.runIf(condition).only`
+- `describe.skipIf(condition).concurrent` / `describe.concurrent.skipIf(condition)`
+- `describe.runIf(condition).concurrent` / `describe.concurrent.runIf(condition)`
+- `describe.only.concurrent` / `describe.concurrent.only`
+- `describe.only.each(cases)` / `describe.skip.each(cases)` / `describe.concurrent.each(cases)` / `describe.runIf(condition).each(cases)` / `describe.skipIf(condition).each(cases)`

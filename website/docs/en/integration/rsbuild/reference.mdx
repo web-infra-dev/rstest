@@ -34,9 +34,9 @@ export default defineConfig({
 #### `configPath`
 
 - **Type:** `string`
-- **Default:** `'./rsbuild.config.ts'`
+- **Default:** `undefined`
 
-Path to rsbuild config file.
+Path to the Rsbuild config file. When omitted, auto-discovers `rsbuild.config.*` in `cwd`.
 
 :::tip
 If both `config` and `configPath` are provided, `config` takes precedence as the config content.
@@ -142,10 +142,10 @@ export default defineConfig({
 
 #### `modifyRsbuildConfig`
 
-- **Type:** `(config: RsbuildConfig) => RsbuildConfig | void`
+- **Type:** `(config: RsbuildConfig) => RsbuildConfig`
 - **Default:** `undefined`
 
-Modify the Rsbuild config before it gets converted to Rstest config:
+Modify the Rsbuild config before it gets converted to Rstest config. The callback must return the `RsbuildConfig` object:
 
 ```ts
 export default defineConfig({
@@ -195,63 +195,39 @@ The Rsbuild config object to convert.
 
 Source file path for the provided `rsbuildConfig`; it does not load config from this path. The adapter uses it only to add the file to [`forceRerunTriggers`](/config/test/force-rerun-triggers) and [`performance.buildCache.buildDependencies`](https://rsbuild.rs/config/performance/build-cache#builddependencies).
 
-#### `environmentName`
-
-- **Type:** `string`
-- **Default:** `undefined`
-
-The environment name in the `environments` field to merge with the common config.
-
-#### `modifyRsbuildConfig`
-
-- **Type:** `(config: RsbuildConfig) => RsbuildConfig`
-- **Default:** `undefined`
-
-Modify the merged Rsbuild config object before it gets converted to Rstest config.
+Also accepts `environmentName` and `modifyRsbuildConfig`, which work the same as in [`withRsbuildConfig`](#withrsbuildconfigoptions).
 
 ## Configuration mapping
 
-The adapter automatically maps these Rsbuild options to Rstest:
+Only the Rsbuild options listed below are inherited by Rstest. Unlisted sections such as `dev`, `server`, and `html` are ignored during conversion.
 
-Only the fields listed below are inherited. Rsbuild options that are not listed are ignored by default, which means test-irrelevant sections such as `dev`, `server`, and `html` are automatically pruned during conversion.
-
-| Rsbuild option           | Rstest equivalent        | Notes                                |
-| ------------------------ | ------------------------ | ------------------------------------ |
-| `root`                   | `root`                   | Project root directory               |
-| `name` from environment  | `name`                   | Environment identifier               |
-| `plugins`                | `plugins`                | Plugin configuration                 |
-| `source.decorators`      | `source.decorators`      | Decorator support                    |
-| `source.assetsInclude`   | `source.assetsInclude`   | Additional static asset patterns     |
-| `source.define`          | `source.define`          | Global constants                     |
-| `source.include`         | `source.include`         | Source inclusion patterns            |
-| `source.exclude`         | `source.exclude`         | Source exclusion patterns            |
-| `source.transformImport` | `source.transformImport` | On-demand import transform rules     |
-| `source.tsconfigPath`    | `source.tsconfigPath`    | TypeScript config path               |
-| `resolve`                | `resolve`                | Module resolution                    |
-| `output.cssModules`      | `output.cssModules`      | CSS modules configuration            |
-| `output.emitAssets`      | `output.emitAssets`      | Emit imported static assets to disk  |
-| `output.module`          | `output.module`          | Output module type                   |
-| `performance.buildCache` | `performance.buildCache` | Reused with rstest-aware defaults    |
-| `tools.rspack`           | `tools.rspack`           | Rspack configuration                 |
-| `tools.swc`              | `tools.swc`              | SWC configuration                    |
-| `tools.bundlerChain`     | `tools.bundlerChain`     | Bundler chain configuration          |
-| `output.target`          | `testEnvironment`        | 'happy-dom' for web, 'node' for node |
+| Rsbuild option           | Rstest equivalent        | Notes                                                                                                   |
+| ------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `root`                   | `root`                   | Project root directory                                                                                  |
+| `environmentName` option | `name`                   | Environment identifier                                                                                  |
+| `plugins`                | `plugins`                | Plugin configuration                                                                                    |
+| `source.decorators`      | `source.decorators`      | Decorator support                                                                                       |
+| `source.assetsInclude`   | `source.assetsInclude`   | Additional static asset patterns                                                                        |
+| `source.define`          | `source.define`          | Global constants                                                                                        |
+| `source.include`         | `source.include`         | Source inclusion patterns                                                                               |
+| `source.exclude`         | `source.exclude`         | Source exclusion patterns                                                                               |
+| `source.transformImport` | `source.transformImport` | On-demand import transform rules                                                                        |
+| `source.tsconfigPath`    | `source.tsconfigPath`    | TypeScript config path                                                                                  |
+| `resolve`                | `resolve`                | Module resolution                                                                                       |
+| `output.cssModules`      | `output.cssModules`      | CSS modules configuration                                                                               |
+| `output.emitAssets`      | `output.emitAssets`      | Emit imported static assets to disk                                                                     |
+| `output.module`          | `output.module`          | Output module type                                                                                      |
+| `performance.buildCache` | `performance.buildCache` | Reused with rstest-aware defaults when enabled in Rsbuild; stays disabled by default when unset         |
+| `tools.rspack`           | `tools.rspack`           | Rspack configuration                                                                                    |
+| `tools.swc`              | `tools.swc`              | SWC configuration                                                                                       |
+| `tools.bundlerChain`     | `tools.bundlerChain`     | Bundler chain configuration                                                                             |
+| `output.target`          | `testEnvironment`        | `'node'` for `'async-node'` or any `node*` target (string or array); `'happy-dom'` for all others/unset |
 
 The adapter also removes the `rsbuild:type-check` plugin because type checking is not part of the test runtime pipeline.
 
 ## Debug config
 
-To see the resolved configuration returned by the adapter, wrap it and log the result:
-
-```ts
-export default defineConfig({
-  extends: async (user) => {
-    const config = await withRsbuildConfig()(user);
-    console.log('Extended config:', JSON.stringify(config, null, 2));
-    return config;
-  },
-});
-```
+Run with `DEBUG=rstest` to write the resolved Rstest, Rsbuild, and Rspack configurations to disk. See [Debug mode](/guide/debug/debugging#debug-mode).
 
 ## Related documentation
 

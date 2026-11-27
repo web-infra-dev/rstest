@@ -42,38 +42,10 @@ type CliShortcut = {
   action: () => void | Promise<void>;
 };
 
-const notSupportedHint = (key: string): CliShortcut['action'] => {
-  return () => {
-    logger.log(
-      color.yellow(`\n'${key}' is not yet supported in browser watch.\n`),
-    );
-  };
-};
-
-const greyedDescription = (key: string, text: string): string =>
-  `${color.bold(key)}  ${color.dim(`${text} (not yet supported in browser watch)`)}`;
-
 /**
- * A shortcut whose callback a run type may not support yet: present callback
- * ⇒ real description/action, absent ⇒ greyed description + hint action.
- */
-const optionalShortcut = (
-  key: string,
-  label: string,
-  action: CliShortcut['action'] | undefined,
-): CliShortcut => ({
-  key,
-  description: action
-    ? `${color.bold(key)}  ${color.dim(label)}`
-    : greyedDescription(key, label),
-  action: action ?? notSupportedHint(key),
-});
-
-/**
- * Install the single watch-mode stdin owner. Actions other than quit are
- * optional: a run type that cannot support one yet (browser-only watch)
- * omits the callback and the key shows a greyed hint instead — there is
- * never a second raw-mode stdin subscriber.
+ * Install the single watch-mode stdin owner shared across every watch shape
+ * (node-only, browser-only, and mixed) — there is never a second raw-mode
+ * stdin subscriber.
  */
 export async function setupCliShortcuts({
   closeServer,
@@ -84,7 +56,7 @@ export async function setupCliShortcuts({
   runWithTestNamePattern,
   runWithFileFilters,
 }: {
-  runFailedTests?: () => Promise<void>;
+  runFailedTests: () => Promise<void>;
   closeServer: () => Promise<void>;
   /**
    * Whether a rerun key can be answered right now — the same gate the rerun
@@ -93,10 +65,10 @@ export async function setupCliShortcuts({
    * itself when it returns false.
    */
   canRerun?: () => boolean;
-  runAll?: () => Promise<void>;
-  updateSnapshot?: () => Promise<void>;
-  runWithTestNamePattern?: (pattern: string | undefined) => Promise<void>;
-  runWithFileFilters?: (filters: string[] | undefined) => Promise<void>;
+  runAll: () => Promise<void>;
+  updateSnapshot: () => Promise<void>;
+  runWithTestNamePattern: (pattern: string | undefined) => Promise<void>;
+  runWithFileFilters: (filters: string[] | undefined) => Promise<void>;
 }): Promise<() => void> {
   const { createInterface, emitKeypressEvents } = await import('node:readline');
 
@@ -196,50 +168,56 @@ export async function setupCliShortcuts({
   };
 
   const shortcuts = [
-    optionalShortcut('f', 'rerun failed tests', runFailedTests),
-    optionalShortcut('a', 'rerun all tests', runAll),
-    optionalShortcut('u', 'update snapshot', updateSnapshot),
-    optionalShortcut(
-      't',
-      'filter by a test name regex pattern',
-      runWithTestNamePattern &&
-        (() => {
-          clearCurrentInputLine();
-          // Gated before the prompt opens, not inside the handler it calls:
-          // asking for a pattern the run cannot use yet either throws away what
-          // the user typed on Enter, or drops the keystroke without a word when
-          // they escape out of it.
-          if (!canRerun()) {
-            return;
-          }
-          promptInput(
-            'Enter test name pattern (empty to clear): ',
-            async (pattern) => {
-              await runWithTestNamePattern(pattern);
-            },
-          );
-        }),
-    ),
-    optionalShortcut(
-      'p',
-      'filter by a filename regex pattern',
-      runWithFileFilters &&
-        (() => {
-          clearCurrentInputLine();
-          if (!canRerun()) {
-            return;
-          }
-          promptInput(
-            'Enter file name pattern (empty to clear): ',
-            async (input) => {
-              const filters = input
-                ? input.split(/\s+/).filter(Boolean)
-                : undefined;
-              await runWithFileFilters(filters);
-            },
-          );
-        }),
-    ),
+    {
+      key: 'f',
+      description: `${color.bold('f')}  ${color.dim('rerun failed tests')}`,
+      action: runFailedTests,
+    },
+    {
+      key: 'a',
+      description: `${color.bold('a')}  ${color.dim('rerun all tests')}`,
+      action: runAll,
+    },
+    {
+      key: 'u',
+      description: `${color.bold('u')}  ${color.dim('update snapshot')}`,
+      action: updateSnapshot,
+    },
+    {
+      key: 't',
+      description: `${color.bold('t')}  ${color.dim('filter by a test name regex pattern')}`,
+      action: () => {
+        // Gated before the prompt opens, not inside the handler it calls:
+        // asking for a pattern the run cannot use yet either throws away what
+        // the user typed on Enter, or drops the keystroke without a word when
+        // they escape out of it.
+        if (!canRerun()) {
+          return;
+        }
+        promptInput(
+          'Enter test name pattern (empty to clear): ',
+          runWithTestNamePattern,
+        );
+      },
+    },
+    {
+      key: 'p',
+      description: `${color.bold('p')}  ${color.dim('filter by a filename regex pattern')}`,
+      action: () => {
+        if (!canRerun()) {
+          return;
+        }
+        promptInput(
+          'Enter file name pattern (empty to clear): ',
+          async (input) => {
+            const filters = input
+              ? input.split(/\s+/).filter(Boolean)
+              : undefined;
+            await runWithFileFilters(filters);
+          },
+        );
+      },
+    },
     {
       key: 'c',
       description: `${color.bold('c')}  ${color.dim('clear screen')}`,

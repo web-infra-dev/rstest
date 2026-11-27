@@ -148,5 +148,5 @@ export {
   materializeVirtualSetupFiles,
 } from './utils/getSetupFiles';
 export { resolveShardedEntries } from './utils/shard';
-export { getTestEntries } from './utils/testFiles';
+export { filterFiles, getTestEntries } from './utils/testFiles';
 export { rsbuild };

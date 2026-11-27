@@ -265,11 +265,15 @@ export const runBrowserWatchCliWithCwd = async (
   extra?: {
     args?: string[];
     env?: Record<string, string>;
+    /** Skip CLI-level `launch.channel=chrome` injection when the fixture spreads `ciChromeEntry()` per chromium instance. */
+    selfManagedChannel?: boolean;
   },
 ) => {
-  const args = extra?.args || [];
+  const args = extra?.args ? [...extra.args] : [];
 
-  applyGithubActionsChrome(args);
+  if (!extra?.selfManagedChannel) {
+    applyGithubActionsChrome(args);
+  }
 
   const result = await runRstestCli({
     command: 'rstest',

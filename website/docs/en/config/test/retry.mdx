@@ -9,13 +9,13 @@ overviewHeaders: []
 - **Default:** `0`
 - **CLI:** `--retry <times>`
 
-Retry the test specific number of times if it fails. This is useful for some flaky or non-deterministic test failures.
+Retry a failing test a specified number of times, useful for handling flaky tests.
 
 A single test can override this with [`TestOptions.retry`](/api/runtime-api/test-api/test#testoptions), including `{ retry: 0 }` to disable retries for one test even when this config is set.
 
 ## Example
 
-You can get two retries by setting `retry:2` when the test fails:
+Set `retry: 2` to retry a failed test up to two times:
 
 import { Tab, Tabs } from '@theme';
 

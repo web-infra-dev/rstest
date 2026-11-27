@@ -75,7 +75,7 @@ export type ToMatchScreenshotOptions = {
   maxDiffPixels?: number;
   /** Maximum fraction of pixels allowed to differ, from 0 to 1. */
   maxDiffPixelRatio?: number;
-  /** Time allowed for consecutive screenshots to become stable. Defaults to 2000 ms; use 0 to disable or at least 100 ms. */
+  /** Time allowed for consecutive screenshots to become stable. Defaults to 5000 ms; use 0 to disable or at least 100 ms. */
   stabilityTimeout?: number;
   /** Mask dynamic content with browser-mode Locators. */
   mask?: Locator[];
@@ -90,10 +90,11 @@ export type ToMatchScreenshotOptions = {
 
 declare module '@rstest/core' {
   interface Assertion<T> {
-    toMatchScreenshot: (
+    toMatchScreenshot(options?: ToMatchScreenshotOptions): Promise<void>;
+    toMatchScreenshot(
       name?: string,
       options?: ToMatchScreenshotOptions,
-    ) => Promise<void>;
+    ): Promise<void>;
   }
 
   interface ExpectStatic {

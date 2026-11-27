@@ -31,9 +31,13 @@ describe.sequential('browser mode - screenshot matching', () => {
   let cliToKill:
     Awaited<ReturnType<typeof runBrowserCliWithCwd>>['cli'] | undefined;
 
-  const runScreenshot = async (args: string[] = []) => {
+  const runScreenshot = async (
+    args: string[] = [],
+    env?: Record<string, string>,
+  ) => {
     const result = await runBrowserCliWithCwd(fixtureDir, {
       args: ['--browser.port=0', ...args],
+      env,
     });
     cliToKill = result.cli;
     return result;
@@ -91,16 +95,13 @@ describe.sequential('browser mode - screenshot matching', () => {
       path.join(screenshotDir, viewportScreenshotName),
     );
     expect(viewportScreenshot.readUInt32BE(20)).toBeLessThan(1800);
-    const pageScreenshotName = screenshotNames.find((name) =>
-      name.startsWith('whole-page~'),
-    );
-    if (!pageScreenshotName) {
-      throw new Error('Expected the full page screenshot reference.');
-    }
     const pageScreenshot = fs.readFileSync(
-      path.join(screenshotDir, pageScreenshotName),
+      path.join(
+        screenshotDir,
+        `matches-a-full-page-screenshot-1-chromium-${process.platform}.png`,
+      ),
     );
-    expect(pageScreenshot.readUInt32BE(20)).toBeGreaterThan(1000);
+    expect(pageScreenshot.readUInt32BE(20)).toBeGreaterThanOrEqual(1800);
     expect(
       screenshotNames.every((name) => Buffer.byteLength(name) <= 240),
     ).toBe(true);
@@ -259,6 +260,9 @@ describe.sequential('browser mode - screenshot matching', () => {
     expect(`${mismatchRun.cli.stdout}\n${mismatchRun.cli.stderr}`).toContain(
       'Diff:',
     );
+    expect(`${mismatchRun.cli.stdout}\n${mismatchRun.cli.stderr}`).toContain(
+      'Regions:',
+    );
     const failureDir = path.join(screenshotDir, '__failures__');
     expect(
       fs.readdirSync(failureDir).some((name) => name.endsWith('.actual.png')),
@@ -267,8 +271,14 @@ describe.sequential('browser mode - screenshot matching', () => {
       fs.readdirSync(failureDir).some((name) => name.endsWith('.diff.png')),
     ).toBe(true);
 
+    const regions = path.join(
+      failureDir,
+      referenceName.replace(/\.png$/, '.regions.png'),
+    );
+    expect(fs.existsSync(regions)).toBe(true);
     const updateRun = await runScreenshot([...args, '--update']);
     await updateRun.expectExecSuccess();
+    expect(fs.existsSync(regions)).toBe(false);
     expect(fs.readFileSync(referencePath)).not.toEqual(originalReference);
 
     const updatedMatchRun = await runScreenshot(['--reporters=json', ...args]);
@@ -340,6 +350,28 @@ describe.sequential('browser mode - screenshot matching', () => {
     expect(parseJsonReport(result.cli.stdout).snapshot.matched).toBe(1);
   });
 
+  it('reports a missing reference in CI even when the locator cannot be captured', async () => {
+    const testPath = path.join(fixtureDir, 'tests', 'configured.test.ts');
+    fs.writeFileSync(
+      testPath,
+      fs
+        .readFileSync(testPath, 'utf8')
+        .replace("page.locator('#pixel')", "page.locator('#absent')"),
+    );
+    const result = await runScreenshot(
+      ['--project=project-config-resolver', 'tests/configured.test.ts'],
+      { CI: 'true' },
+    );
+    await result.cli.exec;
+    expect(result.cli.exec.exitCode).toBe(1);
+    const output = `${result.cli.stdout}\n${result.cli.stderr}`;
+    expect(output).toContain(
+      'No screenshot reference found for "global-default"',
+    );
+    expect(output).toContain('global-default.png');
+    expect(fs.existsSync(path.join(fixtureDir, 'custom-paths'))).toBe(false);
+  });
+
   it('rejects invalid options before creating a reference', async () => {
     const invalidTestPath = path.join(
       fixtureDir,
@@ -353,10 +385,9 @@ import { expect, test } from '@rstest/core';
 
 test('rejects invalid screenshot options', async () => {
   document.body.innerHTML = '<button>Save</button>';
-  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot(
-    'invalid-options',
-    { threshold: 2 },
-  );
+  await expect(page.getByRole('button', { name: 'Save' })).toMatchScreenshot({
+    threshold: 2,
+  });
 });
 
 test('rejects a short screenshot stability timeout', async () => {
@@ -835,11 +866,33 @@ test('captures a screenshot', async () => {
       'rgb(10, 20, 30)',
       'rgb(180, 40, 20)',
     );
-    fs.writeFileSync(testPath, changedTest);
+    fs.writeFileSync(
+      testPath,
+      changedTest.replace('id="pixel"', 'id="pixel" data-animate'),
+    );
     const globalThresholdRun = await runScreenshot([
       'tests/configured.test.ts',
     ]);
     await globalThresholdRun.expectExecSuccess();
+
+    // Only the original pixel changes between captures. The border changes
+    // the dimensions relative to the reference.
+    fs.writeFileSync(
+      testPath,
+      changedTest.replace(
+        'id="pixel" style="',
+        'id="pixel" data-animate style="border-left: 1px solid black; ',
+      ),
+    );
+    const resizedRun = await runScreenshot([
+      '--project=project-config-resolver',
+      'tests/configured.test.ts',
+    ]);
+    await resizedRun.cli.exec;
+    expect(resizedRun.cli.exec.exitCode).toBe(1);
+    expect(`${resizedRun.cli.stdout}\n${resizedRun.cli.stderr}`).toContain(
+      'Screenshot dimensions differ',
+    );
 
     fs.writeFileSync(
       testPath,

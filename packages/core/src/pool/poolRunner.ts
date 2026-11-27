@@ -54,6 +54,7 @@ type PoolRunnerOptions = {
   recordRss?: RssTrace['record'];
   workerId: number;
   environmentKey: string;
+  reuseKey: string;
   memoryLimit?: number;
   memoryMetric?: keyof WorkerMemoryReport;
   onOomKill?: () => void;
@@ -74,8 +75,8 @@ export class WorkerOomKillError extends Error {}
  */
 export class PoolRunner {
   readonly workerId: number;
-  /** Environment identity this worker holds for life — see `Pool.wakeWaiters`. */
-  readonly environmentKey: string;
+  lastEnvironmentKey: string;
+  readonly reuseKey: string;
   readonly worker: PoolWorker;
   private state: RunnerState = 'IDLE';
   private readonly recordRss?: RssTrace['record'];
@@ -117,7 +118,8 @@ export class PoolRunner {
   constructor(worker: PoolWorker, options: PoolRunnerOptions) {
     this.workerId = options.workerId;
     this.recordRss = options.recordRss;
-    this.environmentKey = options.environmentKey;
+    this.lastEnvironmentKey = options.environmentKey;
+    this.reuseKey = options.reuseKey;
     this.memoryLimit = options.memoryLimit;
     this.memoryMetric = options.memoryMetric ?? 'heapUsed';
     this.onOomKill = options.onOomKill;

@@ -9,7 +9,6 @@ import type {
 } from '@rstest/browser/protocol';
 
 import type {
-  RawTestFileResult,
   RawTestInfo,
   RawTestResult,
 } from '@rstest/core/internal/browser-runtime';
@@ -21,32 +20,9 @@ import type {
  * @rstest/browser by importing from the shared source.
  */
 
-export type BrowserClientTestResult = {
-  testId: RawTestResult['testId'];
-  status: RawTestResult['status'];
-  name: RawTestResult['name'];
-  testPath: RawTestResult['testPath'];
-  parentNames?: RawTestResult['parentNames'];
-  location?: {
-    line: number;
-    column?: number;
-    file?: string;
-  };
-};
+export type TestSelection = { file: string; caseId?: string };
 
-export type BrowserClientFileResult = {
-  testId: RawTestFileResult['testId'];
-  status: RawTestFileResult['status'];
-  name: RawTestFileResult['name'];
-  testPath: RawTestFileResult['testPath'];
-  parentNames?: RawTestFileResult['parentNames'];
-  location?: {
-    line: number;
-    column?: number;
-    file?: string;
-  };
-  results: BrowserClientTestResult[];
-};
+export type TestErrors = NonNullable<RawTestResult['errors']>;
 
 export type TestFileReadyPayload = {
   testPath: string;

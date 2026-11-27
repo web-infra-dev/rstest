@@ -1,5 +1,5 @@
 ---
-description: console 方法调用时始终打印调用栈，这将有助于调试。
+description: 在测试中调用 console 方法时打印调用栈。
 ---
 
 # printConsoleTrace
@@ -8,7 +8,7 @@ description: console 方法调用时始终打印调用栈，这将有助于调�
 - **默认值：** `false`
 - **CLI：** `--printConsoleTrace`
 
-console 方法调用时始终打印调用栈，这将有助于调试。
+在测试中调用 `console` 方法（如 `console.log` 或 `console.warn`）时打印调用栈，方便定位日志的来源位置。
 
 import { Tab, Tabs } from '@theme';
 
@@ -30,5 +30,5 @@ export default defineConfig({
 </Tabs>
 
 :::note
-当 [disableConsoleIntercept](/config/test/disable-console-intercept) 为 `true` 时，`printConsoleTrace` 将不会生效。
+当 [`disableConsoleIntercept`](/config/test/disable-console-intercept) 为 `true` 时，`printConsoleTrace` 不会生效。
 :::

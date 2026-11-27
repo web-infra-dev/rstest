@@ -1,5 +1,5 @@
 ---
-description: Default timeout of a test in milliseconds. 0 will disable the timeout.
+description: Default timeout of a test in milliseconds. 0 disables the timeout.
 ---
 
 # testTimeout
@@ -8,7 +8,7 @@ description: Default timeout of a test in milliseconds. 0 will disable the timeo
 - **Default:** `5_000` (`15_000` in Browser Mode)
 - **CLI:** `--testTimeout=5000`
 
-Default timeout of a test in milliseconds. `0` will disable the timeout.
+Maximum time in milliseconds a test case may run before failing with a timeout error. Set to `0` to disable the timeout.
 
 import { Tab, Tabs } from '@theme';
 
@@ -29,10 +29,13 @@ export default defineConfig({
   </Tab>
 </Tabs>
 
-Rstest determines the test timeout based on the following priority order:
+Rstest resolves a test's timeout in the following order (highest to lowest):
 
-1. [timeout](/api/runtime-api/test-api/test#test-1) configuration in each test case
-2. Timeout configured in the test file via [`rs.setConfig({ testTimeout })`](/api/runtime-api/rstest/utilities#rssetconfig)
-3. `--testTimeout` option in CLI
-4. `testTimeout` option in the configuration file
-5. Default value of `5000` milliseconds (`15000` milliseconds in Browser Mode). Browser Mode also uses a `5000` milliseconds default for `expect.poll.timeout`; Node Mode uses `1000` milliseconds.
+1. Per-test `timeout` via [`TestOptions.timeout`](/api/runtime-api/test-api/test#testoptions) or the trailing timeout argument on `test`
+2. Enclosing `describe` suite's [`TestOptions.timeout`](/api/runtime-api/test-api/describe#testoptions) (nearest enclosing suite wins)
+3. File-level timeout set via [`rs.setConfig({ testTimeout })`](/api/runtime-api/rstest/utilities#rssetconfig)
+4. `--testTimeout` CLI option or `run({ testTimeout })`
+5. `testTimeout` in the configuration file
+6. Default of `5_000` ms (`15_000` ms in Browser Mode)
+
+Browser Mode also defaults `expect.poll.timeout` to `5_000` ms, compared to `1_000` ms in Node Mode; see [`expect.poll`](/config/test/expect).

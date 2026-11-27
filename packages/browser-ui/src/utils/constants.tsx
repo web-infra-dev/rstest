@@ -6,10 +6,12 @@ import {
   XCircle,
 } from 'lucide-react';
 import React from 'react';
-import type { BrowserHostConfig } from '../types';
+import type { BrowserHostConfig, TestErrors } from '../types';
 
 export type TestStatus = 'idle' | 'running' | 'passed' | 'failed';
 export type CaseStatus = TestStatus | 'skipped';
+
+export type FileState = { status: TestStatus; errors?: TestErrors };
 
 type StatusMeta = {
   label: string;
@@ -55,6 +57,8 @@ export type CaseInfo = {
   parentNames: string[];
   fullName: string;
   status: CaseStatus;
+  duration?: number;
+  errors?: TestErrors;
   filePath: string;
   location?: {
     line: number;

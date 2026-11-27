@@ -5,11 +5,12 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const benchmarksNodeModules = join(__dirname, 'node_modules');
 const fixturesMemoryDir = join(__dirname, 'fixtures', 'memory');
-const workload = {
+
+const DEFAULT_WORKLOAD = {
   featureCount: 10,
-  rowsPerModule: 80,
+  rowsPerModule: 60,
   sharedModuleCount: 12,
-  testFileCount: 60,
+  testFileCount: 36,
 };
 
 async function writeGeneratedFile(filePath, content) {
@@ -17,10 +18,10 @@ async function writeGeneratedFile(filePath, content) {
   await writeFile(filePath, content);
 }
 
-function createPackageJson() {
+function createPackageJson(pool) {
   return JSON.stringify(
     {
-      name: '@rstest/synthetic-frontend-memory',
+      name: `@rstest/synthetic-frontend-memory-${pool}`,
       private: true,
       type: 'module',
     },
@@ -29,7 +30,33 @@ function createPackageJson() {
   );
 }
 
-function createConfigFile({ maxWorkers, memoryLimit, pool, prebundle }) {
+function createTsConfig() {
+  return JSON.stringify(
+    {
+      compilerOptions: {
+        target: 'ES2022',
+        lib: ['DOM', 'ES2022'],
+        module: 'ESNext',
+        jsx: 'react-jsx',
+        strict: true,
+        skipLibCheck: true,
+        isolatedModules: true,
+        moduleResolution: 'bundler',
+      },
+      include: ['src', 'tests'],
+    },
+    null,
+    2,
+  );
+}
+
+function createConfigFile({
+  cacheDir,
+  maxWorkers,
+  memoryLimit,
+  pool,
+  prebundle,
+}) {
   return `import { fileURLToPath } from 'node:url';
 import { defineConfig } from '@rstest/core';
 
@@ -37,10 +64,13 @@ const root = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
   root,
-  include: ['tests/**/*.test.ts'],
+  include: ['tests/**/*.test.tsx'],
+  setupFiles: ['./src/setupDom.ts'],
+  testTimeout: 30_000,
+  hookTimeout: 30_000,
   performance: {
     buildCache: {
-      cacheDirectory: process.env.RSTEST_BENCH_MEMORY_CACHE,
+      cacheDirectory: ${JSON.stringify(cacheDir)},
     },
   },
   pool: ${JSON.stringify({
@@ -49,60 +79,120 @@ export default defineConfig({
     type: pool,
   })},
   testEnvironment: ${JSON.stringify({ name: 'jsdom', prebundle })},
+  tools: {
+    swc: {
+      jsc: {
+        transform: {
+          react: { runtime: 'automatic' },
+        },
+      },
+    },
+  },
 });
 `;
 }
 
-function createAntdBridge() {
-  return `import React from 'react';
-import { Card, ConfigProvider, Flex, List, Tag } from 'antd';
-import { renderToStaticMarkup } from 'react-dom/server';
+function createDomSetupFile() {
+  return `(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
-export function renderAntdPanel(title, rows) {
-  const checksum = rows.reduce((sum, row) => sum + row.value, 0);
+if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => false,
+    }),
+  });
+}
 
-  const tree = React.createElement(
-    ConfigProvider,
-    {
-      theme: {
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  globalThis.ResizeObserver = ResizeObserverStub as unknown as typeof ResizeObserver;
+}
+`;
+}
+
+function createAntdPanelComponent() {
+  return `import { useState } from 'react';
+import { Button, Card, ConfigProvider, Flex, List, Tag } from 'antd';
+
+export interface DataRow {
+  id: string;
+  label: string;
+  status: 'stable' | 'watch';
+  value: number;
+}
+
+export interface AntdPanelProps {
+  title: string;
+  rows: readonly DataRow[];
+}
+
+export function AntdPanel({ title, rows }: AntdPanelProps) {
+  const [filterStableOnly, setFilterStableOnly] = useState(false);
+  const visibleRows = filterStableOnly
+    ? rows.filter((row) => row.status === 'stable')
+    : rows;
+  const checksum = visibleRows.reduce((sum, row) => sum + row.value, 0);
+
+  return (
+    <ConfigProvider
+      theme={{
+        hashed: false,
         token: {
           colorPrimary: '#1677ff',
           borderRadius: 10,
         },
-      },
-    },
-    React.createElement(
-      Card,
-      { title, size: 'small' },
-      React.createElement(
-        Flex,
-        { gap: 12, vertical: true },
-        React.createElement('p', null, 'rows=' + rows.length + ' checksum=' + checksum),
-        React.createElement(List, {
-          size: 'small',
-          bordered: true,
-          dataSource: rows.slice(0, 40),
-          renderItem: (row) =>
-            React.createElement(
-              List.Item,
-              { 'data-synthetic-row': row.id },
-              React.createElement(
-                Flex,
-                { justify: 'space-between', style: { width: '100%' } },
-                React.createElement('span', null, row.label),
-                React.createElement(Tag, { color: row.status === 'stable' ? 'cyan' : 'purple' }, row.status),
-              ),
-            ),
-        }),
-      ),
-    ),
+      }}
+    >
+      <Card
+        title={title}
+        size="small"
+        extra={
+          <Button
+            size="small"
+            data-filter-toggle="true"
+            onClick={() => setFilterStableOnly((prev) => !prev)}
+          >
+            {filterStableOnly ? 'All' : 'Stable'}
+          </Button>
+        }
+      >
+        <Flex gap={12} vertical>
+          <p data-panel-summary="true">
+            rows={visibleRows.length} checksum={checksum}
+          </p>
+          <List
+            size="small"
+            bordered
+            dataSource={visibleRows.slice(0, 30) as DataRow[]}
+            renderItem={(row) => (
+              <List.Item data-synthetic-row={row.id}>
+                <Flex justify="space-between" style={{ width: '100%' }}>
+                  <span>{row.label}</span>
+                  <Tag color={row.status === 'stable' ? 'cyan' : 'purple'}>
+                    {row.status}
+                  </Tag>
+                </Flex>
+              </List.Item>
+            )}
+          />
+        </Flex>
+      </Card>
+    </ConfigProvider>
   );
-
-  return {
-    checksum,
-    markup: renderToStaticMarkup(tree),
-    renderedRowCount: Math.min(rows.length, 40),
-  };
 }
 `;
 }
@@ -110,7 +200,7 @@ export function renderAntdPanel(title, rows) {
 function createThreeBridge() {
   return `import * as THREE from 'three';
 
-export function buildThreeSnapshot(seed) {
+export function buildThreeSnapshot(seed: number) {
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, 1.6, 0.1, 100);
   camera.position.set(seed % 5, seed % 7, 12);
@@ -143,66 +233,139 @@ export function buildThreeSnapshot(seed) {
 `;
 }
 
-function createSharedModule(index) {
-  return `export const data${index} = Array.from({ length: ${workload.rowsPerModule} }, (_, rowIndex) => ({
-  id: 'data-${index}-' + rowIndex,
-  label: 'Data ${index} row ' + rowIndex,
-  status: rowIndex % 2 === 0 ? 'stable' : 'watch',
-  value: (${index} + 1) * (rowIndex + 3),
-}));
+function createSharedModule(index, rowsPerModule) {
+  return `import type { DataRow } from '../heavy/AntdPanel.tsx';
+
+export const data${index}: readonly DataRow[] = Array.from(
+  { length: ${rowsPerModule} },
+  (_, rowIndex) => ({
+    id: 'data-${index}-' + rowIndex,
+    label: 'Data ${index} row ' + rowIndex,
+    status: rowIndex % 2 === 0 ? 'stable' : 'watch',
+    value: (${index} + 1) * (rowIndex + 3),
+  }),
+);
 `;
 }
 
-function createFeatureModule(index) {
-  const firstModule = index % workload.sharedModuleCount;
-  const secondModule = (index + 3) % workload.sharedModuleCount;
+function createFeatureModule(index, sharedModuleCount) {
+  const firstModule = index % sharedModuleCount;
+  const secondModule = (index + 3) % sharedModuleCount;
 
   return `import { data${firstModule} } from '../shared/data${firstModule}.ts';
 import { data${secondModule} } from '../shared/data${secondModule}.ts';
-import { renderAntdPanel } from '../heavy/antdBridge.ts';
+import { AntdPanel, type DataRow } from '../heavy/AntdPanel.tsx';
 import { buildThreeSnapshot } from '../heavy/threeBridge.ts';
 
-export function buildFeature${index}(seed) {
-  const rows = [...data${firstModule}, ...data${secondModule}].map((row, rowIndex) => ({
-    ...row,
-    value: row.value + seed + rowIndex,
-  }));
-  const panel = renderAntdPanel('Synthetic frontend panel ${index}', rows);
+export function buildFeatureData${index}(seed: number): {
+  rows: DataRow[];
+  checksum: number;
+  panelChecksum: number;
+  meshCount: number;
+  footprint: number;
+} {
+  const rows: DataRow[] = [...data${firstModule}, ...data${secondModule}].map(
+    (row, rowIndex) => ({
+      ...row,
+      value: row.value + seed + rowIndex,
+    }),
+  );
+  const panelChecksum = rows.reduce((sum, row) => sum + row.value, 0);
   const scene = buildThreeSnapshot(seed + ${index});
-  const checksum = rows.reduce((sum, row) => sum + row.value, 0) + scene.checksum;
 
   return {
-    checksum,
-    markup: panel.markup,
+    rows,
+    checksum: panelChecksum + scene.checksum,
+    panelChecksum,
     meshCount: scene.meshCount,
     footprint: scene.footprint,
-    renderedRowCount: panel.renderedRowCount,
-    totalRowCount: rows.length,
-    panelChecksum: panel.checksum,
   };
+}
+
+export function FeatureView${index}({
+  seed,
+  rows,
+}: {
+  seed: number;
+  rows: readonly DataRow[];
+}) {
+  return (
+    <AntdPanel
+      title={'Synthetic frontend panel ${index} #' + seed}
+      rows={rows}
+    />
+  );
 }
 `;
 }
 
-function createTestFile(index) {
-  const featureIndex = index % workload.featureCount;
-  return `import { describe, expect, it } from '@rstest/core';
-import { buildFeature${featureIndex} } from '../../src/features/feature${featureIndex}.ts';
+function createTestFile(index, featureCount) {
+  const featureIndex = index % featureCount;
+  return `import { act } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it } from '@rstest/core';
+import {
+  buildFeatureData${featureIndex},
+  FeatureView${featureIndex},
+} from '../../src/features/feature${featureIndex}.tsx';
 
 describe('synthetic frontend test ${index}', () => {
-  it('renders the generated frontend graph for fixture ${index}', () => {
-    document.body.innerHTML = '';
+  let host: HTMLDivElement;
+  let root: Root;
 
-    const result = buildFeature${featureIndex}(${index});
-    const host = document.createElement('section');
-    host.innerHTML = result.markup;
+  beforeEach(() => {
+    host = document.createElement('div');
     document.body.append(host);
+    root = createRoot(host);
+  });
 
-    expect(host.querySelectorAll('[data-synthetic-row]').length).toBe(result.renderedRowCount);
-    expect(result.totalRowCount).toBeGreaterThan(100);
+  afterEach(async () => {
+    await act(async () => {
+      root.unmount();
+    });
+    host.remove();
+  });
+
+  it('mounts the Ant Design panel and computes the Three.js scene for fixture ${index}', async () => {
+    const result = buildFeatureData${featureIndex}(${index});
+
+    await act(async () => {
+      root.render(<FeatureView${featureIndex} seed={${index}} rows={result.rows} />);
+    });
+
+    const renderedRows = host.querySelectorAll('[data-synthetic-row]');
+    expect(renderedRows.length).toBe(30);
+    expect(result.rows.length).toBeGreaterThan(100);
     expect(result.meshCount).toBeGreaterThan(5);
     expect(result.footprint).toBeGreaterThan(1);
     expect(result.checksum).toBeGreaterThan(result.panelChecksum);
+
+    const toggle = host.querySelector<HTMLButtonElement>('[data-filter-toggle="true"]');
+    expect(toggle).not.toBeNull();
+
+    await act(async () => {
+      toggle?.click();
+    });
+
+    expect(host.querySelector('[data-panel-summary="true"]')?.textContent).toContain(
+      'rows=' + result.rows.filter((row) => row.status === 'stable').length,
+    );
+  });
+
+  it('re-renders with an updated seed without retaining stale DOM nodes', async () => {
+    const initial = buildFeatureData${featureIndex}(${index});
+    const updated = buildFeatureData${featureIndex}(${index + 100});
+
+    await act(async () => {
+      root.render(<FeatureView${featureIndex} seed={${index}} rows={initial.rows} />);
+    });
+    await act(async () => {
+      root.render(
+        <FeatureView${featureIndex} seed={${index + 100}} rows={updated.rows.slice(0, 12)} />,
+      );
+    });
+
+    expect(host.querySelectorAll('[data-synthetic-row]').length).toBe(12);
   });
 });
 `;
@@ -212,28 +375,41 @@ export async function createFrontendMemoryFixture({
   maxWorkers = 4,
   memoryLimit = '256MB',
   pool = 'forks',
-  prebundle = false,
+  prebundle = 'auto',
+  testFileCount = DEFAULT_WORKLOAD.testFileCount,
 } = {}) {
-  const fixtureRoot = fixturesMemoryDir;
+  const workload = { ...DEFAULT_WORKLOAD, testFileCount };
+  const fixtureRoot = join(fixturesMemoryDir, pool);
+  const cacheDir = join(fixtureRoot, '.cache', 'run');
 
   await rm(fixtureRoot, { force: true, recursive: true });
   await mkdir(fixtureRoot, { recursive: true });
 
   try {
-    const nodeModulesLink = join(fixtureRoot, 'node_modules');
-
-    await symlink(benchmarksNodeModules, nodeModulesLink, 'dir');
+    await symlink(
+      benchmarksNodeModules,
+      join(fixtureRoot, 'node_modules'),
+      'dir',
+    );
     await writeGeneratedFile(
       join(fixtureRoot, 'package.json'),
-      createPackageJson(),
+      createPackageJson(pool),
+    );
+    await writeGeneratedFile(
+      join(fixtureRoot, 'tsconfig.json'),
+      createTsConfig(),
     );
     await writeGeneratedFile(
       join(fixtureRoot, 'rstest.config.mts'),
-      createConfigFile({ maxWorkers, memoryLimit, pool, prebundle }),
+      createConfigFile({ cacheDir, maxWorkers, memoryLimit, pool, prebundle }),
     );
     await writeGeneratedFile(
-      join(fixtureRoot, 'src/heavy/antdBridge.ts'),
-      createAntdBridge(),
+      join(fixtureRoot, 'src/setupDom.ts'),
+      createDomSetupFile(),
+    );
+    await writeGeneratedFile(
+      join(fixtureRoot, 'src/heavy/AntdPanel.tsx'),
+      createAntdPanelComponent(),
     );
     await writeGeneratedFile(
       join(fixtureRoot, 'src/heavy/threeBridge.ts'),
@@ -244,7 +420,7 @@ export async function createFrontendMemoryFixture({
       Array.from({ length: workload.sharedModuleCount }, (_, index) =>
         writeGeneratedFile(
           join(fixtureRoot, `src/shared/data${index}.ts`),
-          createSharedModule(index),
+          createSharedModule(index, workload.rowsPerModule),
         ),
       ),
     );
@@ -252,8 +428,8 @@ export async function createFrontendMemoryFixture({
     await Promise.all(
       Array.from({ length: workload.featureCount }, (_, index) =>
         writeGeneratedFile(
-          join(fixtureRoot, `src/features/feature${index}.ts`),
-          createFeatureModule(index),
+          join(fixtureRoot, `src/features/feature${index}.tsx`),
+          createFeatureModule(index, workload.sharedModuleCount),
         ),
       ),
     );
@@ -261,8 +437,8 @@ export async function createFrontendMemoryFixture({
     await Promise.all(
       Array.from({ length: workload.testFileCount }, (_, index) =>
         writeGeneratedFile(
-          join(fixtureRoot, `tests/generated/feature${index}.test.ts`),
-          createTestFile(index),
+          join(fixtureRoot, `tests/generated/feature${index}.test.tsx`),
+          createTestFile(index, workload.featureCount),
         ),
       ),
     );
@@ -273,8 +449,13 @@ export async function createFrontendMemoryFixture({
 
   return {
     root: fixtureRoot,
+    cacheDir,
     cleanup: async () => {
       await rm(fixtureRoot, { force: true, recursive: true });
     },
   };
+}
+
+export async function cleanupMemoryFixturesRoot() {
+  await rm(fixturesMemoryDir, { force: true, recursive: true });
 }

@@ -8,6 +8,10 @@ import type {
 } from '../../types';
 import { getTestEntries, logger, normalizeExactPathMatch } from '../../utils';
 import { createSetupFileState } from '../config/setupFileState';
+import {
+  getUserRstestConfigPluginProjects,
+  hasUserRstestConfigPlugins,
+} from '../config/modifyRstestConfig';
 import { prepareRsbuild } from '../build/rsbuild';
 
 type StatsModuleReason = NonNullable<Rspack.StatsModule['reasons']>[number];
@@ -503,6 +507,23 @@ export async function resolveRelatedTestFiles(
   const setupFileState = createSetupFileState();
   projectEntries = await collectProjectEntries(context);
 
+  const hasProjectEntries = (project: InternalProjectContext): boolean =>
+    Object.keys(projectEntries.get(project.environmentName) ?? {}).length > 0;
+
+  const nonEmptyProjects = context.projects.filter(hasProjectEntries);
+  const emptyProjects = context.projects.filter(
+    (project) => !hasProjectEntries(project),
+  );
+  const relatedProjects: InternalProjectContext[] = [
+    ...nonEmptyProjects,
+    ...getUserRstestConfigPluginProjects(emptyProjects),
+  ];
+
+  if (relatedProjects.length === 0) {
+    return [];
+  }
+
+  const hasPluginProjects = hasUserRstestConfigPlugins(relatedProjects);
   const projectConfigSnapshots = snapshotProjectConfigs(context.projects);
   let devServer:
     Awaited<ReturnType<RsbuildInstance['createDevServer']>> | undefined;
@@ -512,18 +533,33 @@ export async function resolveRelatedTestFiles(
       context,
       globTestSourceEntries,
       setupFileState,
-      targetProjects: context.projects,
-      exposeRstestAPIProjects: context.projects,
+      targetProjects: relatedProjects,
+      exposeRstestAPIProjects: relatedProjects,
       extraPlugins: [createRelatedBuildSafeguardsPlugin()],
       logLevel: 'silent',
       getSetupFileProjects: () => ({
-        setupProjects: context.projects,
-        globalSetupProjects: context.projects,
+        setupProjects: relatedProjects,
+        globalSetupProjects: relatedProjects,
       }),
       onModifyRstestConfigApplied: async () => {
         projectEntries = await collectProjectEntries(context);
       },
+      onRsbuildConfigResolved: async () => {
+        relatedProjects.splice(
+          0,
+          relatedProjects.length,
+          ...context.projects.filter(hasProjectEntries),
+        );
+      },
     });
+
+    if (hasPluginProjects) {
+      await rsbuildInstance.initConfigs({ action: 'dev' });
+
+      if (relatedProjects.length === 0) {
+        return [];
+      }
+    }
 
     devServer = await rsbuildInstance.createDevServer({
       getPortSilently: true,
@@ -555,8 +591,8 @@ export async function resolveRelatedTestFiles(
       ),
     );
 
-    for (const project of context.projects) {
-      if (!projectEntries.has(project.environmentName)) {
+    for (const project of relatedProjects) {
+      if (!hasProjectEntries(project)) {
         continue;
       }
 

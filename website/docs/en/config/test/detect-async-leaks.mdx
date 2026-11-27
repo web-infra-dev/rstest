@@ -14,7 +14,7 @@ import { ApiMeta } from '@components/ApiMeta';
 
 Detect async resources that are still active after a test file finishes, such as timers that were not cleaned up.
 
-This option uses Node.js `async_hooks`, so it may slow down tests. It is intended for debugging leaks and is not recommended for regular test runs.
+This option uses Node.js `async_hooks`, so it may slow down tests. It is intended for debugging leaks rather than regular test runs, and applies only to Node Mode (Browser Mode ignores it with a warning).
 
 import { Tab, Tabs } from '@theme';
 

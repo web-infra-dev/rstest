@@ -7,7 +7,7 @@ import {
   isWorkerRequestEnvelope,
 } from '../../src/pool/protocol';
 import { ForksPoolWorker } from '../../src/pool/workers/forksPoolWorker';
-import { expectRejection } from './helpers';
+import { expectRejection, gatedLoadAssets } from './helpers';
 import type { PoolOptions, PoolTask } from '../../src/pool/types';
 import type { KnownCoverageStructure } from '../../src/types';
 
@@ -43,12 +43,13 @@ const stubRpcMethods = () =>
 const createTask = (
   type: PoolTask['type'] = 'run',
   optionOverrides?: Record<string, unknown>,
-  // A worker is only reused for tasks carrying the same key.
   environmentKey = 'node',
   worker: PoolTask['worker'] = 'forks',
+  reuseKey = environmentKey,
 ): PoolTask => ({
   worker,
   type,
+  reuseKey,
   options: {
     context: { runtimeConfig: { env: {} } },
     environmentKey,
@@ -216,6 +217,71 @@ describe('Pool - stderr handling', () => {
 // ── isolate behavior ───────────────────────────────────────────────────────
 
 describe('Pool - isolate', () => {
+  it('reuses VM workers across environments with matching color settings', async () => {
+    const pool = new Pool(
+      createPoolOptions({ isolate: false, minWorkers: 1, maxWorkers: 1 }),
+    );
+    try {
+      const node = await pool.runTest(
+        createTask('run', undefined, 'node', 'vmForks', '{}'),
+      );
+      const jsdom = await pool.runTest(
+        createTask('run', undefined, 'jsdom', 'vmForks', '{}'),
+      );
+      const jsdomNoColor = await pool.runTest(
+        createTask(
+          'run',
+          undefined,
+          'jsdom-no-color',
+          'vmForks',
+          '{"NO_COLOR":"1"}',
+        ),
+      );
+
+      expect(jsdom).toHaveProperty(
+        '_workerIdentity',
+        Reflect.get(node, '_workerIdentity'),
+      );
+      expect(jsdomNoColor).toHaveProperty(
+        '_workerIdentity',
+        expect.any(Number),
+      );
+      expect(jsdomNoColor).not.toHaveProperty(
+        '_workerIdentity',
+        Reflect.get(jsdom, '_workerIdentity'),
+      );
+    } finally {
+      await pool.close();
+    }
+  });
+
+  it('prefers the matching VM worker over a more recently used worker', async () => {
+    const pool = new Pool(
+      createPoolOptions({ isolate: false, minWorkers: 2, maxWorkers: 2 }),
+    );
+    const jsdomAssets = gatedLoadAssets({ assetFiles: {}, sourceMaps: {} });
+    try {
+      const nodeTask = createTask('run', undefined, 'node', 'vmForks', '{}');
+      const jsdomTask = createTask('run', undefined, 'jsdom', 'vmForks', '{}');
+      jsdomTask.loadAssets = jsdomAssets.loadAssets;
+      const node = pool.runTest(nodeTask);
+      const jsdom = pool.runTest(jsdomTask);
+
+      const nodeResult = await node;
+      jsdomAssets.release();
+      const jsdomResult = await jsdom;
+      const nodeIdentity = Reflect.get(nodeResult, '_workerIdentity');
+      expect(jsdomResult).not.toHaveProperty('_workerIdentity', nodeIdentity);
+      await expect(pool.runTest(nodeTask)).resolves.toHaveProperty(
+        '_workerIdentity',
+        nodeIdentity,
+      );
+    } finally {
+      jsdomAssets.release();
+      await pool.close();
+    }
+  });
+
   it('should not reuse a worker for a different test environment', async () => {
     const pool = new Pool(createPoolOptions({ isolate: false, minWorkers: 1 }));
     try {
@@ -362,6 +428,7 @@ describe('ForksPoolWorker - failed write to the worker', () => {
     const runner = new PoolRunner(worker, {
       workerId: 1,
       environmentKey: 'node',
+      reuseKey: 'node',
     });
     await runner.start();
     const child: ChildProcess = Reflect.get(worker, 'childProcess');

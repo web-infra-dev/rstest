@@ -200,6 +200,37 @@ describe('jsdom', () => {
     await expectExecSuccess();
   });
 
+  it.for(['vmForks', 'vmThreads'] as const)(
+    'reuses one %s worker across file environments',
+    async (pool) => {
+      const { cli, expectExecSuccess } = await runCli(
+        [
+          'test/environmentComment.test.ts',
+          'test/environmentCommentNode.test.ts',
+          'test/alternateEnvironmentComment.test.ts',
+        ],
+        undefined,
+        {
+          args: [
+            '--config',
+            'rstest.environmentComment.config.mts',
+            '--pool',
+            pool,
+            '--pool.maxWorkers',
+            '1',
+          ],
+        },
+      );
+
+      await expectExecSuccess();
+      const workers = [
+        ...cli.stdout.matchAll(/environment-comment-worker: (\d+:\d+)/g),
+      ].map((match) => match[1]);
+      expect(workers).toHaveLength(3);
+      expect(new Set(workers).size).toBe(1);
+    },
+  );
+
   it('should list tests correctly with an environment comment', async () => {
     const { expectExecSuccess } = await runRstestCli({
       command: 'rstest',

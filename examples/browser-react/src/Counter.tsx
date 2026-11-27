@@ -38,16 +38,18 @@ export function Counter({ initialCount = 0, min = 0, max = 5 }: CounterProps) {
       <h2 className="product-title">Soft Hoodie</h2>
 
       <label htmlFor="size-select">Size</label>
-      <select
-        id="size-select"
-        className="control-select"
-        value={size}
-        onChange={(event) => setSize(event.target.value)}
-      >
-        <option value="S">S</option>
-        <option value="M">M</option>
-        <option value="L">L</option>
-      </select>
+      <div className="size-picker">
+        <select
+          id="size-select"
+          className="control-select"
+          value={size}
+          onChange={(event) => setSize(event.target.value)}
+        >
+          <option value="S">S</option>
+          <option value="M">M</option>
+          <option value="L">L</option>
+        </select>
+      </div>
 
       <fieldset className="control-row">
         <legend>Quantity controls</legend>

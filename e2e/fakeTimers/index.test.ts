@@ -7,6 +7,18 @@ import {
   rstest,
 } from '@rstest/core';
 
+it('loads fake timers and maps error stacks with a stubbed document', () => {
+  rstest.stubGlobal('document', {});
+  try {
+    rstest.useFakeTimers({ now: 0 });
+    expect(Date.now()).toBe(0);
+    expect(new Error().stack).toMatch(/fakeTimers[/\\]index\.test\.ts:\d+:/);
+  } finally {
+    rstest.unstubAllGlobals();
+    rstest.useRealTimers();
+  }
+});
+
 describe('fake timers', () => {
   const time1 = new Date('2023-01-01T00:00:00Z');
   const time2 = new Date('2025-01-01T00:00:00Z');

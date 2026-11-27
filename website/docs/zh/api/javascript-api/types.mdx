@@ -1,13 +1,13 @@
 ---
 title: Rstest types
-description: 从 @rstest/core 导入公开的 TypeScript 类型，用于配置、运行时 API、Reporter 和 mock 工具。
+description: 从 @rstest/core 导出的公开 TypeScript 类型，用于配置、运行时 API、Reporter、Mock 和插件开发。
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Rstest types
 
-Rstest 会从 `@rstest/core` 导出公开的 TypeScript 类型。请使用 `import type`，这样这些导入会在运行时代码中被擦除。
+Rstest 从 `@rstest/core` 导出公开的 TypeScript 类型。请使用 `import type` 导入，以便在构建产物中擦除类型引用。
 
 ```ts
 import type { Mock, Mocked, RstestConfig } from '@rstest/core';
@@ -15,11 +15,21 @@ import type { Mock, Mocked, RstestConfig } from '@rstest/core';
 
 ## 配置类型
 
-当你需要在 `defineConfig` 外部为配置对象、配置工厂或共享配置工具标注类型时，可以使用这些类型。
+在 [`defineConfig`](/api/javascript-api/rstest-core#defineconfig)、[`defineProject`](/api/javascript-api/rstest-core#defineproject) 和 [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject) 之外为配置对象、配置工厂或适配器标注类型时，可以使用以下类型：
 
 ```ts
 import type {
+  BrowserExpectConfig,
+  BrowserInstanceConfig,
+  BrowserName,
+  BrowserViewport,
+  CoverageOptions,
+  ExpectConfig,
+  ExpectPollConfig,
+  ExtendConfig,
+  ExtendConfigFn,
   ProjectConfig,
+  RstestCommand,
   RstestConfig,
   RstestConfigAsyncFn,
   RstestConfigExport,
@@ -27,51 +37,62 @@ import type {
 } from '@rstest/core';
 ```
 
-- `RstestConfig`：顶层 Rstest 配置类型。
-- `RstestConfigSyncFn`：返回 `RstestConfig` 的同步函数。
-- `RstestConfigAsyncFn`：返回 `RstestConfig` 的异步函数。
-- `RstestConfigExport`：Rstest 配置文件可接受的导出类型联合。
-- `ProjectConfig`：独立 [Rstest Project](/guide/basic/projects) 配置的类型。
-
-对于大多数配置文件，建议优先使用 [`defineConfig`](/api/javascript-api/rstest-core#defineconfig)、[`defineProject`](/api/javascript-api/rstest-core#defineproject) 和 [`defineInlineProject`](/api/javascript-api/rstest-core#defineinlineproject)，它们可以提供自动补全，而不需要显式类型标注。
+- `RstestConfig`：顶层 Rstest 配置对象类型。
+- `RstestConfigSyncFn` / `RstestConfigAsyncFn`：返回 `RstestConfig` 的同步与异步配置工厂函数。
+- `RstestConfigExport`：`RstestConfig`、`RstestConfigSyncFn` 与 `RstestConfigAsyncFn` 的联合类型。
+- `ProjectConfig`：独立 [Rstest Project](/guide/basic/projects) 配置文件的类型。
+- `ExtendConfig` / `ExtendConfigFn`：[`extends`](/config/test/extends) 与配置适配器使用的返回值和回调函数类型。
+- `RstestCommand`：当前执行的 CLI 命令（`'watch' | 'run' | 'list' | 'merge-reports'`）。
+- `ExpectConfig` / `ExpectPollConfig`：[`expect`](/config/test/expect) 与 `expect.poll` 的配置类型。
+- `CoverageOptions`：[`coverage`](/config/test/coverage) 的配置类型。
+- `BrowserInstanceConfig` / `BrowserExpectConfig` / `BrowserName` / `BrowserViewport`：Browser Mode 实例、断言、浏览器名称与视口配置类型。
 
 ## Test API 类型
 
-当你扩展 Test API、定义可复用 helper 或为自定义 fixture 标注类型时，可以使用这些类型。
+扩展 Test API、编写可复用辅助函数或为自定义 fixture 标注类型时，可以使用以下类型：
 
 ```ts
 import type {
   Describe,
   Expect,
   ExpectStatic,
+  FileFixtureOptions,
   FixtureCleanup,
   FixtureLifecycle,
+  Fixtures,
+  MaybePromise,
   Rstest,
   RstestUtilities,
+  TaskMeta,
+  TaskMetaValue,
+  TestAPIs,
   TestContext,
+  TestForFn,
+  TestOptions,
+  Use,
+  WorkerFixtureOptions,
 } from '@rstest/core';
 ```
 
-<ApiMeta addedVersion="0.10.1" />
+<ApiMeta addedVersion="0.10.1" /> <ApiMeta addedVersion="0.11.7" />
 
-`TestContext` 从 Rstest 0.10.1 开始作为公开类型导出。
-
-<ApiMeta addedVersion="0.11.7" />
-
-`FixtureCleanup` 和 `FixtureLifecycle` 从 Rstest 0.11.7 开始支持具名 fixture 写法。
-
-- `Rstest`：完整的运行时 API 形状，包括 `test`、`describe`、`expect`、hooks 和 `rs` / `rstest` 工具。
-- `RstestUtilities`：`rs` 和 `rstest` 工具对象的类型。
-- `TestContext`：传递给测试回调和生命周期 hooks 的 context 对象。
+- `Rstest`：完整的运行时 API 类型（包含 `test`、`it`、`describe`、`expect`、`assert`、hooks、`rs` 和 `rstest`）。
+- `RstestUtilities`：`rs` 与 `rstest` 工具对象的类型。
+- `TestContext`：传给测试回调和单测 Hook 的上下文对象（自 `0.10.1` 起作为公开类型导出）。
+- `TestOptions`：单测与套件级选项（`timeout`、`retry`、`repeats`、`meta`）。
+- `TestAPIs`：`test.extend(...)` 的返回值类型，包含 `test` 修饰符和链式 `.extend()`。
+- `TestForFn`：`test.for` 的调用签名类型。
 - `Describe`：`describe` API 的类型。
-- `Expect`：`expect(value)` 返回的 assertion 类型。
-- `ExpectStatic`：可调用的 `expect` API 类型。
-- `FixtureCleanup`：通过具名 fixture 注册的 cleanup callback。
-- `FixtureLifecycle`：向具名 fixture 提供 `onCleanup` 的 lifecycle 对象。
+- `Expect` / `ExpectStatic`：可调用的 `expect` API 类型（`Expect` 是 `ExpectStatic` 的别名）。
+- `TaskMeta` / `TaskMetaValue`：可 JSON 序列化的元数据对象与值类型。详见 [Metadata](/guide/advanced/metadata)。
+- `Fixtures` / `Use`：`test.extend` 使用的 fixtures 对象映射及 `use(value)` 回调类型。
+- `FileFixtureOptions` / `WorkerFixtureOptions`：具名 fixture 的作用域选项（`{ scope: 'file' }` 与 `{ scope: 'worker' }`）。
+- `FixtureCleanup` / `FixtureLifecycle`：具名 fixture 的清理回调和 `{ onCleanup }` 生命周期参数类型（`0.11.7` 新增）。
+- `MaybePromise<T>`：工具联合类型 `T | Promise<T>`。
 
 ## Mock 类型
 
-当 helper 接收 mock function、spy 或 mocked module 时，可以使用 mock 类型。
+在辅助函数中接收 mock 函数、spy 或 mocked 模块时，可以使用以下类型：
 
 ```ts
 import type { Mock, Mocked, MockInstance } from '@rstest/core';
@@ -79,7 +100,7 @@ import type { Mock, Mocked, MockInstance } from '@rstest/core';
 
 ### Mock
 
-`Mock<T>` 表示由 [`rs.fn`](/api/runtime-api/rstest/mock-functions#rsfn) 创建的可调用 mock function。它会保留 `T` 的参数和返回值类型，同时增加 mock 控制 API。
+`Mock<T>` 表示由 [`rs.fn`](/api/runtime-api/rstest/mock-functions#rsfn) 创建的可调用 mock 函数，保留 `T` 的参数与返回值类型并附加 mock 控制方法。
 
 ```ts
 import { rs } from '@rstest/core';
@@ -95,7 +116,7 @@ loadUser.mockResolvedValue({ name: 'Jack' });
 
 <ApiMeta addedVersion="0.10.1" />
 
-`MockInstance<T>` 表示 `rs.fn()` mock 和 `rs.spyOn()` spy 共享的 mock 控制 API。当一个 helper 只需要 `mockClear`、`mockReset` 或 `mockRestore` 等 mock 方法，而不需要直接调用 mock function 时，可以使用它。
+`MockInstance<T>` 表示 `rs.fn()` 和 `rs.spyOn()` 共享的 mock 控制接口。当辅助函数只需要调用 `mockClear`、`mockReset`、`mockRestore` 等控制方法而无需直接调用函数本身时，可以使用该类型。
 
 ```ts
 import type { MockInstance } from '@rstest/core';
@@ -105,16 +126,9 @@ function resetTrackedMock(mock: MockInstance) {
 }
 ```
 
-当你直接创建 mock 或 spy 时，通常不需要手动标注类型，TypeScript 可以自动推导。
-
-```ts
-const spy = rs.spyOn(service, 'loadUser');
-spy.mockResolvedValue({ name: 'Jack' });
-```
-
 ### Mocked
 
-`Mocked<T>` 会包装对象或模块类型，使其中的方法按 mock 类型处理。它适合配合 [`rs.mock`](/api/runtime-api/rstest/mock-modules#rsmock)、[`rs.mockObject`](/api/runtime-api/rstest/mock-functions#rsmockobject) 或 [`rs.mocked`](/api/runtime-api/rstest/mock-functions#rsmocked) 使用。
+`Mocked<T>` 包装对象或模块类型，将其中的方法标注为 mock 类型，常配合 [`rs.mock`](/api/runtime-api/rstest/mock-modules#rsmock)、[`rs.mockObject`](/api/runtime-api/rstest/mock-functions#rsmockobject) 或 [`rs.mocked`](/api/runtime-api/rstest/mock-functions#rsmocked) 使用。
 
 ```ts
 import { rs } from '@rstest/core';
@@ -127,45 +141,51 @@ const mockedUserApi: Mocked<typeof userApi> = rs.mocked(userApi);
 mockedUserApi.loadUser.mockResolvedValue({ name: 'Jack' });
 ```
 
-## Reporter 和结果类型
+## Reporter 与结果类型
 
-当你创建自定义 Reporter，或编写消费 Rstest 结果的外部工具时，可以使用这些类型。
+编写自定义 Reporter 或消费 Rstest 测试结果时，可以使用以下类型。完整接口定义见 [Reporter](/api/javascript-api/reporter)。
 
 ```ts
 import type {
+  CoverageMapData,
+  Duration,
   Reporter,
+  ReporterContext,
+  SerializedError,
+  SnapshotSummary,
   TestCaseInfo,
   TestFileInfo,
   TestFileResult,
+  TestInfo,
   TestResult,
+  TestResultStatus,
+  TestRunEndPayload,
+  TestRunStartPayload,
+  TestRunStatus,
+  TestRunSummary,
   TestSuiteInfo,
+  UserConsoleLog,
 } from '@rstest/core';
 ```
 
-Reporter 实现细节见 [Reporter](/api/javascript-api/reporter)。
-
-<ApiMeta addedVersion="0.11.1" />
-
-`meta` 字段包含从 `TestOptions.meta` 初始化，并在运行时通过 `context.task.meta` 写入的可 JSON 序列化元数据。套件元数据会被子套件和测试继承，子级顶层同名字段会覆盖父级字段；继承值会为每个子级复制，避免运行时修改泄漏到兄弟节点。`TestFileResult.meta` 包含文件级 `beforeAll` / `afterAll` hooks 通过 `ctx.meta` 写入的元数据，传给 `onTestSuiteResult` 的 suite 结果则包含该 suite 生命周期 hooks 写入的元数据。
-
-```ts
-import { afterAll, test } from '@rstest/core';
-
-afterAll((ctx) => {
-  ctx.meta.fileTag = 'mutation-run';
-});
-
-test('records metadata', { meta: { owner: 'stryker' } }, (ctx) => {
-  ctx.task.meta.hitCount = 1;
-});
-```
+- `Reporter` / `ReporterContext`：自定义 Reporter 接口及其构造函数上下文（`{ rootPath, config }`）。
+- `TestFileInfo` / `TestSuiteInfo` / `TestCaseInfo` / `TestInfo`：传给 Reporter 开始与就绪钩子的任务信息。
+- `TestResult` / `TestFileResult` / `TestResultStatus`：用例、套件和文件级的执行结果，以及状态联合类型（`'skipped' | 'passed' | 'failed' | 'todo'`）。
+- `TestRunStartPayload` / `TestRunEndPayload` / `TestRunStatus` / `TestRunSummary`：运行级钩子参数、运行状态（`'passed' | 'failed' | 'error'`）及统计汇总。
+- `Duration` / `SerializedError` / `UserConsoleLog`：各阶段耗时、可 JSON 序列化的错误对象和捕获的标准输出日志。
+- `SnapshotSummary` / `CoverageMapData`：快照汇总与 Istanbul 覆盖率映射类型。
 
 ## Assertion 类型
 
-当你为自定义 assertion helper 标注类型时，可以使用 `Assertion` 或 `ExpectStatic`。
+为自定义断言辅助函数或扩展匹配器编写类型时，可以使用以下类型：
 
 ```ts
-import type { Assertion, ExpectStatic } from '@rstest/core';
+import type {
+  Assertion,
+  AsymmetricMatchersContaining,
+  ExpectStatic,
+  Matchers,
+} from '@rstest/core';
 
 function expectVisible(
   expect: ExpectStatic,
@@ -175,10 +195,14 @@ function expectVisible(
 }
 ```
 
-## Rsbuild 类型
+- `Assertion<T>`：`expect(value)` 返回的链式断言对象。
+- `ExpectStatic`：可调用的 `expect` 函数类型，包含 `poll`、`soft`、`extend` 等静态方法。
+- `Matchers<T>` / `AsymmetricMatchersContaining`：来自 `@vitest/expect` 的匹配器接口，用于模块扩展或自定义匹配器类型标注。
 
-Rstest 会从 `@rsbuild/core` 重新导出 `Rspack`，用于需要标注 Rsbuild 或 Rspack hooks 的集成场景，同时保持与 Rstest 相同的依赖图。
+## Rsbuild 与插件类型
+
+Rstest 从 `@rsbuild/core` 重新导出 `Rspack` 和 `RsbuildPlugin`，并导出 `RstestExposeAPI` 供 Rsbuild 插件通过 `api.useExposed('rstest')` 读取或修改已解析的 Rstest 配置。
 
 ```ts
-import type { Rspack } from '@rstest/core';
+import type { RsbuildPlugin, Rspack, RstestExposeAPI } from '@rstest/core';
 ```

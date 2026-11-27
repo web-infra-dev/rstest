@@ -5,13 +5,9 @@ description: The globalSetup option in Rstest allows you to run setup and teardo
 # globalSetup
 
 - **Type:** `string | string[]`
-- **Default:** `undefined`
+- **Default:** `[]`
 
-The `globalSetup` option in Rstest allows you to run setup and teardown code that executes once before all tests and after all tests complete. This is useful for:
-
-- Starting and stopping databases
-- Initializing test services
-- Cleaning up resources after test runs
+Run setup and teardown code once before and after a project's tests, such as starting a database or test server and cleaning up resources afterward.
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';

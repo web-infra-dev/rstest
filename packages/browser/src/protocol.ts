@@ -35,7 +35,7 @@ export const DISPATCH_RPC_REQUEST_TYPE = 'dispatch-rpc-request';
 export const RSTEST_CONFIG_MESSAGE_TYPE = 'RSTEST_CONFIG';
 export const RSTEST_VIEWPORT_EVENT = 'rstest:viewport';
 
-// The headed UI renders one project/browser pair, so a test path identifies its frame.
+// Each headed UI window renders one project/browser pair, so a test path identifies its frame.
 export type BrowserViewportChange = {
   testPath: string;
   viewport?: ViewportSize;
@@ -224,6 +224,12 @@ export type BrowserHostConfig = {
    */
   wsPort?: number;
   /**
+   * Container identity for headed mode. Each headed `(project, browser)` row
+   * opens its own container window, so the UI tags its WebSocket URL with this
+   * id to bind to its dedicated host-side RPC session.
+   */
+  containerId?: string;
+  /**
    * Execution mode. Defaults to 'run'.
    */
   mode?: BrowserExecutionMode;
@@ -351,6 +357,16 @@ export type BrowserDispatchRequest = {
   };
 };
 
+/** Base64-encoded PNGs captured by one headed screenshot assertion. */
+export type ScreenshotComparison = {
+  /** Present when the originals can share a pixel-aligned comparison. */
+  sharedSize?: { width: number; height: number };
+  regions?: string;
+  diff: string;
+  reference: string;
+  actual: string;
+};
+
 /**
  * Dispatch response envelope.
  * `stale: true` signals a safe drop from an older run generation, not a failure.
@@ -360,6 +376,8 @@ export type BrowserDispatchResponse = {
   runToken?: number;
   result?: unknown;
   error?: string;
+  screenshotComparison?: ScreenshotComparison;
+  screenshotComparisonId?: string;
   stale?: boolean;
 };
 

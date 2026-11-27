@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it, onTestFinished } from '@rstest/core';
 import { runRstestCli } from '../scripts';
 import {
-  defaultEnvOverrides,
   runBrowserCli,
   shouldRunFirefoxBrowserTests,
+  shouldRunHeadedBrowserTests,
 } from './utils';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -164,32 +164,30 @@ describe('browser mode - multi-browser launch rules', () => {
     expect(cli.stdout).not.toMatch(/\(firefox\)/);
   }, 60_000);
 
-  it('rejects a second headed browser and names the CLI fix', async () => {
-    const { expectExecFailed, cli } = await runBrowserCli('multi-browser', {
-      args: ['--browser.headless=false'],
-    });
-    await expectExecFailed();
-    const output = `${cli.stdout}\n${cli.stderr}`;
-    expect(output).toMatch(/Only one \(project, browser\) pair can run headed/);
-    expect(output).toContain('--browser.instances');
-  });
-
-  it('rejects watch with one headed and one headless browser', async () => {
-    const result = await runRstestCli({
-      command: 'rstest',
-      args: ['watch', '-c', 'rstest.mixed-headed.config.mts'],
-      options: {
-        nodeOptions: {
-          cwd: fixtureDir,
-          env: { ...defaultEnvOverrides },
-        },
-      },
-    });
-    await result.expectExecFailed();
-    expect(`${result.cli.stdout}\n${result.cli.stderr}`).toMatch(
-      /Watch mode does not support mixing headed/,
-    );
-  });
+  it.runIf(shouldRunHeadedBrowserTests && shouldRunFirefoxBrowserTests)(
+    'runs multiple headed browsers in separate container windows when --browser.headless=false',
+    async () => {
+      const { expectExecSuccess, cli } = await runBrowserCli('multi-browser', {
+        args: ['--browser.headless=false'],
+        env: { DEBUG: 'rstest' },
+      });
+      await expectExecSuccess();
+      expect(cli.stdout).toMatch(
+        /\[rstest \(chromium\)\].*attribution\.test\.ts/,
+      );
+      expect(cli.stdout).toMatch(
+        /\[rstest \(firefox\)\].*attribution\.test\.ts/,
+      );
+      expect(cli.stdout).toMatch(/Test Files 2 passed/);
+      expect(cli.stdout).toMatch(/Tests 6 passed/);
+      expect(cli.stdout).toContain('(rstest (chromium))');
+      expect(cli.stdout).toContain('(rstest (firefox))');
+      expect(
+        cli.log.match(/\[Browser\] launching \S+ \(headed\)/g),
+      ).toHaveLength(2);
+    },
+    90_000,
+  );
 
   it.runIf(shouldRunFirefoxBrowserTests)(
     'records one blob per run and merges two browsers back per browser row',

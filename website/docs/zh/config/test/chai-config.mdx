@@ -11,11 +11,11 @@ type ChaiConfig = {
   /**
    * @default true
    */
-  showDiff: boolean;
+  showDiff?: boolean;
   /**
    * @default 40
    */
-  truncateThreshold: number;
+  truncateThreshold?: number;
 };
 ```
 
@@ -25,43 +25,41 @@ type ChaiConfig = {
 
 ### truncateThreshold
 
-设置在断言失败时显示的字符数。当断言失败并显示对象或数组时，如果输出超过此阈值，Rstest 将截断输出以保持错误消息的可读性。
-
+- **类型：** `number`
 - **默认值：** `40`
 
-更高的值会在断言失败时显示更多细节，对调试复杂数据结构很有用：
+断言失败时对象或数组的最大显示字符数。超出该阈值的内容会被截断。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
   chaiConfig: {
-    truncateThreshold: 100, // 显示最多 100 个字符
+    truncateThreshold: 100, // 最多显示 100 个字符
   },
 });
 ```
 
-使用默认值时，长数组或对象会被截断：
+使用默认值 `40` 时，较长的数组或对象会被截断：
 
-```ts
+```text
 AssertionError: expected [ 1, 2, [ 3, [ 4 ], ... ] ] to strictly equal
 [ 1, 2, [ 3 ] ]
 ```
 
-使用更高的阈值时，你可以看到完整的结构：
+增大阈值后可以完整输出结构：
 
-```ts
+```text
 AssertionError: expected [ 1, 2, [ 3, [ 4 ], { a: 1, length: 1 } ] ] to strictly equal
 [ 1, 2, [ 3 ] ]
 ```
 
 ### showDiff
 
-在断言失败时显示期望值与实际值的差异。
-
+- **类型：** `boolean`
 - **默认值：** `true`
 
-禁用此选项可以只看到纯文本的断言消息，而不显示差异：
+是否在断言失败时显示期望值与实际值的差异。
 
 ```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
@@ -73,9 +71,9 @@ export default defineConfig({
 });
 ```
 
-默认情况下，Rstest 会显示差异，帮助你快速定位问题。
+默认情况下，Rstest 会在断言失败时输出差异：
 
-```ts
+```text
 AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
   + expected
   - actual
@@ -87,8 +85,8 @@ AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
   }
 ```
 
-你可以设置 `showDiff: false`，此时 Rstest 将只显示纯文本的断言消息：
+设置 `showDiff: false` 后，Rstest 只输出纯文本断言消息：
 
-```ts
+```text
 AssertionError: expected { a: 1, b: 2 } to deeply equal { a: 1, b: 3 }
 ```

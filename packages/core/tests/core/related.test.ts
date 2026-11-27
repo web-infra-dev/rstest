@@ -1,4 +1,13 @@
-import { resolveStatsPathCandidate } from '../../src/core/execution/related';
+import type { RsbuildPlugin } from '@rsbuild/core';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'pathe';
+import {
+  resolveRelatedTestFiles,
+  resolveStatsPathCandidate,
+} from '../../src/core/execution/related';
+import { Rstest } from '../../src/core/rstest';
+import type { RstestExposeAPI } from '../../src/types';
 import { filterFiles } from '../../src/utils/testFiles';
 
 // Run `fn` with a stubbed `process.platform` so both platform branches of
@@ -83,5 +92,120 @@ describe('filterFiles', () => {
         ),
       ).toEqual(['/repo/tests/Foo.test.ts', '/repo/tests/foo.test.ts']);
     });
+  });
+});
+
+describe('resolveRelatedTestFiles empty project pruning', () => {
+  const createContext = (
+    root: string,
+    projects: Array<{
+      name: string;
+      include: string[];
+      plugins?: RsbuildPlugin[];
+    }>,
+  ) =>
+    new Rstest(
+      {
+        cwd: root,
+        command: 'run',
+        embedded: true,
+        projects: projects.map((config) => ({ config: { root, ...config } })),
+      },
+      { root },
+    );
+
+  it('compiles only non-empty and hook-revealed projects, and none when all stay empty', async () => {
+    const tempRoot = realpathSync(
+      mkdtempSync(join(tmpdir(), 'rstest-related-prune-')),
+    );
+    try {
+      writeFileSync(join(tempRoot, 'dep.ts'), 'export const value = 1;\n');
+      writeFileSync(
+        join(tempRoot, 'active.test.ts'),
+        "import { value } from './dep';\nexport const res = value;\n",
+      );
+      writeFileSync(
+        join(tempRoot, 'revealed.test.ts'),
+        "import { value } from './dep';\nexport const res = value;\n",
+      );
+
+      let compilerNames: string[] = [];
+      const recordCompilers: RsbuildPlugin = {
+        name: 'record-compilers',
+        setup(api) {
+          api.onBeforeCreateCompiler(({ bundlerConfigs }) => {
+            compilerNames = bundlerConfigs
+              .map((c) => c.name)
+              .filter((n): n is string => Boolean(n))
+              .sort();
+          });
+        },
+      };
+      const revealPlugin: RsbuildPlugin = {
+        name: 'reveal-tests',
+        setup(api) {
+          api
+            .useExposed<RstestExposeAPI>('rstest')
+            ?.modifyRstestConfig((cfg) => {
+              cfg.include = ['revealed.test.ts'];
+            });
+        },
+      };
+
+      const matched = await resolveRelatedTestFiles(
+        createContext(tempRoot, [
+          {
+            name: 'active',
+            include: ['active.test.ts'],
+            plugins: [recordCompilers],
+          },
+          { name: 'empty-plain', include: ['missing-a/**/*.test.ts'] },
+          {
+            name: 'empty-plugin',
+            include: ['missing-b/**/*.test.ts'],
+            plugins: [{ name: 'noop', setup() {} }],
+          },
+          {
+            name: 'revealed',
+            include: ['missing-c/**/*.test.ts'],
+            plugins: [revealPlugin],
+          },
+        ]),
+        { sourceFilters: ['dep.ts'] },
+      );
+
+      expect(matched).toEqual([
+        join(tempRoot, 'active.test.ts'),
+        join(tempRoot, 'revealed.test.ts'),
+      ]);
+      expect(compilerNames).toEqual(['active', 'revealed']);
+
+      let allEmptyCompilers = 0;
+      const allEmpty = await resolveRelatedTestFiles(
+        createContext(tempRoot, [
+          { name: 'empty-plain', include: ['missing-a/**/*.test.ts'] },
+          {
+            name: 'empty-plugin',
+            include: ['missing-b/**/*.test.ts'],
+            plugins: [
+              {
+                name: 'count',
+                setup(api) {
+                  api.onBeforeCreateCompiler(() => {
+                    allEmptyCompilers += 1;
+                  });
+                },
+              },
+            ],
+          },
+        ]),
+        { sourceFilters: ['dep.ts'] },
+      );
+
+      expect(allEmpty).toEqual([]);
+      expect(allEmptyCompilers).toBe(0);
+    } finally {
+      rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 });

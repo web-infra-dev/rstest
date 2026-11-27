@@ -8,9 +8,9 @@ description: Automatically reset mock state before every test.
 - **Default:** `false`
 - **CLI:** `--resetMocks`
 
-Automatically reset mock state before every test.
+Clear all mock state and reset each mock's implementation to its original implementation before every test.
 
-When `resetMocks` enabled, rstest will call [.resetAllMocks()](/api/runtime-api/rstest/mock-functions#rsresetallmocks) before each test.
+When `resetMocks` is enabled, Rstest calls [rs.resetAllMocks()](/api/runtime-api/rstest/mock-functions#rsresetallmocks) before each test.
 
 import { Tab, Tabs } from '@theme';
 

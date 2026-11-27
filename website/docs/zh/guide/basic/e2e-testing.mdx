@@ -3,7 +3,6 @@ description: 本 E2E 测试指南介绍如何使用 @rstest/playwright，在运�
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
-import { Prompt } from '@rspress/core/theme';
 import { PackageManagerTabs } from '@theme';
 
 # E2E 测试
@@ -16,7 +15,7 @@ E2E 测试（端到端测试）从用户的角度验证一个完整的页面或�
 
 ## 安装
 
-安装两个包：
+安装以下两个包（要求 `playwright ^1.49.1`）：
 
 - [@rstest/playwright](https://www.npmjs.com/package/@rstest/playwright) 提供 Rstest fixtures 和断言。
 - [playwright](https://www.npmjs.com/package/playwright) 提供浏览器自动化运行时。
@@ -70,7 +69,7 @@ import { chromium, request } from 'playwright';
 
 一般的 E2E 测试直接使用 `browser`、`context`、`page` 和 `request` fixtures 即可，Rstest 会按照 fixture 生命周期创建并清理这些资源。
 
-也可以从 `@rstest/playwright` 直接导入 `describe`、`beforeEach` 等生命周期方法：
+`@rstest/playwright` 同样导出了 `beforeAll`、`afterAll`、`beforeEach`、`afterEach` 和 `describe` 等生命周期 API：
 
 ```ts
 import { beforeEach, describe, test } from '@rstest/playwright';
@@ -147,14 +146,14 @@ test('mobile page', async ({ page }) => {
 
 `playwright` fixture 支持以下选项：
 
-| 选项             | 说明                                        |
-| ---------------- | ------------------------------------------- |
-| `browserName`    | 要启动的浏览器引擎。目前只支持 `chromium`。 |
-| `launchOptions`  | 传给 `browserType.launch()` 的选项。        |
-| `contextOptions` | 传给 `browser.newContext()` 的选项。        |
-| `requestOptions` | 传给 `request.newContext()` 的选项。        |
-| `debug`          | 用于本地 headed 调试的便捷选项。            |
-| `trace`          | 捕获用于调试的 Playwright trace 产物。      |
+| 选项             | 说明                                                             |
+| ---------------- | ---------------------------------------------------------------- |
+| `browserName`    | 要启动的浏览器引擎。目前只支持 `chromium`。                      |
+| `launchOptions`  | 传给 `browserType.launch()` 的选项。                             |
+| `contextOptions` | 传给 `browser.newContext()` 的选项。                             |
+| `requestOptions` | 传给 `request.newContext()` 的选项。                             |
+| `debug`          | 本地 headed 调试选项，支持 `boolean \| PlaywrightDebugOptions`。 |
+| `trace`          | 捕获用于调试的 Playwright trace 产物。                           |
 
 ### E2E 默认值 {#e2e-defaults}
 
@@ -169,23 +168,7 @@ test('mobile page', async ({ page }) => {
 | Playwright Locator/Page 断言超时 | `expect.poll.timeout`（使用此 helper 时为 `5000ms`） |
 | Rstest `expect.poll.timeout`     | `5000ms`                                             |
 
-显式的 Rstest 配置会覆盖继承的默认值。例如：
-
-```ts title="rstest.config.ts"
-import { defineConfig } from '@rstest/core';
-import { definePlaywrightConfig } from '@rstest/playwright/config';
-
-export default defineConfig({
-  extends: definePlaywrightConfig({}),
-  testTimeout: 60_000,
-  hookTimeout: 45_000,
-  expect: {
-    poll: { timeout: 2000 },
-  },
-});
-```
-
-这里的 Playwright Locator/Page 断言和 `expect.poll()` 都使用 `2000ms`。两类 API 都可以通过单次调用的 timeout 进一步覆盖默认值。
+显式的 Rstest 配置会覆盖继承的默认值（例如 `testTimeout`、`hookTimeout` 以及 [`expect.poll.timeout`](#assertion-timeout)）。
 
 这些默认值只在使用 `definePlaywrightConfig` 时生效。仅从 `@rstest/playwright` 导入 `test` 或 `expect` 不会改变 Rstest 的运行默认值。单元测试与 E2E 混用的 workspace 应只在 E2E project 中使用此 helper。
 
@@ -205,7 +188,7 @@ Playwright 保存 trace、关闭 Context 和关闭 Browser 各自使用 `hookTim
 | `request` | 每个使用它的测试都会创建一个新的 `APIRequestContext`，并在测试结束后 dispose。 |
 | `serve`   | 在测试内启动静态 server，并在测试结束后自动清理。                              |
 
-下面说明每个 fixture 的常见用法。`page` 和 `serve` 会链接到已有示例，避免重复展示相同代码。
+`page` 和 `serve` 的用法示例见[基本用法](#基本用法)和[本地应用 server](#本地应用-server)。
 
 ### 在 hook 中使用 fixture
 
@@ -241,9 +224,7 @@ describe('dashboard', () => {
 });
 ```
 
-Hook 的作用域是所在的 `describe` 块，而不是某个扩展后的 test 对象。因此，该块内的每个测试都必须提供 hook 请求的 fixture；否则，Rstest 会在调用 hook 前让该测试失败，并报告缺失的 fixture。`afterEach` 和 `beforeEach` 返回的清理函数同样支持这一行为。在一次测试执行内，hook 与测试函数共享 fixture 实例，最后按 setup 的反序执行 teardown。
-
-请在 hook 参数中通过直接对象解构声明 fixture 依赖。在 hook 函数体内再解构 context 对象不会请求 fixture。使用 fixture 的回调不支持剩余属性（rest property）和默认值。
+作用域、参数解构和生命周期规则见[在 hook 中使用 fixture](/api/runtime-api/test-api/test#在-hook-中使用-fixture)。
 
 ### 在 `test.for` 中使用 fixture
 
@@ -297,10 +278,6 @@ test('multiple pages', async ({ context }) => {
 });
 ```
 
-### `page`
-
-常见的 E2E 页面访问和断言流程见[基本用法](#基本用法)。
-
 ### `request`
 
 当你只需要 Playwright 的 API 客户端，而不需要启动浏览器时，可以使用 `request`：
@@ -314,10 +291,6 @@ test('health check', async ({ request }) => {
   expect(response.ok()).toBe(true);
 });
 ```
-
-### `serve`
-
-从本地文件启动静态应用的示例见[本地应用 server](#本地应用-server)。
 
 ## 断言
 
@@ -336,15 +309,15 @@ Locator 断言面向 Playwright 的 [`Locator`](https://playwright.dev/docs/api/
 - `toBeEditable(options?)`
 - `toBeFocused(options?)`
 - `toBeEmpty(options?)`
-- `toBeInViewport(options?)`
+- `toBeInViewport(options?)`——支持 `{ timeout?: number; ratio?: number }`，`ratio` 用于指定元素在视口内的最小可见比例。
 - `toContainText(expected, options?)`
-- `toHaveAttribute(name, expected?, options?)`
+- `toHaveAttribute(name, expected?, options?)`——省略 `expected`（如 `toHaveAttribute('disabled')`）时，仅检查属性是否存在。
 - `toHaveClass(expected, options?)`
 - `toHaveCSS(propertyName, expected, options?)`
 - `toHaveCount(expected, options?)`
 - `toHaveId(expected, options?)`
 - `toHaveJSProperty(name, expected, options?)`
-- `toHaveText(expected, options?)`
+- `toHaveText(expected, options?)`——`expected` 支持 `string | RegExp | (string | RegExp)[]`；传入数组时，会按顺序校验匹配元素的数量和各自的文本。
 - `toHaveValue(expected, options?)`
 
 Page 断言：
@@ -438,6 +411,8 @@ const e2e = test.extend({
       screenshots: true,
       snapshots: true,
       sources: true,
+      print: true,
+      summary: true,
     },
   } satisfies PlaywrightOptions,
 });
@@ -447,7 +422,7 @@ const e2e = test.extend({
 
 - `trace.zip`：Playwright 官方 trace 产物。可以用 `npx playwright show-trace <path-to-trace.zip>` 打开。
 
-启用 `summary`（默认行为）时，该目录还会包含：
+启用 `print`（默认开启）时，保存 trace 后会在终端打印 `npx playwright show-trace` 查看命令。启用 `summary`（默认开启）时，该目录还会包含：
 
 - `trace-summary.json`：面向工具和 AI 助手的 Rstest 测试元信息、产物路径和错误堆栈。
 - `debug.md`：面向开发者阅读的调试报告。
@@ -456,7 +431,7 @@ const e2e = test.extend({
 
 ## 本地应用 server
 
-当测试需要访问已构建的本地应用时，可以使用 `serve` fixture。它会为入口文件启动静态 server，并在测试结束后自动停止 server。
+使用 `serve` fixture 通过 HTTP 静态 server 托管已构建的本地应用。它支持传入 HTML 入口文件或目录（托管目录时在 `/` 路径提供其中的 `index.html`），返回 `{ url, close }`，并在测试结束后自动停止 server；如果需要提前关闭，可调用 `await close()`。
 
 ```ts
 import { expect, test } from '@rstest/playwright';
@@ -469,7 +444,12 @@ test('home page', async ({ page, serve }) => {
 });
 ```
 
-启用 `PWDEBUG=1` 时，`serve` 默认会保留 server，避免已打开页面失去可访问的应用服务。在非 watch 运行中，这可能会让 Rstest 进程保持运行，直到你手动停止。如果即使在 debug 模式下也希望关闭 server，可以设置 `keepAliveOnDebug: false`。
+`serve(entry, options?)` 支持以下选项：
+
+- `host`：绑定的主机地址（默认：`'127.0.0.1'`）。
+- `port`：监听端口（默认：随机可用端口）。
+- `headers`：静态文件响应的额外 HTTP headers。
+- `keepAliveOnDebug`：在 debug 模式下保持 server 存活，以便继续查看已打开的页面（默认：`true`）。在非 watch 运行中，这可能会让 Rstest 进程保持运行，直到你手动停止。若希望即使在 debug 模式下也关闭 server，可设为 `keepAliveOnDebug: false`。
 
 ## Headed 调试
 
@@ -485,7 +465,7 @@ PWDEBUG=1 rstest watch
 - `slowMo: 100`
 - `devtools: true`
 
-你也可以在测试里覆盖 debug 默认值：
+也可以在测试中通过 `debug: true` 或配置对象开启并覆盖 debug 默认值：
 
 ```ts
 import { test } from '@rstest/playwright';
@@ -569,19 +549,4 @@ Rstest 浏览器模式会把测试模块打包后放进浏览器运行时执行�
 
 ## 从 Playwright 迁移
 
-已有的 Playwright Test 项目可以交给支持 Skills 的 Coding Agent 迁移，使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) skill。Agent Skills 是安装到 Coding Agent 里的领域知识包，让 Agent 在特定场景下给出更准确的建议或直接执行操作，[skills](https://www.npmjs.com/package/skills) 包负责安装它们。`migrate-to-rstest` skill 包含 Playwright 配置、fixtures 和行为一致性的迁移指南。
-
-先安装该 skill：
-
-<PackageManagerTabs
-  command="skills add rstackjs/agent-skills --skill migrate-to-rstest"
-  dlx
-/>
-
-然后复制下面的 prompt 并发送给你的 Coding Agent：
-
-<Prompt
-  title="将 Playwright 迁移到 @rstest/playwright"
-  description="复制这个 prompt 并发送给你的 Coding Agent。"
-  prompt={`Migrate this Playwright Test project to @rstest/playwright using the migrate-to-rstest skill. Follow its Playwright migration reference, preserve existing behavior and coverage, and report unsupported configuration or fixture features instead of silently dropping them.`}
-/>
+如需将已有的 Playwright Test 项目迁移到 `@rstest/playwright`，可使用 [migrate-to-rstest](https://github.com/rstackjs/agent-skills#migrate-to-rstest) Agent Skill 或 [AI 指南](/guide/start/ai)中的迁移提示词。

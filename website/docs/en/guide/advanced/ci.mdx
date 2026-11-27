@@ -18,7 +18,7 @@ Use `rstest` in CI so the process exits after one test pass. If your project alr
 }
 ```
 
-A minimal GitHub Actions workflow installs dependencies, restores the package-manager cache, and runs the test script:
+A minimal GitHub Actions workflow uses a supported Node.js runtime (`^20.19.0` or `>=22.12.0`), installs dependencies, restores the package-manager cache, and runs the test script:
 
 ```yaml title=".github/workflows/test.yml"
 name: Test
@@ -34,8 +34,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
 
       - uses: actions/setup-node@v4
         with:
@@ -179,8 +177,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
@@ -201,8 +197,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22.12.0
@@ -216,7 +210,7 @@ jobs:
       - run: pnpm rstest merge-reports --coverage --cleanup
 ```
 
-Each shard writes `.rstest-reports/blob-{index}-{count}.json` with its test results and collected coverage. With coverage providers that support deferred finalization, these blob-reporting shards do not generate coverage reports or check thresholds; a shard without the blob reporter still finalizes coverage normally. Older providers retain their existing per-run finalization behavior. The merge job collects those files into one `.rstest-reports/` directory, then `rstest merge-reports` adds untested files, runs the configured reporters, and checks coverage thresholds against the unified result. Put coverage finalization options in the shared configuration, or pass the same `--coverage.*` options to the merge command because shard-only CLI options are not stored in blobs. See [sharding](/guide/basic/cli#sharding-tests) and [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports) for details.
+Each shard writes a blob file to `.rstest-reports/`, and the merge job combines all shards and finalizes coverage (including untested files and thresholds) once across the unified result. Put coverage finalization options in shared config or repeat `--coverage.*` flags on `merge-reports`; see [sharding](/guide/basic/cli#sharding-tests) and [`rstest merge-reports`](/guide/basic/cli#rstest-merge-reports).
 
 ## Publish machine-readable reports
 
@@ -253,12 +247,3 @@ Use `junit` for CI test-result integrations, `json` for custom tooling, `md` for
 Start with the package-manager cache because it is safe and usually gives the biggest CI improvement. In GitHub Actions, `actions/setup-node` with `cache: pnpm` restores the pnpm store based on the lockfile.
 
 Do not cache Playwright browser binaries by default. Restoring the cache can take about as long as downloading the browser, and Linux system dependencies are not included in that cache. Prefer the preinstalled GitHub Chrome when its version policy fits your workflow; otherwise install only the required browser and use `--only-shell` for headless-only Chromium runs.
-
-## Recommended checklist
-
-- Use Node.js `^20.19.0` or `>=22.12.0` to match Rstest's supported runtime range.
-- Run `rstest` in CI, either directly or through a package script.
-- Install coverage and browser packages only when the workflow needs those features.
-- Upload coverage, JUnit, JSON, or blob artifacts with `if: always()` if they help debug failures.
-- Add sharding only after the single-machine workflow is stable.
-- Choose explicitly between a version-matched Playwright browser and a preinstalled system Chrome, and keep the selected browser, channel, and installation step aligned.

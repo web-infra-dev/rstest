@@ -8,8 +8,10 @@ on:
         required: false
         type: string
   schedule:
-    # Run once a week on main to build a continuous baseline for CPU benchmark
-    - cron: '0 0 * * 0'
+    # Run daily on main (18:17 UTC / 02:17 UTC+8, off-peak minute to reduce GitHub Actions cron queueing)
+    - cron: '17 18 * * *'
+    # Run once a week on main (Sunday 00:37 UTC / 08:37 UTC+8, off-peak minute) for CPU benchmark
+    - cron: '37 0 * * 0'
   # Allow manual runs on any branch (CodSpeed backtest + on-demand profiling)
   workflow_dispatch:
     inputs:
@@ -17,6 +19,15 @@ on:
         description: 'Git ref to benchmark (branch, tag, or SHA). Defaults to the selected branch.'
         required: false
         type: string
+      suite:
+        description: 'Which benchmark suite to run.'
+        required: false
+        type: choice
+        default: all
+        options:
+          - all
+          - cpu
+          - memory
 
 concurrency:
   group: codspeed-${{ github.event.pull_request.number || inputs.ref || github.sha }}
@@ -28,13 +39,15 @@ permissions:
   id-token: write
 
 jobs:
-  # Skip the entire workflow when the current HEAD has already been benchmarked
+  # Skip benchmark jobs that have already succeeded on the current HEAD
   # (e.g. a schedule run fires but no new commits landed since the last run).
+  # Tracked per job so a daily memory run does not skip the weekly CPU run.
   check-skip:
     name: Check duplicate run
     runs-on: ubuntu-latest
     outputs:
-      should_skip: ${{ steps.check.outputs.should_skip }}
+      skip_cpu: ${{ steps.check.outputs.skip_cpu }}
+      skip_memory: ${{ steps.check.outputs.skip_memory }}
     steps:
       - name: Check for existing successful run
         id: check
@@ -43,27 +56,41 @@ jobs:
         run: |
           # Always run when manually triggered
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_skip=false" >> "$GITHUB_OUTPUT"
+            echo "skip_cpu=false" >> "$GITHUB_OUTPUT"
+            echo "skip_memory=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          skip_cpu=false
+          skip_memory=false
           # Query completed runs of this workflow for the current commit
-          count=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/codspeed.yml/runs?head_sha=${{ github.sha }}&status=success&per_page=1" \
-            --jq '.total_count')
-          if [ "$count" -gt 0 ]; then
-            echo "should_skip=true" >> "$GITHUB_OUTPUT"
-            echo "Skipping: commit ${{ github.sha }} already benchmarked."
-          else
-            echo "should_skip=false" >> "$GITHUB_OUTPUT"
-          fi
+          run_ids=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/codspeed.yml/runs?head_sha=${{ github.sha }}&status=completed&per_page=20" \
+            --jq '.workflow_runs[].id')
+          for run_id in $run_ids; do
+            jobs=$(gh api \
+              "repos/${{ github.repository }}/actions/runs/${run_id}/jobs" \
+              --jq '.jobs[] | select(.conclusion == "success") | .name')
+            if printf '%s\n' "$jobs" | grep -Fxq "Run CPU benchmarks"; then
+              skip_cpu=true
+            fi
+            if printf '%s\n' "$jobs" | grep -Fxq "Run memory benchmark"; then
+              skip_memory=true
+            fi
+            if [ "$skip_cpu" = "true" ] && [ "$skip_memory" = "true" ]; then
+              break
+            fi
+          done
+          echo "skip_cpu=${skip_cpu}" >> "$GITHUB_OUTPUT"
+          echo "skip_memory=${skip_memory}" >> "$GITHUB_OUTPUT"
+          echo "Duplicate check for ${{ github.sha }}: skip_cpu=${skip_cpu}, skip_memory=${skip_memory}"
 
   codspeed-cpu:
     name: Run CPU benchmarks
     needs: check-skip
-    # CPU walltime benchmark runs on codspeed-macro (expensive), only on schedule or manual trigger
+    # CPU walltime benchmark runs on codspeed-macro (expensive), only on weekly schedule or manual trigger
     if: |
-      needs.check-skip.outputs.should_skip != 'true' &&
-      (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      needs.check-skip.outputs.skip_cpu != 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '37 0 * * 0') || (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'cpu' || inputs.suite == '')))
     # Walltime mode requires CodSpeed bare-metal runners for stable measurements.
     # CPU simulation (Valgrind) is incompatible with child_process.fork — rstest's
     # worker pool generates excessive system calls, making flame graphs unavailable.
@@ -101,10 +128,10 @@ jobs:
   codspeed-memory:
     name: Run memory benchmark
     needs: check-skip
-    # Memory benchmark builds baseline on push to main, runs on PRs for comparison
+    # Memory benchmark runs daily on main (ubuntu-latest), plus manual trigger or workflow_call
     if: |
-      needs.check-skip.outputs.should_skip != 'true' &&
-      (github.event_name == 'push' || github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch')
+      needs.check-skip.outputs.skip_memory != 'true' &&
+      ((github.event_name == 'schedule' && github.event.schedule == '17 18 * * *') || github.event_name == 'push' || github.event_name == 'pull_request' || (github.event_name == 'workflow_dispatch' && (inputs.suite == 'all' || inputs.suite == 'memory' || inputs.suite == '')))
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

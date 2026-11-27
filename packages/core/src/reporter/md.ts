@@ -50,7 +50,10 @@
  *       - `details:` JSON block containing testPath, project, fullName, status,
  *         duration, retryCount, errors array (each with type, message,
  *         expected/actual when no diff, topFrame or stackFrames based on
- *         `options.stack`), and candidateFiles (when enabled and available).
+ *         `options.stack`, and `cause` when the error has one), and
+ *         candidateFiles (when enabled and available). A `cause` holds the
+ *         type, message, topFrame or stackFrames, and `cause` of the error
+ *         it wraps.
  *       - `diff:` diff block per error (only when error has diff; expected/actual
  *         omitted from JSON in this case).
  *       - `codeFrame (error N):` text block per error (when
@@ -62,7 +65,8 @@
  *   - Printed only when `options.errors.unhandled === true` and
  *     `unhandledErrors?.length > 0`.
  *   - `## Unhandled Errors` heading followed by `### Unhandled Error N` for each,
- *     with a JSON block containing name, message, stack.
+ *     with a JSON block containing name, message, stack, and `cause` (the same
+ *     fields, nested) when the error has one.
  *
  * Focused run detection
  *
@@ -437,6 +441,28 @@ const resolveStackPayload = ({
   };
 };
 
+type ErrorCausePayload = ReturnType<typeof resolveStackPayload> & {
+  type: string;
+  message: string;
+  cause?: ErrorCausePayload;
+};
+
+type UnhandledErrorPayload = {
+  name?: string;
+  message: string;
+  stack?: string;
+  cause?: UnhandledErrorPayload;
+};
+
+const toUnhandledErrorPayload = (
+  error: SerializedError,
+): UnhandledErrorPayload => ({
+  name: error.name,
+  message: cleanString(error.message),
+  stack: error.stack ? cleanString(error.stack) : undefined,
+  cause: error.cause ? toUnhandledErrorPayload(error.cause) : undefined,
+});
+
 const formatConsoleLog = (
   log: UserConsoleLog,
   options: Pick<ResolvedOptions, 'console'>,
@@ -632,6 +658,82 @@ export class MdReporter implements Reporter {
     }
   }
 
+  private async collectErrorFrames(
+    error: SerializedError,
+    getSourcemap: TestRunEndPayload['getSourcemap'],
+  ): Promise<{
+    candidateFrames: StackFrame[];
+    topFrame?: StackFrame;
+    stackFrames: StackFrame[];
+  }> {
+    const candidateFrames = error.stack
+      ? await parseErrorStacktrace({
+          stack: error.stack,
+          getSourcemap,
+          fullStack: false,
+          ignore: candidateFrameIgnores,
+        })
+      : [];
+
+    const fullFrames =
+      error.fullStack && error.stack
+        ? (
+            await parseErrorStacktrace({
+              stack: error.stack,
+              getSourcemap,
+              fullStack: true,
+            })
+          ).filter((frame) => !frame.file?.startsWith('node:'))
+        : candidateFrames;
+
+    return {
+      candidateFrames,
+      topFrame: fullFrames[0] ?? candidateFrames[0],
+      stackFrames: resolveStackFrames(fullFrames, this.options),
+    };
+  }
+
+  private toStackPayload(
+    {
+      topFrame,
+      stackFrames,
+    }: { topFrame?: StackFrame; stackFrames: StackFrame[] },
+    rootPath: string,
+  ): ReturnType<typeof resolveStackPayload> {
+    return resolveStackPayload({
+      rootPath,
+      topFrame,
+      stackFrames: stackFrames.map((frame) => ({
+        file: formatPath(rootPath, frame.file),
+        line: frame.lineNumber ?? undefined,
+        column: frame.column ?? undefined,
+        method: frame.methodName ?? undefined,
+      })),
+      mode: this.options.stack,
+    });
+  }
+
+  // An error often wraps the one that really went wrong, as in
+  // `new Error('Failed to load user', { cause })`. Each cause keeps its own
+  // position, so the report leads to the root cause, not only to the wrapper.
+  private async toCausePayload(
+    cause: SerializedError,
+    getSourcemap: TestRunEndPayload['getSourcemap'],
+    rootPath: string,
+  ): Promise<ErrorCausePayload> {
+    return {
+      type: getErrorType(cause),
+      message: cleanString(cause.message),
+      ...this.toStackPayload(
+        await this.collectErrorFrames(cause, getSourcemap),
+        rootPath,
+      ),
+      cause: cause.cause
+        ? await this.toCausePayload(cause.cause, getSourcemap, rootPath)
+        : undefined,
+    };
+  }
+
   private renderUnhandledErrors(
     lines: string[],
     errors: SerializedError[],
@@ -647,11 +749,7 @@ export class MdReporter implements Reporter {
       pushFencedBlock(
         lines,
         'json',
-        stringifyJson({
-          name: error.name,
-          message: cleanString(error.message),
-          stack: error.stack ? cleanString(error.stack) : undefined,
-        }),
+        stringifyJson(toUnhandledErrorPayload(error)),
       );
     }
   }
@@ -808,36 +906,13 @@ export class MdReporter implements Reporter {
           ? failure.errors
           : [createUnknownFailure()];
         const errorEntries = await Promise.all(
-          reportedErrors.map(async (error) => {
-            const candidateFrames = error.stack
-              ? await parseErrorStacktrace({
-                  stack: error.stack,
-                  getSourcemap,
-                  fullStack: false,
-                  ignore: candidateFrameIgnores,
-                })
-              : [];
-
-            const fullFrames =
-              error.fullStack && error.stack
-                ? (
-                    await parseErrorStacktrace({
-                      stack: error.stack,
-                      getSourcemap,
-                      fullStack: true,
-                    })
-                  ).filter((frame) => !frame.file?.startsWith('node:'))
-                : candidateFrames;
-
-            const trimmedFrames = resolveStackFrames(fullFrames, this.options);
-            const topFrame = fullFrames[0] ?? candidateFrames[0];
-            return {
-              error,
-              topFrame,
-              candidateFrames,
-              stackFrames: trimmedFrames,
-            };
-          }),
+          reportedErrors.map(async (error) => ({
+            error,
+            ...(await this.collectErrorFrames(error, getSourcemap)),
+            cause: error.cause
+              ? await this.toCausePayload(error.cause, getSourcemap, rootPath)
+              : undefined,
+          })),
         );
 
         const candidateFiles = this.options.candidateFiles.enabled
@@ -855,14 +930,7 @@ export class MdReporter implements Reporter {
           status: failure.test.status,
           duration: failure.test.duration,
           retryCount: failure.test.retryCount ?? 0,
-          errors: errorEntries.map(({ error, topFrame, stackFrames }) => {
-            const mappedStackFrames = stackFrames.map((frame) => ({
-              file: formatPath(rootPath, frame.file),
-              line: frame.lineNumber ?? undefined,
-              column: frame.column ?? undefined,
-              method: frame.methodName ?? undefined,
-            }));
-
+          errors: errorEntries.map(({ error, cause, ...frames }) => {
             // Prefer diff over full expected/actual to reduce output size
             // (especially for large snapshot mismatches).
             // Diff is output separately as a fenced block to avoid JSON escaping.
@@ -873,12 +941,8 @@ export class MdReporter implements Reporter {
               message: cleanString(error.message),
               expected: hasDiff ? undefined : error.expected,
               actual: hasDiff ? undefined : error.actual,
-              ...resolveStackPayload({
-                rootPath,
-                topFrame,
-                stackFrames: mappedStackFrames,
-                mode: this.options.stack,
-              }),
+              ...this.toStackPayload(frames, rootPath),
+              cause,
             };
           }),
           candidateFiles: candidateFiles.length ? candidateFiles : undefined,

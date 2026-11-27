@@ -1,5 +1,5 @@
 ---
-description: "In-source testing is where the test code lives within the same file as the source code, similar to Rust's module tests."
+description: Glob patterns for source files that contain in-source tests alongside implementation code.
 ---
 
 # includeSource
@@ -7,11 +7,9 @@ description: "In-source testing is where the test code lives within the same fil
 - **Type:** `string[]`
 - **Default:** `[]`
 
-In-source testing is where the test code lives within the same file as the source code, similar to [Rust's module tests](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest).
+Glob patterns for files that contain in-source tests alongside source code, similar to [Rust's module tests](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest). Patterns are resolved relative to [root](/config/test/root) and respect [exclude](/config/test/exclude).
 
-You can define a list of glob patterns that match your in-source test files via `includeSource` configuration.
-
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -19,36 +17,32 @@ export default defineConfig({
 });
 ```
 
-:::tip
-**In-source testing** is usually suitable for small functional functions and utilities, allowing for easy and rapid verification and debugging. For more complex functions and modules, independent test files are recommended.
-:::
+In-source testing suits small utilities that benefit from living next to their implementation. Use dedicated test files for larger modules or suites with complex setup.
 
-`includeSource` works in both Node mode and [browser mode](/guide/browser-testing) projects.
+`includeSource` works in both Node mode and [Browser Mode](/guide/browser-testing) projects.
 
-### Writing in-source tests
+## Writing in-source tests
 
-When `includeSource` defined, Rstest will run all matched files with `import.meta.rstest` inside.
+Rstest scans files matching `includeSource` and runs only the ones that reference `import.meta.rstest`, which exposes the Rstest test API (`it`, `test`, `describe`, `expect`, and hooks):
 
-You can get the Rstest test API via `import.meta.rstest`.
-
-```ts title=src/helper.ts
+```ts title="src/helper.ts"
 export const sayHi = () => 'hi';
 
 if (import.meta.rstest) {
   const { it, expect } = import.meta.rstest;
-  it('should test source code correctly', () => {
+  it('should return hi', () => {
     expect(sayHi()).toBe('hi');
   });
 }
 ```
 
-### For production
+## For production
 
-Put the test code inside the `if (import.meta.rstest)` block. When generating non-test output, define `import.meta.rstest` as `false` in your project's build configuration so the bundler can eliminate the test code as dead code.
+Keep test code inside an `if (import.meta.rstest)` block. In production builds, define `import.meta.rstest` as `false` so the bundler tree-shakes the test block as dead code:
 
-- Use Rspack's [DefinePlugin](https://rspack.rs/plugins/webpack/define-plugin):
+- With Rspack's [DefinePlugin](https://rspack.rs/plugins/webpack/define-plugin):
 
-```diff title=rspack.config.ts
+```diff title="rspack.config.ts"
 import { defineConfig } from '@rspack/cli';
 +import { rspack } from '@rspack/core';
 
@@ -61,9 +55,9 @@ export default defineConfig({
 });
 ```
 
-- Use Rsbuild's [source.define](https://rsbuild.rs/config/source/define) option:
+- With Rsbuild's [source.define](https://rsbuild.rs/config/source/define):
 
-```diff title=rsbuild.config.ts
+```diff title="rsbuild.config.ts"
 import { defineConfig } from '@rsbuild/core';
 
 export default defineConfig({
@@ -75,11 +69,11 @@ export default defineConfig({
 });
 ```
 
-### TypeScript
+## TypeScript
 
-To get TypeScript support for `import.meta.rstest`, we recommend adding `@rstest/core/importMeta` to `compilerOptions.types` in the `tsconfig.json` for your test files:
+Add `@rstest/core/importMeta` to `compilerOptions.types` in your `tsconfig.json` for `import.meta.rstest` type definitions:
 
-```json title=tsconfig.json
+```json title="tsconfig.json"
 {
   "compilerOptions": {
     "types": ["@rstest/core/importMeta"]
@@ -87,10 +81,10 @@ To get TypeScript support for `import.meta.rstest`, we recommend adding `@rstest
 }
 ```
 
-> If your `tsconfig.json` already configures `compilerOptions.types`, append this type to the existing list.
+> If `compilerOptions.types` is already set, append `@rstest/core/importMeta` to the array.
 
-Alternatively, reference the type in `src/rstestEnv.d.ts`:
+Alternatively, add a triple-slash reference in an ambient declaration file:
 
-```ts title=rstestEnv.d.ts
+```ts title="src/rstestEnv.d.ts"
 /// <reference types="@rstest/core/importMeta" />
 ```

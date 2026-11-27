@@ -40,7 +40,6 @@ export class VerboseReporter extends DefaultReporter {
 
   override onTestFileResult(test: TestFileResult): void {
     this.statusRenderer?.onTestFileResult();
-    this.nonTTYProgressNotifier?.notifyOutput();
 
     const { hideSkippedTestFiles, hideSkippedTests, slowTestThreshold } =
       this.resolveFileOptions(test.project);
@@ -48,6 +47,8 @@ export class VerboseReporter extends DefaultReporter {
     if (hideSkippedTestFiles && test.status === 'skipped') {
       return;
     }
+
+    this.nonTTYProgressNotifier?.notifyOutput();
 
     const logResults = () => {
       logFileTitle(

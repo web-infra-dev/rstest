@@ -48,7 +48,7 @@ import {
   createWatchCycleDriver,
   createWatchShortcutHandlers,
   createWatchTeardown,
-  type WatchSessionTargets,
+  type WatchTarget,
 } from './watch/watchSession';
 
 export async function runTests(context: Rstest): Promise<void> {
@@ -176,10 +176,11 @@ async function executeTests(
 
   const hasNodeTestsToRun = planner.hasNodeTestsToRun();
   const hasBrowserTestsToRun = planner.hasBrowserTestsToRun();
+  const hasTestsToRun = hasNodeTestsToRun || hasBrowserTestsToRun;
 
   // Gated on there being something to run: auto-installing a missing coverage
   // package for a run with no work is the wrong default.
-  if (hasNodeTestsToRun || hasBrowserTestsToRun) {
+  if (hasTestsToRun) {
     await ensureCoverageProviderInstalled(coverage, rootPath, {
       confirm: context.packageInstallerConfirm,
     });
@@ -192,17 +193,24 @@ async function executeTests(
   // The single run-scoped provider, built before the executors so both sides can
   // take it through their constructor. A coverage-plugin load error is only
   // thrown when something actually runs (above); on the empty path it just means
-  // no provider can be built.
+  // no provider can be built (including when the node Rsbuild boot was skipped).
   // Built for every shape, the empty ones included: an empty `--related`
   // resolution writes an empty coverage report rather than none at all.
   // "Coverage was requested and this run covered nothing" is a report, and
   // suppressing it for one run shape would re-split the single assembly.
-  const coverageProvider = planner.coveragePluginLoadError()
-    ? null
-    : await createCoverageProviderWithLog(
+  let coverageProvider = null;
+  if (!planner.coveragePluginLoadError()) {
+    try {
+      coverageProvider = await createCoverageProviderWithLog(
         context.normalizedConfig.coverage,
         rootPath,
       );
+    } catch (error) {
+      if (hasTestsToRun) {
+        throw error;
+      }
+    }
+  }
 
   // The cold-start gate, followed rather than re-decided here: the planner
   // brings up no node build for a run with zero node projects, so that run
@@ -533,26 +541,39 @@ async function executeTests(
       ? await planner.globTestEntries(nodeFileFilterPatterns)
       : undefined;
   const browserTarget = browserExecutor;
-  const watchTargets: WatchSessionTargets = {
-    node: nodeExecutorToRun
-      ? {
-          runCycle: (options) =>
-            watchDriver.runCycle(nodeExecutorToRun, {
-              ...options,
-              fileFilters: options?.fileFilters ?? nodeFileFilters,
-            }),
-          globTestEntries: (filters) => planner.globTestEntries(filters),
-          setFileFilters: (fileFilters) => {
-            nodeFileFilterPatterns = undefined;
-            nodeFileFilters = fileFilters;
-          },
-        }
-      : undefined,
-    browser: browserTarget && {
-      rerun: (testPaths, updateSnapshot) =>
-        browserTarget.requestRerun(testPaths, updateSnapshot),
-    },
-  };
+  // Node first, browser second: each finalizes on its own, preserving mixed
+  // watch shortcut output order while keeping shortcut handlers runtime-agnostic.
+  const watchTargets: WatchTarget[] = [
+    ...(nodeExecutorToRun
+      ? [
+          {
+            rerun: (options) =>
+              watchDriver.runCycle(nodeExecutorToRun, {
+                ...options,
+                fileFilters: options?.fileFilters ?? nodeFileFilters,
+              }),
+            globTestEntries: (filters) => planner.globTestEntries(filters),
+            setFileFilters: (fileFilters) => {
+              nodeFileFilterPatterns = undefined;
+              nodeFileFilters = fileFilters;
+            },
+          } satisfies WatchTarget,
+        ]
+      : []),
+    ...(browserTarget
+      ? [
+          {
+            rerun: (options) =>
+              browserTarget.requestRerun(
+                options?.fileFilters,
+                options?.updateSnapshot,
+              ),
+            globTestEntries: (filters) =>
+              planner.globBrowserTestEntries(filters),
+          } satisfies WatchTarget,
+        ]
+      : []),
+  ];
 
   // One teardown for the `q` shortcut, the fatal-signal handler, and the
   // config-change restart hook. The browser side closes first: its runtime owns

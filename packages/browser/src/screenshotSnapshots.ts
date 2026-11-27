@@ -11,12 +11,17 @@ import {
 } from 'pathe';
 import { PNG } from 'pngjs';
 import type { SnapshotUpdateState } from '@vitest/snapshot';
+import type { ScreenshotComparison } from './protocol';
+import { createRegionDiff } from './screenshotDiff';
 import type { ScreenshotMatchOutcome } from './rpcProtocol';
 
 export class ScreenshotMismatchError extends Error {
-  constructor(message: string) {
+  readonly comparison?: ScreenshotComparison;
+
+  constructor(message: string, comparison?: ScreenshotComparison) {
     super(message);
     this.name = 'ScreenshotMismatchError';
+    this.comparison = comparison;
   }
 }
 
@@ -174,6 +179,7 @@ const getFailurePaths = (referencePath: string) => {
   return {
     actual: join(failureDir, `${referenceName}.actual.png`),
     diff: join(failureDir, `${referenceName}.diff.png`),
+    regions: join(failureDir, `${referenceName}.regions.png`),
   };
 };
 
@@ -270,24 +276,35 @@ const writeFailureArtifacts = async ({
   referencePath,
   actualBuffer,
   diffBuffer,
+  regionsBuffer,
   deadline,
 }: {
   snapshotStore: ScreenshotSnapshotStore;
   referencePath: string;
   actualBuffer: Buffer;
   diffBuffer?: Buffer;
+  regionsBuffer?: Buffer;
   deadline?: number;
-}): Promise<{ actualPath: string; diffPath?: string }> => {
+}): Promise<ReturnType<typeof getFailurePaths>> => {
   const paths = getFailurePaths(referencePath);
   await writeScreenshot(snapshotStore, paths.actual, actualBuffer, deadline);
-  if (diffBuffer) {
-    await writeScreenshot(snapshotStore, paths.diff, diffBuffer, deadline);
-    return { actualPath: paths.actual, diffPath: paths.diff };
+  for (const [path, image] of [
+    [paths.diff, diffBuffer],
+    [paths.regions, regionsBuffer],
+  ] as const) {
+    if (image) {
+      await writeScreenshot(snapshotStore, path, image, deadline);
+    } else {
+      await runBeforeScreenshotDeadline(
+        () => snapshotStore.remove(path, deadline),
+        deadline,
+      );
+    }
   }
-  return { actualPath: paths.actual };
+  return paths;
 };
 
-const validateOptions = (
+export const resolveScreenshotComparisonOptions = (
   options: ScreenshotMatchOptions | undefined,
 ): Required<
   Pick<
@@ -297,8 +314,11 @@ const validateOptions = (
 > => {
   const result = {
     threshold: options?.threshold ?? 0.1,
-    maxDiffPixels: options?.maxDiffPixels ?? 0,
-    maxDiffPixelRatio: options?.maxDiffPixelRatio ?? 0,
+    // A ratio alone sets the limit. With neither option, allow no differing pixels.
+    maxDiffPixels:
+      options?.maxDiffPixels ??
+      (options?.maxDiffPixelRatio === undefined ? 0 : Number.POSITIVE_INFINITY),
+    maxDiffPixelRatio: options?.maxDiffPixelRatio ?? 1,
   };
   if (
     !Number.isFinite(result.threshold) ||
@@ -308,9 +328,8 @@ const validateOptions = (
     throw new Error('toMatchScreenshot threshold must be between 0 and 1.');
   }
   if (
-    !Number.isFinite(result.maxDiffPixels) ||
-    result.maxDiffPixels < 0 ||
-    !Number.isInteger(result.maxDiffPixels)
+    options?.maxDiffPixels !== undefined &&
+    (!Number.isInteger(options.maxDiffPixels) || options.maxDiffPixels < 0)
   ) {
     throw new Error(
       'toMatchScreenshot maxDiffPixels must be a non-negative integer.',
@@ -325,15 +344,28 @@ const validateOptions = (
       'toMatchScreenshot maxDiffPixelRatio must be between 0 and 1.',
     );
   }
-  if (
-    options?.maxDiffPixels !== undefined &&
-    options.maxDiffPixelRatio !== undefined
-  ) {
-    throw new Error(
-      'toMatchScreenshot accepts either maxDiffPixels or maxDiffPixelRatio, not both.',
-    );
-  }
   return result;
+};
+
+export const compareScreenshotPixels = (
+  expected: PNG,
+  actual: PNG,
+  options: ReturnType<typeof resolveScreenshotComparisonOptions>,
+  diff?: PNG,
+): { differentPixels: number; maxDiffPixels: number } => {
+  const differentPixels = pixelmatch(
+    expected.data,
+    actual.data,
+    diff?.data ?? null,
+    expected.width,
+    expected.height,
+    { threshold: options.threshold },
+  );
+  const maxDiffPixels = Math.min(
+    options.maxDiffPixels,
+    Math.floor(expected.width * expected.height * options.maxDiffPixelRatio),
+  );
+  return { differentPixels, maxDiffPixels };
 };
 
 export const matchBrowserScreenshot = async ({
@@ -343,7 +375,8 @@ export const matchBrowserScreenshot = async ({
   projectName,
   testName,
   browserName,
-  screenshotBase64,
+  captureScreenshot,
+  includeComparison = false,
   updateSnapshot,
   options,
   deadline,
@@ -358,7 +391,11 @@ export const matchBrowserScreenshot = async ({
   projectName: string;
   testName: string;
   browserName: 'chromium' | 'firefox' | 'webkit';
-  screenshotBase64: string;
+  /** A null result means the provider accepted the first capture against the reference. */
+  captureScreenshot: (
+    matchesReference?: (first: Buffer) => Promise<boolean>,
+  ) => Promise<string | null>;
+  includeComparison?: boolean;
   updateSnapshot: SnapshotUpdateState;
   options?: ScreenshotMatchOptions;
   deadline?: number;
@@ -368,7 +405,7 @@ export const matchBrowserScreenshot = async ({
   platform?: string;
 }): Promise<ScreenshotMatchOutcome> => {
   throwIfScreenshotDeadlinePassed(deadline);
-  const normalizedOptions = validateOptions(options);
+  const normalizedOptions = resolveScreenshotComparisonOptions(options);
   const filepath = resolveScreenshotPath(
     rootPath,
     testPath,
@@ -380,32 +417,67 @@ export const matchBrowserScreenshot = async ({
     screenshotDirectory,
     resolvePath,
   );
-  const actualBuffer = Buffer.from(screenshotBase64, 'base64');
-  const actual = PNG.sync.read(actualBuffer);
-  throwIfScreenshotDeadlinePassed(deadline);
-  const expectedContent = await runBeforeScreenshotDeadline(
-    () => snapshotStore.read(filepath),
-    deadline,
-  );
-  const expectedBuffer =
-    expectedContent === null
-      ? undefined
-      : Buffer.from(expectedContent, 'base64');
-
-  if (!expectedBuffer) {
-    if (updateSnapshot === 'new' || updateSnapshot === 'all') {
-      await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
-      await removeFailureArtifacts(snapshotStore, filepath, deadline);
-      return 'added';
-    }
+  const readReference = () =>
+    runBeforeScreenshotDeadline(() => snapshotStore.read(filepath), deadline);
+  const canAddReference = updateSnapshot === 'new' || updateSnapshot === 'all';
+  const requiredReference = canAddReference ? undefined : await readReference();
+  if (requiredReference === null) {
     throw new ScreenshotMismatchError(
       `No screenshot reference found for "${testName}". Run Rstest with --update to create it.\nReference: ${filepath}`,
     );
   }
+  let decodedRequiredReference: PNG | undefined;
+  const matchesReference = async (first: Buffer): Promise<boolean> => {
+    const content = requiredReference ?? (await readReference());
+    if (content === null) return false;
+    const reference = Buffer.from(content, 'base64');
+    if (first.equals(reference)) return true;
+    let expected: PNG;
+    try {
+      expected = PNG.sync.read(reference);
+    } catch {
+      // Report corrupt references with the stabilized actual screenshot.
+      return false;
+    }
+    if (requiredReference !== undefined) decodedRequiredReference = expected;
+    const actual = PNG.sync.read(first);
+    if (expected.width !== actual.width || expected.height !== actual.height) {
+      return false;
+    }
+    const { differentPixels, maxDiffPixels } = compareScreenshotPixels(
+      expected,
+      actual,
+      normalizedOptions,
+    );
+    return differentPixels <= maxDiffPixels;
+  };
+  const screenshotBase64 = await captureScreenshot(
+    updateSnapshot === 'all' ? undefined : matchesReference,
+  );
+  throwIfScreenshotDeadlinePassed(deadline);
+  if (
+    screenshotBase64 === null ||
+    (decodedRequiredReference && screenshotBase64 === requiredReference)
+  ) {
+    await removeFailureArtifacts(snapshotStore, filepath, deadline);
+    return 'matched';
+  }
+  const actualBuffer = Buffer.from(screenshotBase64, 'base64');
+  const actual = PNG.sync.read(actualBuffer);
+  throwIfScreenshotDeadlinePassed(deadline);
+
+  const expectedContent = requiredReference ?? (await readReference());
+  if (expectedContent === null) {
+    await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
+    await removeFailureArtifacts(snapshotStore, filepath, deadline);
+    return 'added';
+  }
 
   let expected: PNG;
   try {
-    expected = PNG.sync.read(expectedBuffer);
+    expected =
+      decodedRequiredReference ??
+      PNG.sync.read(Buffer.from(expectedContent, 'base64'));
   } catch (error) {
     throwIfScreenshotDeadlinePassed(deadline);
     if (updateSnapshot === 'all') {
@@ -422,60 +494,86 @@ export const matchBrowserScreenshot = async ({
     });
     const reason = error instanceof Error ? ` ${error.message}` : '';
     throw new ScreenshotMismatchError(
-      `Screenshot reference for "${testName}" is not a valid PNG.${reason}\nReference: ${filepath}\nActual: ${artifacts.actualPath}\nRun Rstest with --update to replace it.`,
+      `Screenshot reference for "${testName}" is not a valid PNG.${reason}\nReference: ${filepath}\nActual: ${artifacts.actual}\nRun Rstest with --update to replace it.`,
     );
   }
   throwIfScreenshotDeadlinePassed(deadline);
+  const comparison = (
+    diffBuffer: Buffer,
+    sharedSize?: ScreenshotComparison['sharedSize'],
+    regionsBuffer?: Buffer,
+  ): ScreenshotComparison | undefined =>
+    includeComparison
+      ? {
+          sharedSize,
+          regions: regionsBuffer?.toString('base64'),
+          reference: expectedContent,
+          actual: screenshotBase64,
+          diff: diffBuffer.toString('base64'),
+        }
+      : undefined;
+
   if (expected.width !== actual.width || expected.height !== actual.height) {
     if (updateSnapshot === 'all') {
       await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
       await removeFailureArtifacts(snapshotStore, filepath, deadline);
       return 'updated';
     }
+    const diffBuffer = createDimensionDiff(expected, actual);
     const artifacts = await writeFailureArtifacts({
       snapshotStore,
       referencePath: filepath,
       actualBuffer,
-      diffBuffer: createDimensionDiff(expected, actual),
+      diffBuffer,
       deadline,
     });
     throw new ScreenshotMismatchError(
-      `Screenshot dimensions differ for "${testName}": expected ${expected.width}x${expected.height}, received ${actual.width}x${actual.height}.\nReference: ${filepath}\nActual: ${artifacts.actualPath}\nDiff: ${artifacts.diffPath}\nRun Rstest with --update to replace it.`,
+      `Screenshot dimensions differ for "${testName}": expected ${expected.width}x${expected.height}, received ${actual.width}x${actual.height}.\nReference: ${filepath}\nActual: ${artifacts.actual}\nDiff: ${artifacts.diff}\nRun Rstest with --update to replace it.`,
+      comparison(diffBuffer),
     );
   }
 
   const diff = new PNG({ width: expected.width, height: expected.height });
-  const differentPixels = pixelmatch(
-    expected.data,
-    actual.data,
-    diff.data,
-    expected.width,
-    expected.height,
-    { threshold: normalizedOptions.threshold },
+  const { differentPixels, maxDiffPixels } = compareScreenshotPixels(
+    expected,
+    actual,
+    normalizedOptions,
+    diff,
   );
   throwIfScreenshotDeadlinePassed(deadline);
-  const maxDiffPixels = Math.max(
-    normalizedOptions.maxDiffPixels,
-    Math.floor(
-      expected.width * expected.height * normalizedOptions.maxDiffPixelRatio,
-    ),
-  );
-
   if (differentPixels > maxDiffPixels) {
     if (updateSnapshot === 'all') {
       await writeScreenshot(snapshotStore, filepath, actualBuffer, deadline);
       await removeFailureArtifacts(snapshotStore, filepath, deadline);
       return 'updated';
     }
+    const diffBuffer = PNG.sync.write(diff);
+    const regionsBuffer = createRegionDiff(actual, diff);
     const artifacts = await writeFailureArtifacts({
       snapshotStore,
       referencePath: filepath,
       actualBuffer,
-      diffBuffer: PNG.sync.write(diff),
+      diffBuffer,
+      regionsBuffer,
       deadline,
     });
     throw new ScreenshotMismatchError(
-      `Screenshot does not match the stored reference for "${testName}": ${differentPixels} pixels differ (allowed: ${maxDiffPixels}).\nReference: ${filepath}\nActual: ${artifacts.actualPath}\nDiff: ${artifacts.diffPath}\nRun Rstest with --update to replace it.`,
+      [
+        `Screenshot does not match the stored reference for "${testName}": ${differentPixels} pixels differ (allowed: ${maxDiffPixels}).`,
+        `Reference: ${filepath}`,
+        `Actual: ${artifacts.actual}`,
+        ...(regionsBuffer ? [`Regions: ${artifacts.regions}`] : []),
+        `Diff: ${artifacts.diff}`,
+        'Run Rstest with --update to replace it.',
+      ].join('\n'),
+      comparison(
+        diffBuffer,
+        {
+          width: expected.width,
+          height: expected.height,
+        },
+        regionsBuffer,
+      ),
     );
   }
 

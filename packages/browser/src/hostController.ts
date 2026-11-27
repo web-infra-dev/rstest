@@ -14,6 +14,7 @@ import {
   createRunnerEventSink,
   createSilentConsoleController,
   DEFAULT_TEST_TIMEOUT,
+  filterFiles,
   getPrettyConsoleName,
   hasUserRstestConfigPlugins,
   type InternalContext,
@@ -32,6 +33,7 @@ import {
   resolveBrowserInstances,
   resolveSnapshotPathDefault,
   type SelectedTestFile,
+  serializableConfig,
   type SerializedError,
   toSelectedTestFile,
   type TestFileResult,
@@ -65,6 +67,7 @@ import {
 } from './browserV8Coverage';
 import { getHeadlessConcurrency } from './concurrency';
 import { createConcurrencyLimiter } from './concurrencyLimiter';
+import { createBrowserWatchCoordinator } from './browserWatchCoordinator';
 import { createHeadedScheduler } from './headedScheduler';
 import { createHeadlessScheduler } from './headlessScheduler';
 import {
@@ -372,10 +375,24 @@ export const runBrowserController = async (
       envOverlay: env,
     },
   );
-  // The schedulers partition on the row itself. At most one `(project, browser)`
-  // row can run headed per run (validated), so the composition degrades to a
-  // pure headless run when no row is headed; `useHeadlessDirect` only steers
-  // the container window resolution and `setContainerOptions`.
+  // Refresh live per-cycle runtime fields (`testNamePattern` updated by watch
+  // `t`/`a` shortcuts) on each row before a rerun executes.
+  const syncLiveRuntimeConfig = (): void => {
+    for (const row of projectRuntimeConfigs) {
+      const project = projectByName.get(row.name);
+      const testNamePattern = project
+        ? project.normalizedConfig.testNamePattern
+        : context.normalizedConfig.testNamePattern;
+      row.runtimeConfig = serializableConfig({
+        ...row.runtimeConfig,
+        testNamePattern,
+      });
+    }
+  };
+  // The schedulers partition on the row itself: headless rows share one
+  // headless scheduler, and each headed `(project, browser)` row opens its own
+  // container window. `useHeadlessDirect` only skips resolving container assets
+  // when no row is headed.
   const headedRows = projectRuntimeConfigs.filter((row) => !row.headless);
   const headlessRows = projectRuntimeConfigs.filter((row) => row.headless);
   const useHeadlessDirect = headedRows.length === 0;
@@ -571,6 +588,7 @@ export const runBrowserController = async (
     context,
     options?.shardedEntries,
     browserProjects,
+    { applyFileFilters: !isWatchMode || filesOnly },
   );
   let totalTests = projectEntries.reduce(
     (total, item) => total + item.testFiles.length,
@@ -709,10 +727,19 @@ export const runBrowserController = async (
     return cleanup;
   };
 
-  // Track initial test files for watch mode (from this controller's freshly
-  // collected entries, before adopting the runtime's entry snapshot below).
+  // Track initial test files for watch mode (unfiltered disk set, including
+  // any updates applied by `modifyRstestConfig` during runtime creation).
+  const filterWatchTestPaths = (testPaths: string[]): string[] =>
+    context.fileFilters === undefined
+      ? testPaths
+      : filterFiles(testPaths, context.fileFilters, context.rootPath);
+  const collectUnfilteredWatchEntries = () =>
+    collectProjectEntries(context, browserProjects, {
+      applyFileFilters: false,
+    });
+
   if (isWatchMode) {
-    watchState.lastTestFiles = collectWatchTestFiles(projectEntries);
+    watchState.lastTestFiles = collectWatchTestFiles(runtime.projectEntries);
     // Bind the runtime's long-lived watch plugins to THIS entry's trigger —
     // the runtime survives config-change restarts, this closure does not.
     watchState.triggerRerun = async () => {
@@ -731,13 +758,12 @@ export const runBrowserController = async (
   // A path-scoped shortcut must match a browser entry. Keep its paths on the
   // dispatch call instead of putting them in the shared compiler-change set:
   // an overlapping rebuild can drain that set before the shortcut is planned.
-  const hasMatchingTestPath = (testPaths: string[]): boolean => {
-    const wanted = testPaths
-      ? new Set(testPaths.map((testPath) => getTestPathKey(testPath)))
-      : new Set<string>();
-    return watchState.lastTestFiles.some((file) =>
-      wanted.has(getTestPathKey(file.testPath)),
-    );
+  const hasMatchingTestPath = (
+    testPaths: string[],
+    files: readonly TestFileInfo[] = watchState.lastTestFiles,
+  ): boolean => {
+    const wanted = new Set(testPaths.map(getTestPathKey));
+    return files.some((file) => wanted.has(getTestPathKey(file.testPath)));
   };
 
   /**
@@ -749,29 +775,31 @@ export const runBrowserController = async (
    */
   const buildRerunOutcome = ({
     rerunTestPaths,
+    executedFileKeys,
     testTime,
     rawCoverage,
     unhandledErrors,
   }: {
     rerunTestPaths: string[];
+    executedFileKeys?: ReadonlySet<string>;
     testTime: number;
     rawCoverage: unknown[];
     unhandledErrors?: Error[];
   }): ExecutorCycleOutcome => {
     const deletedTestPaths = drainPendingDeletedTestPaths(watchState);
     const rerunPathSet = new Set(rerunTestPaths);
-    const rerunResults = context.reporterResults.results.filter((result) =>
-      rerunPathSet.has(result.testPath),
-    );
+    const matchesCycle = (result: { project: string; testPath: string }) =>
+      executedFileKeys
+        ? executedFileKeys.has(reporterFileKey(result.project, result.testPath))
+        : rerunPathSet.has(result.testPath);
+    const rerunResults = context.reporterResults.results.filter(matchesCycle);
     // Watch coverage is per-cycle on both transports: only the files this
     // rerun executed are reported.
     const coverageMap = buildBrowserCoverageMap(rerunResults, coverageProvider);
 
     return {
       results: rerunResults,
-      testResults: context.reporterResults.testResults.filter((result) =>
-        rerunPathSet.has(result.testPath),
-      ),
+      testResults: context.reporterResults.testResults.filter(matchesCycle),
       errors: unhandledErrors ?? [],
       testPaths: rerunTestPaths,
       deletedTestPaths,
@@ -797,89 +825,6 @@ export const runBrowserController = async (
    * per cycle like `fatalErrorRef`; see `ExecutorCycleOutcome.failure`.
    */
   let fatalCompileError: Error | undefined;
-
-  /**
-   * The watch session both transports hand back. Only `execute` differs — the
-   * cycle's timing, its fatal-error capture window, and the error-to-outcome
-   * precedence are one contract with core, so they live in one place.
-   * Execution starts only after core has reported the selected scope.
-   */
-  const createWatchSession = (
-    execute: (
-      testPaths: string[],
-      updateSnapshot: BrowserHostConfig['snapshot']['updateSnapshot'],
-    ) => Promise<unknown[]>,
-  ): BrowserWatchSession => ({
-    runCycle: async (testPaths, updateSnapshot, onSelected) => {
-      // Signalled by a rebuild that ended in `compiler.hooks.failed`: nothing
-      // was emitted, so this cycle reports the failure instead of rerunning
-      // tests.
-      if (fatalCompileError) {
-        return {
-          ...buildRerunOutcome({
-            rerunTestPaths: [],
-            testTime: 0,
-            rawCoverage: [],
-            unhandledErrors: [fatalCompileError],
-          }),
-          failure: 'fatal',
-        };
-      }
-      const selectedPaths = new Set(testPaths.map(getTestPathKey));
-      const runStartFailure = await onSelected?.(
-        expandSelectedFiles(
-          watchState.lastTestFiles.filter((file) =>
-            selectedPaths.has(getTestPathKey(file.testPath)),
-          ),
-        ),
-      );
-      // A reporter run-start failure aborts the cycle; core records it once,
-      // so the rerun reports nothing of its own.
-      if (runStartFailure) {
-        fatalErrorRef.current = null;
-        return buildRerunOutcome({
-          rerunTestPaths: [],
-          testTime: 0,
-          rawCoverage: [],
-        });
-      }
-      const rerunStartTime = Date.now();
-      // A fatal error is one cycle's outcome, not permanent session state. The
-      // headed scheduler also uses this ref to stop the rest of a failed cycle,
-      // so carrying it forward would prevent the next cycle from reloading.
-      fatalErrorRef.current = null;
-      let rerunError: Error | undefined;
-      let rawCoverage: unknown[] = [];
-
-      try {
-        rawCoverage = await execute(testPaths, updateSnapshot);
-      } catch (error) {
-        // Surfaced through the outcome rather than thrown: core finalizes this
-        // cycle either way, and its results belong in the report even when the
-        // run that produced them ended badly.
-        rerunError = toError(error);
-      }
-
-      const rerunFatalError = fatalErrorRef.current ?? undefined;
-      return buildRerunOutcome({
-        rerunTestPaths: testPaths,
-        testTime: Math.max(0, Date.now() - rerunStartTime),
-        rawCoverage,
-        unhandledErrors: rerunError
-          ? [rerunError]
-          : rerunFatalError
-            ? [rerunFatalError]
-            : undefined,
-      });
-    },
-    requestRerun: async (testPaths, updateSnapshot) => {
-      if (testPaths && !hasMatchingTestPath(testPaths)) {
-        return;
-      }
-      await watchSignals.runDispatchRerun(updateSnapshot, testPaths ?? 'all');
-      await watchSignals.awaitSignalledCycle();
-    },
-  });
 
   projectEntries = runtime.projectEntries;
   totalTests = projectEntries.reduce(
@@ -921,12 +866,22 @@ export const runBrowserController = async (
 
   // Collect all test files from project entries with project info
   // Normalize paths to posix format for cross-platform compatibility
-  const allTestFiles: TestFileInfo[] = projectEntries.flatMap((entry) =>
+  let allTestFiles: TestFileInfo[] = projectEntries.flatMap((entry) =>
     entry.testFiles.map((testPath) => ({
       testPath: normalize(testPath),
       projectName: entry.project.name,
     })),
   );
+  if (isWatchMode && context.fileFilters !== undefined) {
+    const matchedPaths = new Set(
+      filterWatchTestPaths(allTestFiles.map((file) => file.testPath)).map(
+        getTestPathKey,
+      ),
+    );
+    allTestFiles = allTestFiles.filter((file) =>
+      matchedPaths.has(getTestPathKey(file.testPath)),
+    );
+  }
   let runStartFailure: Error | undefined;
   try {
     runStartFailure = await options?.onSelected?.(
@@ -1020,22 +975,47 @@ export const runBrowserController = async (
       }
     : undefined;
 
-  // Hybrid runs (one headed pair + headless pages) install one lane per
-  // scheduler; the lane is chosen from the REQUEST'S OWN data, not install
-  // order: a session target names a headless runner page, a runId names the
-  // headed container.
-  const dispatchLanes: DispatchLanes = {};
-  const setDispatchPageResolver = (lanes: DispatchLanes): void => {
-    Object.assign(dispatchLanes, lanes);
+  // Multi-lane runs install one headless resolver and one headed resolver per
+  // container window; the lane is chosen from the REQUEST'S OWN data: a
+  // session target names a headless runner page, and a runId names the headed
+  // container whose registry minted it.
+  const dispatchLanes: DispatchLanes = {
+    headed: new Map(),
+  };
+  const setHeadlessDispatchPageResolver = (
+    resolver: DispatchPageResolver,
+  ): void => {
+    dispatchLanes.headless = resolver;
+  };
+  const setHeadedDispatchPageResolver = (
+    containerId: string,
+    resolver: DispatchPageResolver,
+  ): void => {
+    dispatchLanes.headed!.set(containerId, resolver);
   };
   const resolveDispatchPages = (
     target?: BrowserDispatchRequest['target'],
     runId?: string,
   ): ReturnType<DispatchPageResolver> => {
-    const lane = target?.sessionId
-      ? dispatchLanes.headless
-      : dispatchLanes.headed;
-    return lane?.(target, runId) ?? {};
+    if (target?.sessionId) {
+      return dispatchLanes.headless?.(target, runId) ?? {};
+    }
+    const headed = dispatchLanes.headed;
+    if (!headed || headed.size === 0) {
+      return {};
+    }
+    if (!runId) {
+      return headed.size === 1
+        ? headed.values().next().value!(target, runId)
+        : {};
+    }
+    for (const resolve of headed.values()) {
+      const resolved = resolve(target, runId);
+      if (resolved.containerPage) {
+        return resolved;
+      }
+    }
+    return {};
   };
 
   const dispatchBrowserRpcRequest = async ({
@@ -1136,17 +1116,27 @@ export const runBrowserController = async (
       throw new Error('Browser container page is not initialized');
     }
 
-    try {
-      const result = await implementation.dispatchRpc({
+    const dispatch = (
+      matchesScreenshotReference?: (first: Buffer) => Promise<boolean>,
+    ) =>
+      implementation.dispatchRpc({
         containerPage: runnerPage ? undefined : containerPage,
         runnerPage,
-        request: dispatchRequest,
+        request: screenshotDeadline
+          ? {
+              ...dispatchRequest,
+              timeout: Math.max(1, screenshotDeadline - Date.now()),
+            }
+          : dispatchRequest,
+        matchesScreenshotReference,
         isRequestCurrent: isRunCurrent,
         timeoutFallbackMs,
       });
 
+    try {
       if (request.kind === 'screenshot') {
         if (request.method === 'captureFailure') {
+          const result = await dispatch();
           const project = projectByName.get(request.projectName);
           const testName = request.args[0];
           const testIdentity = request.args[2];
@@ -1191,7 +1181,7 @@ export const runBrowserController = async (
         }
         const [testName] = request.args;
         const screenshotAssertionOrdinal = request.args[2];
-        if (typeof result !== 'string' || typeof testName !== 'string') {
+        if (typeof testName !== 'string') {
           throw new Error('Invalid screenshot matcher response.');
         }
         if (
@@ -1226,7 +1216,14 @@ export const runBrowserController = async (
           // Reference paths differentiate per browser: the requesting page's
           // browser id, not the run-wide default, owns the reference directory.
           browserName: screenshotBrowserName,
-          screenshotBase64: result,
+          captureScreenshot: async (matchesReference) => {
+            const result = await dispatch(matchesReference);
+            if (result !== null && typeof result !== 'string') {
+              throw new Error('Invalid screenshot matcher response.');
+            }
+            return result;
+          },
+          includeComparison: Boolean(containerPage && !runnerPage),
           updateSnapshot: request.snapshotUpdate ?? initialSnapshotUpdate,
           options: screenshotOptions,
           deadline: screenshotDeadline,
@@ -1247,7 +1244,7 @@ export const runBrowserController = async (
         return outcome;
       }
 
-      return result;
+      return await dispatch();
     } catch (error) {
       if (error instanceof ScreenshotMismatchError) {
         const key = fileKeyOf(request);
@@ -1259,6 +1256,7 @@ export const runBrowserController = async (
         };
         counts.unmatched += 1;
         screenshotCountsByFile.set(key, counts);
+        if (error.comparison) throw error;
       }
       // birpc serializes thrown Errors as `{}` over JSON; throw a string instead.
       if (error instanceof Error) {
@@ -1280,14 +1278,11 @@ export const runBrowserController = async (
     },
   );
 
-  // The container HTML carries the row set its runner iframes resolve:
-  // headless-only runs never render it; a headed window gets its headed rows
-  // (at most one, validated), keeping `(project, browser)` lookups unambiguous.
-  runtime.setContainerOptions(
-    useHeadlessDirect
-      ? hostOptions
-      : { ...hostOptions, projects: headedRows.map(toWireRow) },
-  );
+  // Each headed scheduler registers its own per-container options under its
+  // `containerId`; headless-only runs set the base options as a fallback.
+  if (useHeadlessDirect) {
+    runtime.setContainerOptions(hostOptions);
+  }
 
   // Track test results from browser runners
   const reporterResults: TestFileResult[] = [];
@@ -1699,79 +1694,71 @@ export const runBrowserController = async (
     });
   };
 
-  const schedulerDeps = {
-    context,
-    allTestFiles,
-    hostOptions,
-    projectRoots: new Map(
-      projectRuntimeConfigs.map((project) => [
-        project.name,
-        project.projectRoot,
-      ]),
-    ),
-    isWatchMode,
-    createDispatchRouter,
-    fatalErrorRef,
-    watchSignals,
-    setDispatchPageResolver,
-    createWatchSession,
-    collectProjectEntries: () => collectProjectEntries(context),
-    logWatchReady: () => logWatchReadyMessage(context, enableCliShortcuts),
-    destroyRuntime: closeRuntime,
-  };
+  const projectRoots = new Map(
+    projectRuntimeConfigs.map((project) => [project.name, project.projectRoot]),
+  );
 
-  // Hybrid scope: at most one headed row (validated), the rest stay headless.
-  // The headless lane keeps the watch ownership (its pool drives reruns); a
-  // headed window joins the initial cycle beside it.
   const headlessRowNames = new Set(headlessRows.map((row) => row.name));
   const headlessAllTestFiles = allTestFiles.filter((file) =>
     headlessRowNames.has(file.projectName),
   );
 
-  // Always composed lanes: each owns its own transport (headless page bridges,
-  // headed container WebSocket), so results never cross, and the controller
-  // finalizes both outputs as one cycle. A pure headless run has one lane; a
-  // single headed pair (validated) either joins headless lanes beside it or,
-  // with no headless row at all, runs alone.
-  // A mixed run's two lanes share one file budget (`pool.maxWorkers`, or the
-  // headless default), so they never run more files at once than a single lane
-  // would. A single-lane run needs no limiter.
+  // Always composed lanes: headless rows share one pool-backed lane, and each
+  // headed `(project, browser)` row opens its own container window. Any
+  // multi-lane run shares one file budget (`pool.maxWorkers`, or the headless
+  // default); in watch mode the budget stays unclamped because added files can
+  // expand future cycles.
+  const totalLanes = (headlessRows.length > 0 ? 1 : 0) + headedRows.length;
   const fileLimiter =
-    headlessRows.length > 0 && headedRows[0]
+    totalLanes > 1
       ? createConcurrencyLimiter(
-          getMixedLaneConcurrency(context, {
-            headlessFiles: headlessAllTestFiles,
-            headlessRows,
-            headedFiles: allTestFiles,
-            headedRow: headedRows[0],
-          }),
+          isWatchMode
+            ? getHeadlessConcurrency(context, Number.POSITIVE_INFINITY)
+            : getMixedLaneConcurrency(context, {
+                headlessFiles: headlessAllTestFiles,
+                headlessRows,
+                headedFiles: allTestFiles,
+                headedRows,
+              }),
         )
       : undefined;
-  const [headless, headed] = await Promise.all([
+  const [headless, ...headedLanes] = await Promise.all([
     headlessRows.length > 0
       ? createHeadlessScheduler({
-          ...schedulerDeps,
+          context,
           launchPool: runtime.launchPool,
           projectServers: runtime.projectServers,
           v8Coverage,
           allTestFiles: headlessAllTestFiles,
           projectRuntimeConfigs: headlessRows,
           fileLimiter,
+          hostOptions,
           watchState,
+          isWatchMode,
+          createDispatchRouter,
           handlers: { handleFatal, handleTestFileComplete },
+          watchSignals,
+          setDispatchPageResolver: setHeadlessDispatchPageResolver,
         })
       : undefined,
-    headedRows[0]
-      ? createHeadedScheduler({
-          ...schedulerDeps,
-          allTestFiles,
-          runtime,
-          headedRow: headedRows[0],
-          fileLimiter,
-          v8Coverage,
-          handlers: { handleTestFileComplete },
-        })
-      : undefined,
+    ...headedRows.map((headedRow) =>
+      createHeadedScheduler({
+        context,
+        runtime,
+        headedRow,
+        fileLimiter,
+        allTestFiles,
+        hostOptions,
+        v8Coverage,
+        projectRoots,
+        isWatchMode,
+        createDispatchRouter,
+        handlers: { handleTestFileComplete },
+        fatalErrorRef,
+        watchSignals,
+        setDispatchPageResolver: setHeadedDispatchPageResolver,
+      }),
+    ),
   ]).catch(async (error) => {
     // A browser launch failure surfaces from a lane, after the runtime exists.
     // A rejected non-watch cycle has no deferred close, so the runtime closes
@@ -1779,15 +1766,40 @@ export const runBrowserController = async (
     await closeRuntime();
     throw error;
   });
-  const testTime = Math.max(headless?.testTime ?? 0, headed?.testTime ?? 0);
+  const testTime = Math.max(
+    headless?.testTime ?? 0,
+    ...headedLanes.map((lane) => lane.testTime),
+  );
   const rawCoverage = [
     ...(headless?.rawCoverage ?? []),
-    ...(headed?.rawCoverage ?? []),
+    ...headedLanes.flatMap((lane) => lane.rawCoverage ?? []),
   ];
-  const watchSession = headless?.watchSession ?? headed?.watchSession;
-  const close = async () => {
-    await Promise.all([headless?.close?.(), headed?.close?.()]);
-  };
+  const watchSession = isWatchMode
+    ? createBrowserWatchCoordinator({
+        watchState,
+        watchSignals,
+        headlessLane: headless,
+        headlessRows,
+        headedLanes,
+        collectProjectEntries: collectUnfilteredWatchEntries,
+        filterWatchTestPaths,
+        syncRuntimeConfig: syncLiveRuntimeConfig,
+        logWatchReady: () => logWatchReadyMessage(context, enableCliShortcuts),
+        hasMatchingTestPath,
+        getFatalCompileError: () => fatalCompileError,
+        fatalErrorRef,
+        buildRerunOutcome,
+      })
+    : undefined;
+  const close = isWatchMode
+    ? undefined
+    : async () => {
+        await Promise.all([
+          headless?.close?.(),
+          ...headedLanes.map((lane) => lane.close?.()),
+        ]);
+        await closeRuntime();
+      };
 
   // The first build must not trigger a duplicate cycle, but a fatal test cycle
   // does not invalidate the session the scheduler already established.

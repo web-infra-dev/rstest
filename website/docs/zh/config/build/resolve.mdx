@@ -10,27 +10,43 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 ## resolve.aliasStrategy <RsbuildDocBadge path="/config/resolve/alias-strategy" text="resolve.aliasStrategy" />
 
-控制 `resolve.alias` 选项与 `tsconfig.json` 中的 `paths` 选项的优先级。
+- **类型：** `'prefer-tsconfig' | 'prefer-alias'`
+- **默认值：** `'prefer-tsconfig'`
+
+控制 `resolve.alias` 选项与 `tsconfig.json` 中的 `paths` 选项的优先级：
+
+- `'prefer-tsconfig'`：`tsconfig.json` 中的 `paths` 优先于 `resolve.alias`。
+- `'prefer-alias'`：`resolve.alias` 优先于 `tsconfig.json` 中的 `paths`。
 
 ## resolve.alias <RsbuildDocBadge path="/config/resolve/alias" text="resolve.alias" />
 
-设置模块路径的别名，用于简化导入路径或重定向模块引用，类似于 Rspack 的 [resolve.alias](https://rspack.rs/zh/config/resolve#resolvealias) 配置。
+- **类型：** `ConfigChain<Record<string, string | false | (string | false)[]>>`
+- **默认值：** `{}`
 
-对于 TypeScript 项目，你只需要在 `tsconfig.json` 中配置 [compilerOptions.paths](https://www.typescriptlang.org/tsconfig/#paths) 即可，Rstest 会自动识别它，不需要额外配置 `resolve.alias` 字段。
+设置模块路径别名以简化导入路径或重定向模块引用，用法与 Rspack 的 [resolve.alias](https://rspack.rs/zh/config/resolve#resolvealias) 一致。
+
+对于 TypeScript 项目，Rstest 会自动识别 `tsconfig.json` 中的 [compilerOptions.paths](https://www.typescriptlang.org/tsconfig/#paths)，无需在 `resolve.alias` 中重复配置。
 
 ## resolve.dedupe <RsbuildDocBadge path="/config/resolve/dedupe" text="resolve.dedupe" />
 
-强制 Rstest 从项目根目录解析指定的包，这可以用于移除重复包和减少包大小。
+- **类型：** `string[]`
+- **默认值：** `undefined`
+
+强制 Rstest 从项目根目录解析指定的包，避免产物中出现重复依赖。
 
 ## resolve.extensions <RsbuildDocBadge path="/config/resolve/extensions" text="resolve.extensions" />
 
-自动添加导入文件的扩展名。这意味着你可以导入文件，而不需要显式地写它们的扩展名。
+- **类型：** `string[]`
+- **默认值：** `['.ts', '.tsx', '.mjs', '.js', '.jsx', '.json', '.cjs']`
+
+在导入模块未写明扩展名时自动解析的文件扩展名列表。在 Node 模式构建（`node`、`jsdom` 和 `happy-dom`）中，Rstest 会继承 Rsbuild 的默认值并追加 `.cjs`；Browser Mode 则保持 Rsbuild 默认的扩展名列表。
 
 ## resolve.conditionNames <RsbuildDocBadge path="/config/resolve/condition-names" text="resolve.conditionNames" />
 
-控制解析包 `exports` 字段时使用的条件名称列表。
+- **类型：** `string[]`
+- **默认值：** 取决于测试环境和依赖类型。
 
-**默认值：** 取决于测试环境和依赖类型。
+控制解析包 `exports` 字段时使用的条件名称列表。
 
 对于 `node`、`jsdom` 和 `happy-dom` 测试，Rstest 继承 Rspack 的默认条件。在默认的 `NODE_ENV=test` 下，打包 JavaScript 依赖时使用以下条件：
 
@@ -41,7 +57,7 @@ import { RsbuildDocBadge } from '@components/RsbuildDocBadge';
 
 Rstest 在打包时将 `NODE_ENV=test` 视为开发模式，因此即使 `NODE_ENV` 为 `'test'`，也会启用 `development` 条件。匹配入口的优先级由包的 `exports` 键顺序决定，而非 `conditionNames` 的排列顺序。
 
-自定义此选项时，可以通过 `'...'` 保留 Rspack 的默认条件。例如，`node` 测试可以使用 `conditionNames: ['custom', '...']`，`jsdom` / `happy-dom` 测试则使用 `conditionNames: ['browser', 'custom', '...']`。显式设置此选项后，Rstest 不再自动添加 `browser`。
+自定义此选项时，可通过 `'...'` 保留 Rspack 的默认条件。例如，`node` 测试可以使用 `conditionNames: ['custom', '...']`，`jsdom` / `happy-dom` 测试则使用 `conditionNames: ['browser', 'custom', '...']`。显式设置此选项后，Rstest 不再自动添加 `browser`。
 
 不包含 `'...'` 的列表会覆盖各依赖类型的默认条件，包括 `import` 和 `require` 的区别。
 
@@ -49,4 +65,10 @@ Rstest 在打包时将 `NODE_ENV=test` 视为开发模式，因此即使 `NODE_E
 
 ## resolve.mainFields <RsbuildDocBadge path="/config/resolve/main-fields" text="resolve.mainFields" />
 
-控制包入口字段的优先级顺序，例如 `main`、`module` 和 `browser`。
+- **类型：** `string[]`
+- **默认值：** `['main']`（`node`）；`['module', 'main']`（`jsdom` / `happy-dom`）；`['browser', 'module', 'main']`（Browser Mode）
+
+控制 `package.json` 入口字段的优先级顺序，例如 `main`、`module` 和 `browser`。
+
+- 在 `node` 测试环境中，Rstest 会从 `mainFields` 中过滤掉 `'module'`（默认为 `['main']`），因为包的 `module` 字段并不总是原生 Node ESM 模块。
+- 在 `node`、`jsdom` 和 `happy-dom` 中处理 CommonJS `require` 时，Rstest 还会将 `resolve.byDependency.commonjs.mainFields` 设为 `['main', '...']`。

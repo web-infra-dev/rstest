@@ -1,24 +1,24 @@
 ---
-description: Mock functions, object methods, ESM modules, and CommonJS modules in Rstest, and distinguish mock state from module state.
+description: Mock functions, object methods, ESM modules, CommonJS modules, environment variables, globals, and timers in Rstest.
 ---
 
 import { ApiMeta } from '@components/ApiMeta';
 
 # Mocking
 
-Mocking lets you replace dependencies in tests, control return values, and assert how functions or modules are called. Rstest provides different mocking APIs for functions, object methods, ESM modules, CommonJS modules, and object trees.
+Mocking replaces dependencies in tests, controls return values, and records how functions or modules are called. All mocking, stubbing, and timer APIs live on `rs` (an alias for `rstest`) imported from `@rstest/core` or injected via [`globals`](/config/test/globals); Rstest does not provide `vi` or `jest` globals.
 
 ## Mock modules
 
-If a dependency is loaded through the module system, you can choose different APIs based on the module type and mocking behavior. Module mocking works the same in Node mode and [browser mode](/guide/browser-testing).
+Module mocking works the same in Node mode and [browser mode](/guide/browser-testing). Choose an API based on how the dependency is loaded and when the mock should take effect.
 
 ### Mock ESM modules
 
-If a dependency is loaded through `import`, you can use [rs.mock()](/api/runtime-api/rstest/mock-modules#rsmock) or [rs.doMock()](/api/runtime-api/rstest/mock-modules#rsdomock).
+For dependencies loaded through `import`, use [rs.mock()](/api/runtime-api/rstest/mock-modules#rsmock) or [rs.doMock()](/api/runtime-api/rstest/mock-modules#rsdomock).
 
 #### Use `rs.mock()`
 
-`rs.mock()` is hoisted to the top of the file. It is useful when the dependency should be replaced before the module under test runs.
+`rs.mock()` is hoisted to the top of the file so static `import` statements receive the mocked module before the module under test runs. Factory functions must be synchronous; returning a `Promise` throws an error.
 
 ```ts title="user-service.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -35,11 +35,19 @@ test('returns the fetched user name', async () => {
 });
 ```
 
-If you share mock registration through a separate module and your project declares `sideEffects: false`, mark the registration module as having side effects so the build retains it. See [Module side effects](/guide/advanced/side-effects) for configuration examples.
+Pass a dynamic `import()` (`Promise<T>`) as the first argument to enable IDE type inference on the factory return value without changing runtime behavior:
+
+```ts
+rs.mock(import('./api'), () => ({
+  fetchUser: rs.fn().mockResolvedValue({ id: '1', name: 'Alice' }),
+}));
+```
+
+If you share mock registration through a separate module and your project declares `sideEffects: false`, mark that registration module as having side effects so the build keeps it. See [Module side effects](/guide/advanced/side-effects).
 
 #### Use `rs.doMock()`
 
-Note that `rs.doMock()` is not hoisted and only takes effect after it runs. It is useful when earlier `import` statements should keep the real implementation and later ones should use the mock.
+`rs.doMock()` is not hoisted and only affects `import()` calls that run after it. Use it when earlier `import` statements should keep the real implementation and later ones should use the mock:
 
 ```ts title="feature.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -59,7 +67,7 @@ test('only mocks later imports', async () => {
 
 ### Share values with a hoisted mock factory
 
-Because `rs.mock()` is hoisted, its factory cannot read variables initialized later through normal module execution. Use [rs.hoisted()](/api/runtime-api/rstest/mock-modules#rshoisted) when the factory and test assertions need to share the same mock function or value.
+Because `rs.mock()` is hoisted, its factory cannot read variables initialized later during normal module execution. Use [rs.hoisted()](/api/runtime-api/rstest/mock-modules#rshoisted) when the factory and test assertions share the same mock function or value:
 
 ```ts title="api.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -79,13 +87,13 @@ test('shares the mock with the factory', async () => {
 
 ### Mock CommonJS modules
 
-Use [rs.mockRequire()](/api/runtime-api/rstest/mock-modules#rsmockrequire) or [rs.doMockRequire()](/api/runtime-api/rstest/mock-modules#rsdomockrequire) when you need to target the CommonJS entry loaded through `require()`. If both `import` and `require()` resolve to the same bundled module, `rs.mock()` also applies to `require()`.
+Use [rs.mockRequire()](/api/runtime-api/rstest/mock-modules#rsmockrequire) or [rs.doMockRequire()](/api/runtime-api/rstest/mock-modules#rsdomockrequire) to target the CommonJS entry loaded through `require()`. When both `import` and `require()` resolve to the same bundled module, `rs.mock()` applies to `require()` as well; when a package exposes separate ESM and CommonJS entries, mocking one entry does not affect the other.
 
-These APIs exist for CommonJS interop. They also work in browser tests, but prefer the ESM APIs (`rs.mock` / `rs.doMock`) when writing browser tests.
+These APIs also work in browser tests, though ESM APIs (`rs.mock` / `rs.doMock`) are preferred there.
 
 #### Use `rs.mockRequire()`
 
-`rs.mockRequire()` is hoisted to the top of the file. It is useful for file-level mocking of CommonJS modules.
+`rs.mockRequire()` is hoisted to the top of the file for file-level mocking of CommonJS modules:
 
 ```js title="math.test.cjs"
 const { expect, rs, test } = require('@rstest/core');
@@ -102,13 +110,11 @@ test('mocks a CommonJS module loaded with require', () => {
 
 #### Use `rs.doMockRequire()`
 
-Note that `rs.doMockRequire()` is not hoisted and only affects later `require()` calls.
-
-Note that this distinction matters when a package exposes both ESM and CommonJS entries. Mocking the ESM entry does not automatically affect the CommonJS entry, and vice versa.
+`rs.doMockRequire()` is not hoisted and only affects `require()` calls that run after it.
 
 ### Auto-mock modules
 
-If you want to replace the module's function exports with mock functions first and then configure only selected exports in the test, call `rs.mock()` with only the module path. Rstest first checks for a matching manual mock in `__mocks__`; when none exists, it falls back to auto-mocking the module. You can also pass `{ mock: true }` explicitly to skip the manual mock lookup and request auto-mocking directly.
+To replace a module's exported functions with mock functions and configure selected exports inside each test, call `rs.mock()` with only the module path. Rstest checks for a matching manual mock in `__mocks__` first and falls back to auto-mocking when none exists. Pass `{ mock: true }` to skip the `__mocks__` lookup and request auto-mocking directly:
 
 ```ts title="math.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -122,18 +128,27 @@ test('overrides one export', () => {
 });
 ```
 
-### Load a mocked module
+### Load a registered mock
 
-`rs.mock()` configures what import-based loads receive. When a test instead needs the auto-mocked module object directly, use one of these APIs:
+When a test needs to load an already-registered mock (`rs.mock` / `rs.doMock` / `rs.mockRequire` / `rs.doMockRequire`, or a `__mocks__` file) imperatively instead of via `import` or `require()`, use [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) (ESM) or [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock) (CommonJS):
 
-- [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) asynchronously loads an ESM module and returns a Promise. Use it with `await` for modules consumed through `import`.
-- [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock) synchronously loads a CommonJS module. Use it for modules consumed through `require()`.
+```ts title="math.test.ts"
+import { expect, rs, test } from '@rstest/core';
 
-Both APIs replace function exports and nested functions with mocks. Primitive values are preserved, while arrays become empty arrays. In TypeScript, pass the returned module to `rs.mocked(module, true)` before calling mock control methods such as `mockReturnValue`. Match the API to the module entry your code uses, especially when a package provides separate ESM and CommonJS entries.
+test('loads an auto-mocked module', async () => {
+  rs.doMock('./math', { mock: true });
+  const math = await rs.importMock<typeof import('./math')>('./math');
+
+  math.add.mockReturnValue(100);
+  expect(math.add(1, 2)).toBe(100);
+});
+```
+
+See [rs.importMock()](/api/runtime-api/rstest/mock-modules#rsimportmock) and [rs.requireMock()](/api/runtime-api/rstest/mock-modules#rsrequiremock) for error behavior and TypeScript typing with `rs.mocked()`.
 
 ### Spy on a whole module
 
-If you want to keep the real implementation and still assert calls, you can use `{ spy: true }`.
+Pass `{ spy: true }` to keep the original implementations while tracking calls to exported functions:
 
 ```ts title="calculator.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -147,17 +162,17 @@ test('keeps the real implementation while tracking calls', () => {
 });
 ```
 
-Note that the spy only tracks calls made **through an export** — calls between functions inside the same module are not tracked.
+This wraps the module's **exports** — calls between functions inside the same module use local bindings and are not tracked.
 
 ### Partially mock modules
 
-Use the matching API when a mocked module still needs some or all of its real exports:
+Use the matching API when a mocked module needs some or all of its real exports:
 
 - Add `with { rstest: 'importActual' }` to a static ESM import when a hoisted, synchronous `rs.mock()` factory needs the real exports.
 - Use [rs.importActual()](/api/runtime-api/rstest/mock-modules#rsimportactual) to load the original ESM module asynchronously inside a test.
-- Use [rs.requireActual()](/api/runtime-api/rstest/mock-modules#rsrequireactual) to load the original CommonJS module synchronously, including from a synchronous mock factory.
+- Use [rs.requireActual()](/api/runtime-api/rstest/mock-modules#rsrequireactual) to load the original CommonJS module synchronously, including inside a synchronous mock factory.
 
-For a module graph without top-level `await`, the static ESM form is useful for replacing one export while keeping the others. The example loads the mocked module with `await import()` inside the test, which also works when the actual module graph uses top-level `await`:
+When the module graph does not use top-level `await`, the static ESM form lets you override specific exports while keeping the rest. The example below dynamically imports the mocked module inside the test, which also works when the real module graph uses top-level `await`:
 
 ```ts title="date-utils.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -175,13 +190,15 @@ test('keeps parseDate real', async () => {
 });
 ```
 
-Note that factory functions are hoisted, so values shared with the factory must come from a static `importActual` import or [`rs.hoisted()`](#share-values-with-a-hoisted-mock-factory).
+Because `rs.mock()` factories are hoisted, shared values must come from a static `importActual` import or [`rs.hoisted()`](#share-values-with-a-hoisted-mock-factory). For modules with top-level `await`, load them dynamically inside the test; see [partial mock with `importActual`](/api/runtime-api/rstest/mock-modules#partial-mock-with-importactual).
 
-If the actual module graph uses top-level `await`, do not statically import the mocked module in the same test file. The factory may run before the actual exports are ready. Dynamically import the mocked module with `await import()` inside an async test after the actual import has loaded. See [partial mocks with `importActual`](/api/runtime-api/rstest/mock-modules#partial-mock-with-importactual) for an example.
+### Mock virtual modules
+
+Rstest does not use Jest's third `{ virtual: true }` argument. To mock a module that does not exist on disk, map the specifier to `false` in `resolve.alias` so the bundler skips disk resolution, then provide its exports with `rs.mock()` or a `__mocks__` file. See [Mock virtual modules](/api/runtime-api/rstest/mock-modules#mock-virtual-modules).
 
 ### Reuse manual mocks from `__mocks__`
 
-If multiple tests reuse the same fake implementation, you can place it in `__mocks__` and load it without passing a factory. Manual mocks take precedence over the auto-mock fallback.
+Place shared fake implementations in `__mocks__` and call `rs.mock()` without a factory. Manual mocks take precedence over the auto-mock fallback:
 
 ```txt
 src/
@@ -200,19 +217,19 @@ rs.mock('../src/api');
 
 ### Reset module state
 
-If you want later `import` or `require()` calls to return the original module again, you can use these APIs:
+To restore the original module for later `import` or `require()` calls or clear the module cache:
 
 - [rs.unmock()](/api/runtime-api/rstest/mock-modules#rsunmock) / [rs.doUnmock()](/api/runtime-api/rstest/mock-modules#rsdounmock): stop mocking an `import`-based module.
 - [rs.unmockRequire()](/api/runtime-api/rstest/mock-modules#rsunmockrequire) / [rs.doUnmockRequire()](/api/runtime-api/rstest/mock-modules#rsdounmockrequire): stop mocking a `require()`-based module.
-- [rs.resetModules()](/api/runtime-api/rstest/mock-modules#rsresetmodules): clear the module cache so the next import or require evaluates the module again.
+- [rs.resetModules()](/api/runtime-api/rstest/mock-modules#rsresetmodules): clear the module cache so the next import or require re-evaluates the module.
 
-Note that `rs.resetModules()` does not cancel module mocking. To cancel module mocking, use the matching `unmock` API for the way the module is loaded.
+`rs.resetModules()` does not cancel module mocking; use the matching `unmock` API for the way the module is loaded.
 
 For the full API and more examples, see [Mock modules](/api/runtime-api/rstest/mock-modules).
 
 ## Mock functions
 
-If a dependency is passed in as a callback or injected implementation, you can use [rs.fn()](/api/runtime-api/rstest/mock-functions#rsfn) to create a mock function.
+Use [rs.fn()](/api/runtime-api/rstest/mock-functions#rsfn) to create a mock function for callbacks or injected dependencies:
 
 ```ts title="user.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -227,7 +244,7 @@ test('passes the selected id to the callback', () => {
 });
 ```
 
-You can also override behavior through mock instance methods, for example by returning a different value for one call:
+Override per-call or default behavior with mock instance methods:
 
 ```ts
 const fetchUser = rs.fn(async (id: string) => ({ id, role: 'guest' }));
@@ -235,11 +252,11 @@ const fetchUser = rs.fn(async (id: string) => ({ id, role: 'guest' }));
 fetchUser.mockResolvedValueOnce({ id: '1', role: 'admin' });
 ```
 
-For the full API and more examples, see [Mock functions](/api/runtime-api/rstest/mock-functions) and [MockInstance](/api/runtime-api/rstest/mock-instance).
+See [Mock functions](/api/runtime-api/rstest/mock-functions) and [MockInstance](/api/runtime-api/rstest/mock-instance).
 
 ## Spy on existing methods
 
-If you want to keep the real object and still track calls or temporarily override behavior, you can use [rs.spyOn()](/api/runtime-api/rstest/mock-functions#rsspyon).
+Use [rs.spyOn()](/api/runtime-api/rstest/mock-functions#rsspyon) to keep the real object while tracking calls or temporarily overriding a method or accessor:
 
 ```ts title="logger.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -254,33 +271,17 @@ test('logs a warning when validation fails', () => {
 });
 ```
 
+Pass `'get'` or `'set'` as the third argument (`rs.spyOn(obj, 'prop', 'get')`) to spy on a property getter or setter.
+
 ### `using` syntax
 
 <ApiMeta addedVersion="0.10.2" />
 
-Rstest supports the `using` syntax to restore the spy automatically when the block exits:
-
-```ts title="logger.test.ts"
-import { expect, rs, test } from '@rstest/core';
-
-test('logs a warning when validation fails', () => {
-  {
-    using warn = rs.spyOn(console, 'warn').mockImplementation(() => undefined);
-
-    console.warn('invalid payload');
-
-    expect(warn).toHaveBeenCalledWith('invalid payload');
-  }
-
-  // console.warn is restored here
-});
-```
-
-This pattern is commonly used with globals such as `console` and `Date`, as well as shared objects that already exist in the test.
+Rstest supports `using` to restore spies, env/global stubs, and fake timers automatically when a block exits; see [Scoped cleanup](/guide/advanced/scoped-cleanup) for examples.
 
 ## Deep-mock objects
 
-If a dependency already exists in memory and you want to convert nested methods into mocks, you can use [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject).
+Use [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject) to recursively convert methods on an existing object into mocks (or pass `{ spy: true }` to keep implementations while recording calls):
 
 ```ts title="service.test.ts"
 import { expect, rs, test } from '@rstest/core';
@@ -303,27 +304,70 @@ test('mocks nested methods', async () => {
 });
 ```
 
-If you want to keep the original nested implementations while still recording calls, you can pass `{ spy: true }`.
+See [rs.mockObject()](/api/runtime-api/rstest/mock-functions#rsmockobject) for array handling and [MockInstance](/api/runtime-api/rstest/mock-instance).
 
-For the full API and more examples, see [Mock functions](/api/runtime-api/rstest/mock-functions) and [MockInstance](/api/runtime-api/rstest/mock-instance).
+## Stub environment variables and globals
+
+Use [rs.stubEnv()](/api/runtime-api/rstest/utilities#rsstubenv) and [rs.stubGlobal()](/api/runtime-api/rstest/utilities#rsstubglobal) to override `process.env` / `import.meta.env` or `globalThis` properties during a test:
+
+```ts title="env.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('stubs env and global values', () => {
+  using _env = rs.stubEnv('API_URL', 'https://test.example.com');
+  using _fetch = rs.stubGlobal(
+    'fetch',
+    rs.fn().mockResolvedValue(new Response('ok')),
+  );
+
+  expect(process.env.API_URL).toBe('https://test.example.com');
+  expect(import.meta.env.API_URL).toBe('https://test.example.com');
+  expect(rs.isMockFunction(globalThis.fetch)).toBe(true);
+});
+```
+
+See [Utilities](/api/runtime-api/rstest/utilities) for manual restoration and [`unstubEnvs`](/config/test/unstub-envs) / [`unstubGlobals`](/config/test/unstub-globals) for automatic cleanup.
+
+## Mock timers
+
+Use [Fake timers](/api/runtime-api/rstest/fake-timers) to replace global timer functions and `Date` so tests can advance time deterministically:
+
+```ts title="timer.test.ts"
+import { expect, rs, test } from '@rstest/core';
+
+test('advances timers without waiting', () => {
+  using _timers = rs.useFakeTimers();
+  const callback = rs.fn();
+
+  setTimeout(callback, 1000);
+  rs.advanceTimersByTime(1000);
+
+  expect(callback).toHaveBeenCalledTimes(1);
+});
+```
+
+See [Fake timers](/api/runtime-api/rstest/fake-timers) for `rs.setSystemTime()`, async advancement, and manual restoration.
 
 ## Type and identify mock functions
 
 [rs.mocked()](/api/runtime-api/rstest/mock-functions#rsmocked) returns the same value at runtime and only tells TypeScript to treat it as mocked. Use it when an auto-mocked module or object still has its original static type.
 
-[rs.isMockFunction()](/api/runtime-api/rstest/mock-functions#rsismockfunction) performs a runtime check. Use it when test logic needs to determine whether a function is currently a mock; it also narrows the function to `MockInstance` in TypeScript.
+[rs.isMockFunction()](/api/runtime-api/rstest/mock-functions#rsismockfunction) performs a runtime check to determine whether a function is currently a mock and narrows its type to `MockInstance` in TypeScript.
 
 ## Clear mock state
 
-If you need to clear call history or reset mock implementations, you can use these APIs:
+Configure automatic cleanup before every test in `rstest.config.ts`:
 
-- [clearMocks](/config/test/clear-mocks): clear call history before each test.
-- [resetMocks](/config/test/reset-mocks): clear call history and reset mock implementations.
-- [restoreMocks](/config/test/restore-mocks): restore spied descriptors on real objects.
+- [clearMocks](/config/test/clear-mocks): clear call history (`mock.calls`, `mock.results`, etc.).
+- [resetMocks](/config/test/reset-mocks): clear call history and reset mock implementations to their initial state. When both `resetMocks` and `clearMocks` are enabled, `resetMocks` takes precedence.
+- [restoreMocks](/config/test/restore-mocks): restore original property descriptors on objects spied with `rs.spyOn()`. Does not clear call history, reset implementations, or affect standalone mocks created with `rs.fn()`.
+- [unstubEnvs](/config/test/unstub-envs) / [unstubGlobals](/config/test/unstub-globals): restore `process.env` / `import.meta.env` and `globalThis` stubs created with `rs.stubEnv()` and `rs.stubGlobal()`.
 
-For manual cleanup, the corresponding APIs are `rs.clearAllMocks()`, `rs.resetAllMocks()`, and `rs.restoreAllMocks()`.
+For manual cleanup, call `rs.clearAllMocks()`, `rs.resetAllMocks()`, `rs.restoreAllMocks()`, `rs.unstubAllEnvs()`, and `rs.unstubAllGlobals()`.
 
 ## Further reading
 
 - [Mock functions](/api/runtime-api/rstest/mock-functions)
 - [Mock modules](/api/runtime-api/rstest/mock-modules)
+- [Utilities](/api/runtime-api/rstest/utilities)
+- [Fake timers](/api/runtime-api/rstest/fake-timers)

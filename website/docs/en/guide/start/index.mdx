@@ -1,32 +1,24 @@
 ---
-description: Rstest is a JavaScript testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem,  enabling seamless integration into existing Rspack-based projects.
+description: Rstest is a JavaScript and TypeScript testing framework powered by Rspack and Rsbuild.
 ---
 
 # Introduction
 
-Rstest is a JavaScript testing framework powered by Rspack. It delivers comprehensive, first-class support for the Rspack ecosystem, enabling seamless integration into existing Rspack-based projects.
-
-Rstest offers full Jest-compatible APIs while providing native, out-of-the-box support for TypeScript, ESM, CJS, and more, ensuring a modern and efficient testing experience.
+Rstest is a JavaScript and TypeScript testing framework built on [Rspack](https://rspack.rs) and [Rsbuild](https://rsbuild.rs). It provides Jest-compatible APIs with built-in support for TypeScript, ESM, CJS, and CSS Modules.
 
 ## ✨ Why Rstest
 
-Rstest is built on top of Rspack and Rsbuild, and works out of the box with built-in support for common use cases such as TypeScript, ESM, CJS, and CSS Modules. Even if you are not using Rspack, Rstest can be adopted without migrating your existing build system.
+Built on Rspack and Rsbuild, Rstest runs TypeScript, ESM, CJS, and CSS Modules out of the box—you can adopt it without migrating your existing build setup.
 
-For projects already using the Rstack toolchain (Rspack, Rsbuild, Rslib, etc.), Rstest can further **reuse your existing build configuration**—including module resolution, code transformation, and plugin capabilities—eliminating the need to maintain separate transform or resolver setups for testing.
+If your project already uses Rstack tools (Rspack, Rsbuild, or Rslib), Rstest reuses your existing module resolution, code transforms, and plugins through adapters instead of maintaining a separate test config.
 
-In terms of execution model, Rstest runs tests using a dependency graph–based **bundle model**, rather than the traditional per-file transform-and-execute approach. This enables it to fully leverage build-time optimizations—such as tree-shaking and skipping unused re-exports in side-effect-free barrel files—bringing test behavior closer to real production output. As a result, Rstest reduces redundant module transformations and executions in large-scale projects, improving both performance and stability.
-
-See [Module side effects](/guide/advanced/side-effects) for how `sideEffects` declarations affect initialization imports.
-
-By integrating testing into the build pipeline, Rstest simplifies the overall toolchain, reduces the duplicated cost of maintaining separate configuration and plugin systems, and allows testing to fit more naturally into modern engineering architectures such as monorepos and complex applications.
-
-In the future, Rstest will continue evolving around a unified “build + test” model—exploring more efficient approaches to quality assurance, and integrating more deeply with CI systems and AI-driven workflows.
+Rstest executes tests with a dependency-graph **bundle model** rather than transforming files one by one. Build-time optimizations—such as tree-shaking and skipping unused re-exports in side-effect-free barrel files—cut redundant module compilation and execution in large projects and keep test behavior closer to production output. See [Module side effects](/guide/advanced/side-effects) for how `sideEffects` declarations affect initialization imports.
 
 ## 🔥 Roadmap
 
-Rstest now supports core testing scenarios including Node / DOM testing, mocking, multi-project testing, and coverage collection, and has been successfully implemented in Rstack projects (including Rsbuild, Rslib, Rspack, and others).
+Rstest supports Node.js and DOM testing, Browser Mode, Playwright E2E testing, mocking, multi-project workspaces, and code coverage, and is used across Rstack projects including Rsbuild, Rslib, and Rspack.
 
-The project is currently in active development, and we will continue to refine functionality and enhance the user experience based on community feedback. For future development plans, please refer to the [Rstest Roadmap](https://github.com/web-infra-dev/rstest/issues/85).
+See the [Rstest Roadmap](https://github.com/web-infra-dev/rstest/issues/85) for upcoming plans.
 
 ## 🦀 Rstack
 
@@ -53,15 +45,14 @@ Rstack includes the following tools:
 
 ## 📦 Core packages
 
-Rstest's base functionality is provided by [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core). Other core packages add support for Browser Mode, coverage collection, and reusing Rstack configurations. You can install them as needed for your project.
-
-Rstest includes the following core packages:
+Rstest's base runner is provided by [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core). Install the additional packages below as needed for Browser Mode, E2E testing, coverage, or Rstack config reuse:
 
 | Name                                                                                                      | Description                | Version                                                                                                                                                                                                |
 | --------------------------------------------------------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | [@rstest/core](https://github.com/web-infra-dev/rstest/tree/main/packages/core)                           | Core testing framework     | <a href="https://npmjs.com/package/@rstest/core"><img src="https://img.shields.io/npm/v/@rstest/core?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>                           |
 | [@rstest/browser](https://github.com/web-infra-dev/rstest/tree/main/packages/browser)                     | Browser Mode support       | <a href="https://npmjs.com/package/@rstest/browser"><img src="https://img.shields.io/npm/v/@rstest/browser?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>                     |
 | [@rstest/browser-react](https://github.com/web-infra-dev/rstest/tree/main/packages/browser-react)         | React component testing    | <a href="https://npmjs.com/package/@rstest/browser-react"><img src="https://img.shields.io/npm/v/@rstest/browser-react?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>         |
+| [@rstest/playwright](https://github.com/web-infra-dev/rstest/tree/main/packages/playwright)               | Playwright E2E fixtures    | <a href="https://npmjs.com/package/@rstest/playwright"><img src="https://img.shields.io/npm/v/@rstest/playwright?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>               |
 | [@rstest/coverage-v8](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-v8)             | V8 coverage provider       | <a href="https://npmjs.com/package/@rstest/coverage-v8"><img src="https://img.shields.io/npm/v/@rstest/coverage-v8?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>             |
 | [@rstest/coverage-istanbul](https://github.com/web-infra-dev/rstest/tree/main/packages/coverage-istanbul) | Istanbul coverage provider | <a href="https://npmjs.com/package/@rstest/coverage-istanbul"><img src="https://img.shields.io/npm/v/@rstest/coverage-istanbul?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a> |
 | [@rstest/adapter-rsbuild](https://github.com/web-infra-dev/rstest/tree/main/packages/adapter-rsbuild)     | Reuse Rsbuild config       | <a href="https://npmjs.com/package/@rstest/adapter-rsbuild"><img src="https://img.shields.io/npm/v/@rstest/adapter-rsbuild?style=flat-square&colorA=564341&colorB=EDED91" alt="npm version" /></a>     |

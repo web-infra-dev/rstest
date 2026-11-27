@@ -18,6 +18,10 @@ import type {
   BrowserLocatorText,
   BrowserRpcRequest,
 } from '../../rpcProtocol';
+import {
+  resolveScreenshotComparisonOptions,
+  compareScreenshotPixels,
+} from '../../screenshotSnapshots';
 import { createSerialTaskQueue } from '../../serialTaskQueue';
 import { compilePlaywrightLocator } from './compileLocator';
 import { formatExpectError, serializeExpectedText } from './expectUtils';
@@ -161,11 +165,19 @@ const callExpect = async (
   locator: Locator,
   expectMethod: string,
   options: { isNot: boolean; timeout: number } & Record<string, unknown>,
-  fallbackMessage: string,
+  description: string,
+  expectedText?: BrowserLocatorText,
 ): Promise<null> => {
   const result = await expectWithProbes(locator, expectMethod, options);
   if (result.matches !== !options.isNot) {
-    throw new Error(formatExpectError(result) || fallbackMessage);
+    const details = formatExpectError(result);
+    if (!expectedText) throw new Error(details || description);
+    const value =
+      expectedText.type === 'string'
+        ? JSON.stringify(expectedText.value)
+        : `/${expectedText.source}/${expectedText.flags}`;
+    const assertion = `${options.isNot ? 'not.' : ''}${description}(${value})`;
+    throw new Error([assertion, details].filter(Boolean).join('\n'));
   }
   return null;
 };
@@ -200,10 +212,12 @@ const assertStringArg = (
 const captureStableScreenshot = async (
   target: Locator | Page,
   options: Record<string, unknown>,
+  comparison: ReturnType<typeof resolveScreenshotComparisonOptions>,
   requestDeadline: number | undefined,
   beforeCapture?: () => Promise<void>,
-): Promise<Buffer> => {
-  const { stabilityTimeout = 2_000, ...playwrightOptions } = options;
+  matchesReference?: (first: Buffer) => Promise<boolean>,
+): Promise<Buffer | null> => {
+  const { stabilityTimeout = 5_000, ...playwrightOptions } = options;
   if (
     typeof stabilityTimeout !== 'number' ||
     !Number.isFinite(stabilityTimeout) ||
@@ -227,10 +241,14 @@ const captureStableScreenshot = async (
       ...(timeout === undefined ? {} : { timeout }),
     } as any);
   };
-  let previous = await capture();
-  if (stabilityTimeout === 0) return previous;
+  const first = await capture();
+  if (stabilityTimeout === 0) return first;
+
+  if (await matchesReference?.(first)) return null;
 
   const stabilityDeadline = Date.now() + stabilityTimeout;
+  let previousBuffer = first;
+  let previousImage: PNG | undefined;
   while (
     Date.now() < stabilityDeadline &&
     (!requestDeadline || Date.now() < requestDeadline)
@@ -257,16 +275,22 @@ const captureStableScreenshot = async (
         `Screenshot did not become stable within ${stabilityTimeout}ms. Increase stabilityTimeout or mask dynamic content.`,
       );
     }
-    const before = PNG.sync.read(previous);
-    const after = PNG.sync.read(current);
+    if (current.equals(previousBuffer)) return current;
+    previousImage ??= PNG.sync.read(previousBuffer);
+    const decoded = PNG.sync.read(current);
     if (
-      before.width === after.width &&
-      before.height === after.height &&
-      before.data.equals(after.data)
+      previousImage.width === decoded.width &&
+      previousImage.height === decoded.height
     ) {
-      return current;
+      const { differentPixels, maxDiffPixels } = compareScreenshotPixels(
+        previousImage,
+        decoded,
+        comparison,
+      );
+      if (differentPixels <= maxDiffPixels) return current;
     }
-    previous = current;
+    previousBuffer = current;
+    previousImage = decoded;
   }
 
   throw new Error(
@@ -276,9 +300,11 @@ const captureStableScreenshot = async (
 
 const readScreenshotOptions = async (
   root: FrameLocator | Page,
-  value: unknown,
-): Promise<Record<string, unknown>> => {
-  if (value === undefined) return {};
+  value: unknown = {},
+): Promise<{
+  capture: Record<string, unknown>;
+  comparison: ReturnType<typeof resolveScreenshotComparisonOptions>;
+}> => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error('toMatchScreenshot options must be an object.');
   }
@@ -320,20 +346,23 @@ const readScreenshotOptions = async (
   }
 
   return {
-    ...(options.stabilityTimeout === undefined
-      ? {}
-      : { stabilityTimeout: options.stabilityTimeout }),
-    ...(options.mask === undefined ? {} : { mask: options.mask }),
-    ...(options.maskColor === undefined
-      ? {}
-      : { maskColor: options.maskColor }),
-    ...(options.fullPage === undefined ? {} : { fullPage: options.fullPage }),
-    ...(options.style === undefined ? {} : { style: options.style }),
-    ...(options.caret === undefined ? {} : { caret: options.caret }),
-    ...(options.scale === undefined ? {} : { scale: options.scale }),
-    ...(options.omitBackground === undefined
-      ? {}
-      : { omitBackground: options.omitBackground }),
+    comparison: resolveScreenshotComparisonOptions(options),
+    capture: {
+      ...(options.stabilityTimeout === undefined
+        ? {}
+        : { stabilityTimeout: options.stabilityTimeout }),
+      ...(options.mask === undefined ? {} : { mask: options.mask }),
+      ...(options.maskColor === undefined
+        ? {}
+        : { maskColor: options.maskColor }),
+      ...(options.fullPage === undefined ? {} : { fullPage: options.fullPage }),
+      ...(options.style === undefined ? {} : { style: options.style }),
+      ...(options.caret === undefined ? {} : { caret: options.caret }),
+      ...(options.scale === undefined ? {} : { scale: options.scale }),
+      ...(options.omitBackground === undefined
+        ? {}
+        : { omitBackground: options.omitBackground }),
+    },
   };
 };
 
@@ -422,7 +451,8 @@ const dispatchExpectMatcher = (
         timeout,
         expectedText: serializeExpectedText(expected, textDef.textOptions),
       },
-      `Expected element ${method}`,
+      method,
+      expected,
     );
   }
 
@@ -583,12 +613,14 @@ export async function dispatchPlaywrightBrowserRpc({
   containerPage,
   runnerPage,
   request,
+  matchesScreenshotReference,
   isRequestCurrent,
   timeoutFallbackMs,
 }: {
   containerPage?: Page;
   runnerPage?: Page;
   request: BrowserRpcRequest;
+  matchesScreenshotReference?: (first: Buffer) => Promise<boolean>;
   isRequestCurrent?: () => boolean;
   timeoutFallbackMs: number;
 }): Promise<unknown> {
@@ -756,9 +788,10 @@ export async function dispatchPlaywrightBrowserRpc({
       throw new Error(`Screenshot matcher not supported: ${request.method}`);
     }
     const isFailureCapture = request.method === 'captureFailure';
-    const options = isFailureCapture
-      ? {}
-      : await readScreenshotOptions(locatorRoot, request.args[1]);
+    const { capture: options, comparison } = await readScreenshotOptions(
+      locatorRoot,
+      isFailureCapture ? undefined : request.args[1],
+    );
     let screenshotTarget: Locator | Page = locator;
     let restoreScreenshotState: (() => Promise<void>) | undefined;
     let beforeScreenshotCapture: (() => Promise<void>) | undefined;
@@ -830,7 +863,7 @@ export async function dispatchPlaywrightBrowserRpc({
         'toMatchScreenshot fullPage is only supported when asserting the page.',
       );
     }
-    let screenshot: Buffer;
+    let screenshot: Buffer | null;
     try {
       if (isFailureCapture) {
         const screenshotTimeout = requestDeadline
@@ -846,14 +879,16 @@ export async function dispatchPlaywrightBrowserRpc({
         screenshot = await captureStableScreenshot(
           screenshotTarget,
           options,
+          comparison,
           requestDeadline,
           beforeScreenshotCapture,
+          matchesScreenshotReference,
         );
       }
     } finally {
       await restoreScreenshotState?.();
     }
-    return screenshot.toString('base64');
+    return screenshot?.toString('base64') ?? null;
   }
 
   if (request.kind === 'locator') {

@@ -1,5 +1,5 @@
 ---
-description: 源码内联测试（In-source testing）指的是测试代码与源代码写在同一个文件中，类似于 Rust 的模块测试。
+description: 匹配包含源码内联测试（in-source testing）的源文件的 glob 模式。
 ---
 
 # includeSource
@@ -7,11 +7,9 @@ description: 源码内联测试（In-source testing）指的是测试代码与�
 - **类型：** `string[]`
 - **默认值：** `[]`
 
-源码内联测试（In-source testing）指的是测试代码与源代码写在同一个文件中，类似于 [Rust 的模块测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest)。
+配置用于匹配源码内联测试（in-source testing）文件的 glob 模式，测试代码与实现代码写在同一个文件中，类似于 [Rust 的模块测试](https://doc.rust-lang.org/book/ch11-03-test-organization.html#the-tests-module-and-cfgtest)。模式会相对于 [root](/config/test/root) 解析，并受 [exclude](/config/test/exclude) 规则约束。
 
-你可以通过 `includeSource` 配置，定义一组用于匹配内联测试文件的 glob 模式列表。
-
-```ts
+```ts title="rstest.config.ts"
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
@@ -19,36 +17,32 @@ export default defineConfig({
 });
 ```
 
-:::tip
-源码内联测试通常适用于小型功能函数和工具方法，能够方便地进行快速验证和调试。对于更复杂的功能和模块，建议使用独立的测试文件。
-:::
+内联测试适合工具函数等小型模块，方便就近验证和调试。对于较大或需要复杂初始化的模块，建议使用独立的测试文件。
 
-`includeSource` 同时适用于 Node 模式与[浏览器模式](/guide/browser-testing)项目。
+`includeSource` 同时适用于 Node 模式与 [Browser Mode](/guide/browser-testing) 项目。
 
-### 编写内联测试
+## 编写内联测试
 
-当定义了 `includeSource` 后，Rstest 会运行所有通过 glob 匹配且包含 `import.meta.rstest` 的文件。
+Rstest 会扫描匹配 `includeSource` 的文件，仅运行其中包含 `import.meta.rstest` 的文件。通过 `import.meta.rstest` 可以获取 Rstest 的测试 API（`it`、`test`、`describe`、`expect` 和 Hook）：
 
-你可以通过 `import.meta.rstest` 获取 Rstest 的测试 API。
-
-```ts title=src/helper.ts
+```ts title="src/helper.ts"
 export const sayHi = () => 'hi';
 
 if (import.meta.rstest) {
   const { it, expect } = import.meta.rstest;
-  it('should test source code correctly', () => {
+  it('should return hi', () => {
     expect(sayHi()).toBe('hi');
   });
 }
 ```
 
-### 生产环境构建
+## 生产环境构建
 
-将测试代码写在 `if (import.meta.rstest)` 代码块内。生成非测试产物时，请在项目的构建配置中将 `import.meta.rstest` 定义为 `false`，这样打包工具就能将测试代码作为无用代码移除。
+将测试代码放在 `if (import.meta.rstest)` 代码块内。构建生产产物时，在构建配置中将 `import.meta.rstest` 定义为 `false`，打包工具即可将其作为死代码消除：
 
 - 使用 Rspack 的 [DefinePlugin](https://rspack.rs/zh/plugins/webpack/define-plugin)：
 
-```diff title=rspack.config.ts
+```diff title="rspack.config.ts"
 import { defineConfig } from '@rspack/cli';
 +import { rspack } from '@rspack/core';
 
@@ -63,7 +57,7 @@ export default defineConfig({
 
 - 使用 Rsbuild 的 [source.define](https://rsbuild.rs/zh/config/source/define) 选项：
 
-```diff title=rsbuild.config.ts
+```diff title="rsbuild.config.ts"
 import { defineConfig } from '@rsbuild/core';
 
 export default defineConfig({
@@ -75,11 +69,11 @@ export default defineConfig({
 });
 ```
 
-### TypeScript
+## TypeScript
 
-如需让 TypeScript 支持 `import.meta.rstest`，推荐在测试文件对应的 `tsconfig.json` 中，将 `@rstest/core/importMeta` 添加到 `compilerOptions.types`：
+如需为 `import.meta.rstest` 提供 TypeScript 类型支持，在 `tsconfig.json` 的 `compilerOptions.types` 中添加 `@rstest/core/importMeta`：
 
-```json title=tsconfig.json
+```json title="tsconfig.json"
 {
   "compilerOptions": {
     "types": ["@rstest/core/importMeta"]
@@ -89,8 +83,8 @@ export default defineConfig({
 
 > 如果已有 `compilerOptions.types` 配置，请将该类型追加到现有列表中。
 
-也可以在 `src/rstestEnv.d.ts` 中引用类型：
+也可以在声明文件中引用该类型：
 
-```ts title=rstestEnv.d.ts
+```ts title="src/rstestEnv.d.ts"
 /// <reference types="@rstest/core/importMeta" />
 ```

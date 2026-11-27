@@ -1,11 +1,13 @@
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
-import { prepareFixtures } from '../scripts';
+import { prepareFixtures, sleep } from '../scripts';
 import { BROWSER_PORTS } from './fixtures/ports';
 import {
   deleteFixtureTarget,
   killCliProcessTree,
+  runBrowserWatchCli,
   runBrowserWatchCliWithCwd,
   runBrowserWatchCrud,
   shouldRunHeadedBrowserTests,
@@ -14,7 +16,313 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+async function getBrowserUiPages() {
+  const { chromium } = await import('playwright');
+  const browser = await chromium.connectOverCDP(
+    `http://127.0.0.1:${BROWSER_PORTS['watch-headed-cdp']}`,
+  );
+  return browser
+    .contexts()
+    .flatMap((context) => context.pages())
+    .filter((page) => page.url().startsWith('http://localhost:'));
+}
+
+async function getBrowserUiPage() {
+  const pages = await getBrowserUiPages();
+  const page = pages[0];
+  if (!page) throw new Error('Browser UI page is missing');
+  return page;
+}
+
 describe('browser mode - headed watch', () => {
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'reruns the selected case or suite from the browser UI',
+    async () => {
+      const { cli } = await runBrowserWatchCli('browser-react', {
+        args: ['-c', 'rstest.rerun.config.mts', '--reporter=verbose'],
+      });
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        const page = await getBrowserUiPage();
+
+        await page.getByRole('heading', { name: 'Run results' }).waitFor();
+        await page.getByTestId('test-files-toggle-expand').click();
+        const cases = page.getByTestId('test-case-title');
+        const selected = cases.filter({
+          hasText: 'should work with getByRole query',
+        });
+        await selected.waitFor();
+        const caseCount = await cases.count();
+
+        cli.resetStd();
+        await selected.getByTestId('test-case-rerun').click();
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/✓.*should work with getByRole query/);
+        expect(cli.stdout).toContain(`1 passed | ${caseCount - 1} skipped`);
+
+        cli.resetStd();
+        await page.getByTestId('test-suite-rerun').click();
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(new RegExp(`Tests\\s+${caseCount} passed`));
+      } finally {
+        await killCliProcessTree(cli);
+      }
+    },
+    60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'opens the failed case in Results and restores the chosen preview after a watch rerun',
+    async () => {
+      const fixturesTargetPath = path.join(
+        __dirname,
+        'fixtures/fixtures-test-browser-failure-details',
+      );
+      const { fs } = await prepareFixtures({
+        fixturesPath: path.join(__dirname, 'fixtures/browser-react'),
+        fixturesTargetPath,
+      });
+      const file = path.join(
+        fixturesTargetPath,
+        'tests/testingLibraryDom.test.tsx',
+      );
+      const passing = "toHaveText('2')";
+      const failing = "toHaveText('51', { timeout: 500 })";
+      fs.update(file, (content) => content.replace(passing, failing));
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '-c',
+          'rstest.rerun.config.mts',
+          '--include',
+          'tests/{testingLibraryDom,renderHook}.test.tsx',
+        ],
+      });
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        const page = await getBrowserUiPage();
+        const panel = page.getByRole('region', { name: 'Failure details' });
+        await panel.waitFor();
+        expect(
+          await page
+            .getByRole('heading', { name: /uses Testing Library elements/i })
+            .isVisible(),
+        ).toBe(true);
+        const cases = page.getByTestId('test-case-title');
+        await cases
+          .filter({ hasText: 'should work with getByRole query' })
+          .click();
+        await panel.waitFor({ state: 'hidden' });
+        await cases
+          .filter({ hasText: 'uses Testing Library elements' })
+          .click();
+        await panel.waitFor();
+        expect(await panel.innerText()).toContain('toHaveText("51")');
+        expect(await panel.innerText()).toContain('unexpected value "2"');
+        await panel.getByText('Stack trace', { exact: true }).click();
+        expect(await panel.locator('details pre').isVisible()).toBe(true);
+        await page
+          .getByTestId('test-file-title')
+          .filter({ hasText: 'renderHook.test.tsx' })
+          .click();
+        const hookName = 'should render hook with initial value';
+        const hookRow = page
+          .getByTestId('result-row')
+          .filter({ hasText: hookName });
+        expect(await hookRow.innerText()).toMatch(/\d+ (ms|s)/);
+        await hookRow.click();
+        await page.getByTestId('view-preview').click();
+        const hookFrame = page.locator(
+          'iframe[data-test-file$="renderHook.test.tsx"]',
+        );
+        await hookFrame.waitFor();
+
+        cli.resetStd();
+        fs.update(file, (content) => content.replace(failing, passing));
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toContain('Test Files 2 passed');
+        await hookFrame.waitFor();
+        expect(
+          await page.getByTestId('view-preview').getAttribute('aria-pressed'),
+        ).toBe('true');
+        await page.getByTestId('view-results').click();
+        await page.getByRole('heading', { name: hookName }).waitFor();
+        await page
+          .getByTestId('test-file-title')
+          .filter({ hasText: 'testingLibraryDom.test.tsx' })
+          .click();
+        const repairedCase = page
+          .getByTestId('result-row')
+          .filter({ hasText: 'uses Testing Library elements' });
+        expect(await repairedCase.innerText()).toMatch(/passed/i);
+        await repairedCase.click();
+        await page
+          .getByRole('heading', { name: /uses Testing Library elements/i })
+          .waitFor();
+        await panel.waitFor({ state: 'hidden' });
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'shows screenshot originals side by side and highlights changes in the actual image',
+    async () => {
+      const fixturesTargetPath = path.join(
+        __dirname,
+        'fixtures/fixtures-test-screenshot-comparison',
+      );
+      const { fs } = await prepareFixtures({
+        fixturesPath: path.join(__dirname, 'fixtures/browser-react'),
+        fixturesTargetPath,
+      });
+      const file = path.join(
+        fixturesTargetPath,
+        'tests/testingLibraryDom.test.tsx',
+      );
+      fs.update(
+        file,
+        () => `import { page } from '@rstest/browser';
+import { expect, it } from '@rstest/core';
+
+it('compares a swatch', async () => {
+  document.body.innerHTML = '<div id="swatch" style="width: 128px; height: 600px; background: red"></div>';
+  await expect(page.locator('#swatch')).toMatchScreenshot('swatch');
+});`,
+      );
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: ['-c', 'rstest.rerun.config.mts'],
+      });
+      try {
+        await cli.waitForStdout('Test Files 1 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+        cli.resetStd();
+        fs.update(file, (source) =>
+          source.replace('background: red', 'background: blue'),
+        );
+        const page = await getBrowserUiPage();
+        const panel = page.getByRole('region', { name: 'Failure details' });
+        const expected = panel.getByRole('img', {
+          name: 'Expected screenshot',
+        });
+        const actual = panel.getByRole('img', { name: 'Actual screenshot' });
+        await actual.waitFor();
+        const highlight = panel.getByRole('checkbox', {
+          name: 'Highlight changes',
+        });
+        const directory = path.join(
+          path.dirname(file),
+          '__screenshots__',
+          path.basename(file),
+        );
+        const base = `swatch-chromium-${process.platform}`;
+        const imageSrc = async (filename: string) =>
+          `data:image/png;base64,${await readFile(path.join(directory, filename), 'base64')}`;
+        const reference = await imageSrc(`${base}.png`);
+        const capture = await imageSrc(`__failures__/${base}.actual.png`);
+        const regions = await imageSrc(`__failures__/${base}.regions.png`);
+        const pixels = await imageSrc(`__failures__/${base}.diff.png`);
+        expect(await highlight.isChecked()).toBe(false);
+        expect(await expected.getAttribute('src')).toBe(reference);
+        expect(await actual.getAttribute('src')).toBe(capture);
+        const left = await expected.boundingBox();
+        const right = await actual.boundingBox();
+        expect(left!.x + left!.width).toBeLessThanOrEqual(right!.x);
+        expect(left!.y).toBe(right!.y);
+
+        const comparison = panel.getByRole('region', {
+          name: 'Screenshot comparison',
+        });
+        const header = comparison.getByText('Expected', { exact: true });
+        const headerTop = (await header.boundingBox())!.y;
+        expect(left).toMatchObject(
+          await expected.evaluate((image: HTMLImageElement) => ({
+            width: image.naturalWidth,
+            height: image.naturalHeight,
+          })),
+        );
+        const scroll = await comparison.evaluate((el) => {
+          el.scrollTop = el.scrollHeight;
+          return el.scrollTop;
+        });
+        expect(scroll).toBeGreaterThan(0);
+        expect((await expected.boundingBox())!.y).toBeCloseTo(
+          left!.y - scroll,
+          0,
+        );
+        expect((await actual.boundingBox())!.y).toBeCloseTo(
+          right!.y - scroll,
+          0,
+        );
+        expect((await header.boundingBox())!.y).toBeCloseTo(headerTop, 0);
+
+        const centerColor = () =>
+          actual.evaluate(async (image: HTMLImageElement) => {
+            await image.decode();
+            const context = document.createElement('canvas').getContext('2d')!;
+            context.drawImage(
+              image,
+              Math.floor(image.naturalWidth / 2),
+              Math.floor(image.naturalHeight / 2),
+              1,
+              1,
+              0,
+              0,
+              1,
+              1,
+            );
+            return Array.from(context.getImageData(0, 0, 1, 1).data);
+          });
+        const originalCenter = await centerColor();
+        await highlight.check();
+        expect(await expected.getAttribute('src')).toBe(reference);
+        expect(await actual.getAttribute('src')).toBe(regions);
+        expect(await centerColor()).not.toEqual(originalCenter);
+        const dialog = page.getByRole('dialog');
+        for (const [label, src] of [
+          ['expected', reference],
+          ['actual', capture],
+        ]) {
+          await panel
+            .getByRole('button', {
+              name: `Open ${label} screenshot at original size`,
+            })
+            .click();
+          const original = dialog.getByRole('img');
+          expect(await original.getAttribute('src')).toBe(src);
+          expect(
+            await original.evaluate(async (el: HTMLImageElement) => {
+              await el.decode();
+              return el.getBoundingClientRect().height === el.naturalHeight;
+            }),
+          ).toBe(true);
+          await page.keyboard.press('Escape');
+          await dialog.waitFor({ state: 'hidden' });
+        }
+        await highlight.uncheck();
+        expect(await actual.getAttribute('src')).toBe(capture);
+        await panel.getByText('Snapshot details', { exact: true }).click();
+        await panel.getByRole('button', { name: 'View pixel diff' }).click();
+        expect(await dialog.getByRole('img').getAttribute('src')).toBe(pixels);
+        await dialog.getByRole('button', { name: 'Close' }).click();
+        await dialog.waitFor({ state: 'hidden' });
+        await cli.waitForStdout('Waiting for file changes...');
+        cli.resetStd();
+        fs.update(file, (source) =>
+          source.replace('background: blue', 'background: red'),
+        );
+        await cli.waitForStdout('Test Files 1 passed');
+        await panel.waitFor({ state: 'hidden' });
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    60_000,
+  );
+
   it.runIf(shouldRunHeadedBrowserTests)(
     'runs added files after an empty headed watch start',
     async () => {
@@ -190,5 +498,288 @@ it('runs the added file', () => expect(document.createElement('main').tagName).t
       }
     },
     60_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'supports mixed headed and headless projects in watch mode and scopes UI reruns to the headed window',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-mixed-headed`;
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+      const testFile = path.join(fixturesTargetPath, 'tests/index.test.ts');
+      fs.create(
+        path.join(fixturesTargetPath, 'rstest.mixed.config.mts'),
+        `import { defineConfig } from '@rstest/core';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
+
+const chromeLaunch = ciChromeEntry().providerOptions?.launch ?? {};
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'headed-app',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: false,
+        port: BROWSER_PORTS['watch-headed'],
+        providerOptions: {
+          launch: {
+            ...chromeLaunch,
+            args: ['--remote-debugging-port=' + BROWSER_PORTS['watch-headed-cdp']],
+          },
+        },
+      },
+      include: ['tests/**/*.test.ts'],
+      setupFiles: ['./setup.ts'],
+      testTimeout: BROWSER_TEST_TIMEOUT,
+    },
+    {
+      name: 'headless-app',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: true,
+        providerOptions: {
+          launch: chromeLaunch,
+        },
+      },
+      include: ['tests/**/*.test.ts'],
+      setupFiles: ['./setup.ts'],
+      testTimeout: BROWSER_TEST_TIMEOUT,
+    },
+  ],
+});
+`,
+      );
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: ['-c', 'rstest.mixed.config.mts'],
+      });
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/\[headed-app\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).toMatch(/\[headless-app\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).toContain('Test Files 2 passed');
+
+        const page = await getBrowserUiPage();
+        expect(await page.title()).toBe('headed-app [RSTEST BROWSER]');
+        expect(
+          await page.getByTestId('sidebar-instance-label').textContent(),
+        ).toBe('headed-app');
+
+        // UI rerun button reruns ONLY the headed window's project (even though
+        // both projects include tests/index.test.ts).
+        cli.resetStd();
+        await page.getByTestId('test-file-rerun').first().click();
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/\[headed-app\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).not.toMatch(/\[headless-app\]/);
+
+        // File edit reruns both headed and headless projects.
+        cli.resetStd();
+        fs.update(testFile, (content) => `${content}\n// watch edit\n`);
+        await cli.waitForStdout('✓ [headed-app] tests/index.test.ts');
+        await cli.waitForStdout('✓ [headless-app] tests/index.test.ts');
+        await cli.waitForStdout('Test Files 2 passed');
+
+        // File add + delete sync across both lanes cleanly.
+        const addedFile = path.join(fixturesTargetPath, 'tests/added.test.ts');
+        cli.resetStd();
+        fs.create(
+          addedFile,
+          `import { expect, test } from '@rstest/core';\ntest('added', () => expect(1 + 1).toBe(2));\n`,
+        );
+        await cli.waitForStdout('✓ [headed-app] tests/added.test.ts');
+        await cli.waitForStdout('✓ [headless-app] tests/added.test.ts');
+        await cli.waitForStdout('Test Files 4 passed');
+
+        cli.resetStd();
+        fs.delete(addedFile);
+        await cli.waitForStdout('Test Files 2 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    90_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'runs multiple headed projects in watch mode with independent UI windows and scoped UI reruns',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-multi-headed`;
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch`,
+        fixturesTargetPath,
+      });
+      fs.delete(path.join(fixturesTargetPath, 'tests/another.test.ts'));
+      const testFile = path.join(fixturesTargetPath, 'tests/index.test.ts');
+      fs.create(
+        path.join(fixturesTargetPath, 'rstest.multi-headed.config.mts'),
+        `import { defineConfig } from '@rstest/core';
+import { BROWSER_PORTS, BROWSER_TEST_TIMEOUT, ciChromeEntry } from '../ports';
+
+const sharedLaunch = {
+  ...(ciChromeEntry().providerOptions?.launch ?? {}),
+  args: ['--remote-debugging-port=' + BROWSER_PORTS['watch-headed-cdp']],
+};
+
+export default defineConfig({
+  projects: [
+    {
+      name: 'app-a',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: false,
+        port: BROWSER_PORTS['watch-headed'],
+        providerOptions: { launch: sharedLaunch },
+      },
+      include: ['tests/**/*.test.ts'],
+      setupFiles: ['./setup.ts'],
+      testTimeout: BROWSER_TEST_TIMEOUT,
+    },
+    {
+      name: 'app-b',
+      browser: {
+        enabled: true,
+        provider: 'playwright',
+        headless: false,
+        providerOptions: { launch: sharedLaunch },
+      },
+      include: ['tests/**/*.test.ts'],
+      setupFiles: ['./setup.ts'],
+      testTimeout: BROWSER_TEST_TIMEOUT,
+    },
+  ],
+});
+`,
+      );
+
+      const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: ['-c', 'rstest.multi-headed.config.mts'],
+      });
+      try {
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/\[app-a\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).toMatch(/\[app-b\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).toContain('Test Files 2 passed');
+
+        const pages = await getBrowserUiPages();
+        expect(pages).toHaveLength(2);
+        const pageByTitle = new Map<string, (typeof pages)[number]>();
+        for (const p of pages) {
+          pageByTitle.set(await p.title(), p);
+        }
+        const pageA = pageByTitle.get('app-a [RSTEST BROWSER]');
+        const pageB = pageByTitle.get('app-b [RSTEST BROWSER]');
+        expect(pageA).toBeDefined();
+        expect(pageB).toBeDefined();
+        expect(
+          await pageA!.getByTestId('sidebar-instance-label').textContent(),
+        ).toBe('app-a');
+        expect(
+          await pageB!.getByTestId('sidebar-instance-label').textContent(),
+        ).toBe('app-b');
+
+        // Clicking rerun inside app-a reruns ONLY app-a (even though both
+        // headed windows include tests/index.test.ts).
+        cli.resetStd();
+        await pageA!.getByTestId('test-file-rerun').first().click();
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/\[app-a\].*tests\/index\.test\.ts/);
+        expect(cli.stdout).not.toMatch(/\[app-b\]/);
+
+        // File edit reruns both headed windows.
+        cli.resetStd();
+        fs.update(testFile, (content) => `${content}\n// multi headed edit\n`);
+        await cli.waitForStdout('✓ [app-a] tests/index.test.ts');
+        await cli.waitForStdout('✓ [app-b] tests/index.test.ts');
+        await cli.waitForStdout('Test Files 2 passed');
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    90_000,
+  );
+
+  it.runIf(shouldRunHeadedBrowserTests)(
+    'supports t/p/a watch shortcuts in headed watch mode',
+    async () => {
+      const fixturesTargetPath = `${__dirname}/fixtures/fixtures-test-browser-watch-headed-shortcuts`;
+      const { fs } = await prepareFixtures({
+        fixturesPath: `${__dirname}/fixtures/watch-shortcuts`,
+        fixturesTargetPath,
+      });
+      fs.update(
+        path.join(fixturesTargetPath, 'tests/snap.test.ts'),
+        () => `import { expect, it } from '@rstest/core';
+
+it('headed gamma', () => {
+  expect(typeof document).toBe('object');
+});
+`,
+      );
+
+      const result = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+        args: [
+          '--browser.headless',
+          'false',
+          `--browser.port=${BROWSER_PORTS['watch-headed']}`,
+          '--reporter=verbose',
+        ],
+      });
+      const { cli } = result;
+      try {
+        await cli.waitForStdout('Test Files 2 passed');
+        await cli.waitForStdout('Tests 3 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+        await sleep(1000);
+
+        // `t` filters tests by name in headed iframes.
+        cli.resetStd();
+        cli.exec.process!.stdin!.write('t');
+        await cli.waitForStdout('Enter test name pattern');
+        cli.exec.process!.stdin!.write('alpha\r');
+        await cli.waitForStdout('Applied testNamePattern: alpha');
+        await cli.waitForStdout('Tests 1 passed | 2 skipped');
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/✓.*passes alpha/);
+
+        // `p` narrows to `basic` and keeps active `t alpha`.
+        cli.resetStd();
+        cli.exec.process!.stdin!.write('p');
+        await cli.waitForStdout('Enter file name pattern');
+        cli.exec.process!.stdin!.write('basic\r');
+        await cli.waitForStdout('Applied file filters: basic');
+        await cli.waitForStdout('Tests 1 passed | 2 skipped');
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/✓.*passes alpha/);
+        expect(cli.stdout).not.toContain('snap.test.ts');
+
+        // `a` clears both `p` and `t` and restores all files & tests in headed UI.
+        cli.resetStd();
+        cli.exec.process!.stdin!.write('a');
+        await cli.waitForStdout('Test Files 2 passed');
+        await cli.waitForStdout('Tests 3 passed');
+        await cli.waitForStdout('Waiting for file changes...');
+        expect(cli.stdout).toMatch(/✓.*passes alpha/);
+        expect(cli.stdout).toMatch(/✓.*passes beta/);
+        expect(cli.stdout).toMatch(/✓.*headed gamma/);
+
+        cli.exec.process!.stdin!.write('q');
+        await result.expectExecSuccess();
+      } finally {
+        await killCliProcessTree(cli);
+        await deleteFixtureTarget(fs, fixturesTargetPath);
+      }
+    },
+    90_000,
   );
 });

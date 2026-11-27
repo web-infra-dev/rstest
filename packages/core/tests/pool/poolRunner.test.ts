@@ -291,6 +291,7 @@ const createTask = (): PoolTask =>
     rpcMethods: {},
     type: 'run',
     worker: 'forks',
+    reuseKey: 'node',
   }) as PoolTask;
 
 describe('PoolRunner file fixture cleanup watchdog', () => {
@@ -298,6 +299,7 @@ describe('PoolRunner file fixture cleanup watchdog', () => {
     rs.useFakeTimers();
     const runner = new PoolRunner(new CleanupTimeoutWorker(), {
       environmentKey: 'node',
+      reuseKey: 'node',
       workerId: 1,
     });
     try {
@@ -331,6 +333,7 @@ describe('PoolRunner worker fixture cleanup', () => {
     rs.useFakeTimers();
     const runner = new PoolRunner(new WorkerCleanupErrorWorker(false), {
       environmentKey: 'node',
+      reuseKey: 'node',
       workerId: 1,
     });
 
@@ -366,6 +369,7 @@ describe('PoolRunner worker fixture cleanup', () => {
     rs.useFakeTimers();
     const runner = new PoolRunner(new WorkerCleanupTimeoutWorker(), {
       environmentKey: 'node',
+      reuseKey: 'node',
       workerId: 1,
     });
 
@@ -387,6 +391,7 @@ describe('PoolRunner worker fixture cleanup', () => {
   it('keeps the completed result when worker cleanup reports an error', async () => {
     const runner = new PoolRunner(new WorkerCleanupErrorWorker(), {
       environmentKey: 'node',
+      reuseKey: 'node',
       workerId: 1,
     });
 
@@ -406,6 +411,7 @@ describe('PoolRunner worker fixture cleanup', () => {
     const worker = new WorkerCleanupErrorWorker();
     const runner = new PoolRunner(worker, {
       environmentKey: 'node',
+      reuseKey: 'node',
       workerId: 1,
     });
 
@@ -431,6 +437,7 @@ describe('PoolRunner VM worker memory limit', () => {
       const send = rs.spyOn(worker, 'send');
       const runner = new PoolRunner(worker, {
         environmentKey: 'node',
+        reuseKey: 'node',
         workerId: 1,
         memoryMetric,
         memoryLimit,
@@ -452,6 +459,7 @@ describe('PoolRunner VM worker memory limit', () => {
   it('marks a runner for recycling after a worker reports heap over the limit', async () => {
     const runner = new PoolRunner(new MemoryReportingWorker(), {
       environmentKey: 'jsdom',
+      reuseKey: 'jsdom',
       memoryLimit: 100,
       workerId: 1,
     });
@@ -475,6 +483,7 @@ describe('PoolRunner RSS limit', () => {
     async ({ memoryMetric, memoryLimit, recycle }) => {
       const runner = new PoolRunner(new MemoryReportingWorker(), {
         environmentKey: 'node',
+        reuseKey: 'node',
         workerId: 1,
         memoryMetric,
         memoryLimit,

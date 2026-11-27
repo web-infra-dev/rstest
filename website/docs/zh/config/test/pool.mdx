@@ -19,11 +19,12 @@ export type RstestPoolOptions = {
   /** worker 数量上限或可用 CPU 的百分比 */
   maxWorkers?: number | string;
   /**
-   * `vmForks` 或 `vmThreads` worker 完成一个测试文件后，如果报告的 V8 `heapUsed` 达到该阈值，
-   * 则会在分配下一个文件前回收 worker。这是 worker 回收阈值，不是进程 RSS 的硬上限。
-   * 支持字节数、百分比和单位字符串。
-   * forks 在 isolate: false 时使用 RSS；VM pools 使用 V8 堆用量。
-   * threads 和开启隔离的 forks 忽略此选项。
+   * 测试文件运行完成后用于触发回收 worker 的内存阈值。
+   * 这是 worker 回收阈值，不是进程 RSS 的硬上限。
+   * `(0, 1]` 之间的数值表示系统内存比例，大于 `1` 的数值表示字节数；
+   * 字符串支持 `%`、`KB`、`KiB`、`MB`、`MiB`、`GB` 或 `GiB` 后缀。
+   * `isolate: false` 的 `forks` 使用 RSS；VM pool 使用 V8 堆用量。
+   * `threads` 和开启隔离的 `forks` 忽略此选项。
    * @default undefined（VM pool 使用 `系统内存 / maxWorkers`）
    */
   memoryLimit?: number | string;
@@ -54,7 +55,7 @@ const defaultPool = {
 
 建议先使用默认的 `forks`。它在四种 pool 中引入的执行限制最少，对 Node.js API 和 native addon 的兼容性更好。默认的 [`isolate: true`](/config/test/isolate) 还会为每个测试文件创建独立进程，避免进程级状态在文件之间残留，并将原生崩溃的影响限制在子进程内。
 
-性能不符合预期时，先确认耗时集中在哪个阶段。可以使用 `rstest-debugging` skill 辅助排查，安装方式和分析方法见[性能分析](/guide/debug/profiling)。如果瓶颈确实在 worker 启动或模块加载，再考虑下面的选择：
+性能不符合预期时，先通过[性能分析](/guide/debug/profiling)确认耗时集中在哪个阶段。如果瓶颈确实在 worker 启动或模块加载，再考虑下面的选择：
 
 | 场景                                                | 可以尝试    | 切换前需要确认                                            |
 | --------------------------------------------------- | ----------- | --------------------------------------------------------- |
@@ -76,16 +77,10 @@ Rstest 将这些结果保存在 `node_modules/.cache/.rstest-results/results.jso
 
 所有 pool 都需要将环境选项序列化后传给 worker，不支持在这些选项中传入函数。具体要求见 [`testEnvironment.options`](/config/test/test-environment#环境选项)。
 
-### forks
-
-通过 `child_process.fork` 创建 Node.js 子进程，每个 worker 都有独立的进程内存和进程级状态。默认每个文件使用新进程；设置 [`isolate: false`](/config/test/isolate) 后，多个文件可以复用同一个子进程。
-
-默认隔离模式下，每个文件都需要承担进程启动和初始化成本。
-
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
   ```bash
-  npx rstest --pool forks
+  npx rstest --pool threads
   ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -93,11 +88,18 @@ Rstest 将这些结果保存在 `node_modules/.cache/.rstest-results/results.jso
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  pool: 'forks',
+  // 'forks' | 'threads' | 'vmForks' | 'vmThreads'
+  pool: 'threads',
 });
 ```
   </Tab>
 </Tabs>
+
+### forks
+
+通过 `child_process.fork` 创建 Node.js 子进程，每个 worker 都有独立的进程内存和进程级状态。默认每个文件使用新进程；设置 [`isolate: false`](/config/test/isolate) 后，多个文件可以复用同一个子进程。
+
+默认隔离模式下，每个文件都需要承担进程启动和初始化成本。
 
 ### threads
 
@@ -113,45 +115,11 @@ export default defineConfig({
 
 完整差异见 [Node.js Worker 文档](https://nodejs.org/api/worker_threads.html#class-worker)。
 
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-  ```bash
-  npx rstest --pool threads
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: 'threads',
-});
-```
-  </Tab>
-</Tabs>
-
 ### vmForks
 
 <ApiMeta addedVersion="0.12.0" />
 
 复用子进程，并为每个测试文件创建新的 `vm.Context`，减少反复启动进程的开销。`process.chdir()` 等进程 API 仍然可用，但同一子进程中的文件可能共享进程级状态。
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-  ```bash
-  npx rstest --pool vmForks
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: 'vmForks',
-});
-```
-  </Tab>
-</Tabs>
 
 ### vmThreads
 
@@ -160,26 +128,6 @@ export default defineConfig({
 复用 worker thread，并为每个测试文件创建新的 `vm.Context`，减少反复启动线程的开销。它与 `vmForks` 提供相同的 VM 隔离，同时受上述 worker thread 限制。
 
 两种 VM pool 的隔离范围和兼容性要求见文末的 [VM pool 的行为边界](#vm-pool-的行为边界)。
-
-<Tabs defaultValue='rstest.config.ts'>
-  <Tab label="CLI">
-  ```bash
-  npx rstest --pool vmThreads --pool.memoryLimit 256MB
-  ```
-  </Tab>
-  <Tab label="rstest.config.ts">
-```ts
-import { defineConfig } from '@rstest/core';
-
-export default defineConfig({
-  pool: {
-    type: 'vmThreads',
-    memoryLimit: '256MB',
-  },
-});
-```
-  </Tab>
-</Tabs>
 
 ## 配置 worker 并行度和内存
 

@@ -1,5 +1,5 @@
 ---
-description: A list of glob patterns that should be excluded from your test files.
+description: Glob patterns excluded from test file discovery.
 overviewHeaders: []
 ---
 
@@ -7,20 +7,20 @@ overviewHeaders: []
 
 - **Type:** `string[] | { patterns: string[]; override?: boolean }`
 - **Default:** `['**/node_modules/**', '**/dist/**', '**/.{idea,git,cache,output,temp}/**']`
-- **CLI:** `--exclude "**/node_modules/**"`
+- **CLI:** `--exclude "**/fixtures/**"`
 
-A list of glob patterns that should be excluded from your test files.
+Glob patterns excluded from test file discovery, resolved relative to [root](/config/test/root). Rstest also automatically excludes its temporary build output directory ([`output.distPath.root`](/config/build/output#outputdistpath), `dist/.rstest-temp` by default).
 
 ## Example
 
-Exclude the test files under `node_modules`:
+Exclude test files under `fixtures`:
 
 import { Tab, Tabs } from '@theme';
 
 <Tabs defaultValue='rstest.config.ts'>
   <Tab label="CLI">
   ```bash
-  npx rstest --exclude "**/node_modules/**"
+  npx rstest --exclude "**/fixtures/**"
   ```
   </Tab>
   <Tab label="rstest.config.ts">
@@ -28,8 +28,7 @@ import { Tab, Tabs } from '@theme';
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
-  exclude: ['**/node_modules/**'],
+  exclude: ['**/fixtures/**'],
 });
 ```
   </Tab>
@@ -37,13 +36,12 @@ export default defineConfig({
 
 ## Override default value
 
-By default, Rstest will merge your custom config with the default config. If you want to override the default `exclude` configuration, you can set `override` to `true`.
+By default, Rstest merges custom `exclude` patterns with the defaults. Set `override: true` to replace the default patterns instead:
 
 ```ts title='rstest.config.ts'
 import { defineConfig } from '@rstest/core';
 
 export default defineConfig({
-  include: ['**/*.{test,spec}.?(c|m)[jt]s?(x)'],
   exclude: {
     patterns: ['**/node_modules/**'],
     override: true,
