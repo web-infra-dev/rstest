@@ -1,6 +1,4 @@
 import type { RsbuildPlugin } from '@rsbuild/core';
-import type { RuntimeRstest } from './runtime/api';
-import { getRuntimeAPI } from './runtime/api/global';
 import type {
   BrowserInstanceConfig,
   BrowserExpectConfig,
@@ -22,15 +20,6 @@ import type {
 
 export { loadConfig, mergeProjectConfig, mergeRstestConfig } from './config';
 export * from './runtime/api/public';
-
-// External packages may load this entry inside a VM. The worker owns the
-// cleanup registries and publishes its registrars into each runtime realm.
-export const registerWorkerCleanup: RuntimeRstest['registerWorkerCleanup'] = (
-  cleanup,
-) => getRuntimeAPI('registerWorkerCleanup')(cleanup);
-export const registerFileCleanup: RuntimeRstest['registerFileCleanup'] = (
-  cleanup,
-) => getRuntimeAPI('registerFileCleanup')(cleanup);
 
 export type {
   BrowserInstanceConfig,

@@ -17,8 +17,26 @@ export {
   getCurrentTestTimeout,
   registerElementExpect,
 } from './runtime/api/expect';
-// Public test APIs (describe, it, expect, etc.)
-export * from './runtime/api/public';
+// The Node pool owns the cleanup hooks also exported by runtime/api/public.
+export {
+  afterAll,
+  afterEach,
+  assert,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFailed,
+  onTestFinished,
+  rs,
+  rstest,
+  test,
+  type Assertion,
+  type Mock,
+  type Mocked,
+  type MockInstance,
+} from './runtime/api/public';
 export {
   formatTestError,
   formatTestErrors,

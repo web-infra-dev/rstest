@@ -1,16 +1,28 @@
 import type { Rstest, RstestUtilities } from '../../types';
-import { getRuntimeAPI } from './global';
+import type { RuntimeRstest } from './index';
 
 export type { Assertion } from '../../types/expect';
 export type { Mock, Mocked, MockInstance } from '../../types/mock';
 
-const wrapRstestAPI = <T extends keyof Omit<Rstest, 'rstest' | 'rs'>>(
+declare global {
+  var RSTEST_API: RuntimeRstest | undefined;
+}
+
+const check = (name: keyof RuntimeRstest) => {
+  if (!globalThis.RSTEST_API?.[name]) {
+    throw new Error(
+      `Rstest API '${name}' is not registered yet, please make sure you are running in a rstest environment.`,
+    );
+  }
+};
+
+const wrapRstestAPI = <T extends keyof Omit<RuntimeRstest, 'rstest' | 'rs'>>(
   name: T,
-): Rstest[T] => {
-  const fn = (...args: Parameters<Rstest[T]>) => {
-    const api = getRuntimeAPI(name);
-    return api.call(
-      api,
+): RuntimeRstest[T] => {
+  const fn = (...args: Parameters<RuntimeRstest[T]>) => {
+    check(name);
+    return globalThis.RSTEST_API![name].call(
+      globalThis.RSTEST_API![name],
       // @ts-expect-error
       ...args,
     );
@@ -26,7 +38,7 @@ const wrapRstestAPI = <T extends keyof Omit<Rstest, 'rstest' | 'rs'>>(
       }
       return Reflect.get(globalThis.RSTEST_API[name], key, receiver);
     },
-  }) as Rstest[T];
+  }) as RuntimeRstest[T];
 };
 
 const wrapRstestUtilitiesAPI = <T extends keyof Pick<Rstest, 'rstest' | 'rs'>>(
@@ -34,7 +46,8 @@ const wrapRstestUtilitiesAPI = <T extends keyof Pick<Rstest, 'rstest' | 'rs'>>(
 ): Rstest[T] => {
   return new Proxy({} as Rstest[T], {
     get(_target, key, receiver) {
-      return Reflect.get(getRuntimeAPI(name), key, receiver);
+      check(name);
+      return Reflect.get(globalThis.RSTEST_API?.[name] || {}, key, receiver);
     },
   });
 };
@@ -54,3 +67,7 @@ export const onTestFinished: Rstest['onTestFinished'] =
   wrapRstestAPI('onTestFinished');
 export const onTestFailed: Rstest['onTestFailed'] =
   wrapRstestAPI('onTestFailed');
+export const registerFileCleanup: RuntimeRstest['registerFileCleanup'] =
+  wrapRstestAPI('registerFileCleanup');
+export const registerWorkerCleanup: RuntimeRstest['registerWorkerCleanup'] =
+  wrapRstestAPI('registerWorkerCleanup');
