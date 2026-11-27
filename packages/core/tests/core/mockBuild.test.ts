@@ -56,4 +56,52 @@ describe('injectChunkInstallMockGuard', () => {
     const source = '__webpack_require__.f = {};';
     expect(injectChunkInstallMockGuard(source)).toBe(source);
   });
+
+  it.each(['rstest_original_modules', 'rstest_original_module_factories'])(
+    'preserves mocked factories registered in %s',
+    (registryName) => {
+      const mockedFactory = () => 'mocked';
+      const realFactory = () => 'real';
+      const modules = { mocked: mockedFactory };
+      const webpackRequire = {
+        m: modules,
+        o: Object.hasOwn,
+        [registryName]: Object.assign(Object.create({ inherited: true }), {
+          mocked: undefined,
+        }),
+      };
+
+      const installChunk = new Function(
+        '__webpack_require__',
+        'moreModules',
+        `${injectChunkInstallMockGuard(chunkInstallRuntime)}\ninstallChunk();`,
+      );
+      installChunk(webpackRequire, {
+        mocked: realFactory,
+        ordinary: realFactory,
+        inherited: realFactory,
+        hasOwnProperty: realFactory,
+      });
+
+      expect(modules).toEqual({
+        mocked: mockedFactory,
+        ordinary: realFactory,
+        inherited: realFactory,
+        hasOwnProperty: realFactory,
+      });
+    },
+  );
+
+  it('installs chunks before the mock registries are initialized', () => {
+    const realFactory = () => 'real';
+    const modules = {};
+    const installChunk = new Function(
+      '__webpack_require__',
+      'moreModules',
+      `${injectChunkInstallMockGuard(chunkInstallRuntime)}\ninstallChunk();`,
+    );
+    installChunk({ m: modules, o: Object.hasOwn }, { ordinary: realFactory });
+
+    expect(modules).toEqual({ ordinary: realFactory });
+  });
 });

@@ -29,7 +29,7 @@ const CHUNK_INSTALL_LOOP_PATTERNS = [
 ] as const;
 
 const MOCKED_ID_INSTALL_GUARD =
-  'if (Object.keys(__webpack_require__.rstest_original_modules || {}).includes(moduleId) || Object.keys(__webpack_require__.rstest_original_module_factories || {}).includes(moduleId)) continue;';
+  'if ((__webpack_require__.rstest_original_modules && Object.hasOwn(__webpack_require__.rstest_original_modules, moduleId)) || (__webpack_require__.rstest_original_module_factories && Object.hasOwn(__webpack_require__.rstest_original_module_factories, moduleId))) continue;';
 
 export const injectChunkInstallMockGuard = (code: string): string => {
   let patched = code;
