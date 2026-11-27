@@ -1,8 +1,6 @@
 import { expect, it } from '@rstest/core';
 
-let attempts = 0;
-
-it('passes after a failed retry', () => {
-  attempts++;
-  expect(attempts).toBeGreaterThan(1);
+it('passes after two failed attempts', ({ task }) => {
+  document.body.textContent = `Attempt ${task.retryCount + 1}`;
+  expect(task.retryCount).toBe(2);
 });

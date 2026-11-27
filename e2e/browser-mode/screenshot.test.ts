@@ -507,38 +507,47 @@ test('fails in both projects', () => {
     ).toBe(false);
   });
 
-  it('removes screenshots when a retry passes', async () => {
-    const result = await runScreenshot([
-      '--retry=1',
-      'tests/retry-pass.test.ts',
-    ]);
-    await result.expectExecSuccess();
-    expect(`${result.cli.stdout}\n${result.cli.stderr}`).not.toContain(
-      'Saved failed browser test screenshot:',
-    );
-    expect(
-      fs
-        .readdirSync(fixtureDir, { recursive: true })
-        .some((entry) => entry.toString().endsWith('.png')),
-    ).toBe(false);
-  });
+  it.each([
+    { outcome: 'passes', retries: 2, exitCode: 0 },
+    { outcome: 'fails', retries: 1, exitCode: 1 },
+  ])(
+    'keeps each failed attempt when the last retry $outcome',
+    async ({ retries, exitCode }) => {
+      const result = await runScreenshot([
+        '--project=project-a',
+        `--retry=${retries}`,
+        'tests/retry-pass.test.ts',
+      ]);
+      await result.cli.exec;
+      expect(result.cli.exec.exitCode).toBe(exitCode);
+      const directory = path.join(fixtureDir, '.rstest', 'screenshots');
+      const screenshots = fs
+        .readdirSync(directory, { recursive: true, encoding: 'utf8' })
+        .filter((name) => name.endsWith('.png'));
+      expect(screenshots).toHaveLength(2);
+      const [first, second] = screenshots.map((name) => {
+        const filepath = path.join(directory, name);
+        expect(result.cli.stdout).toContain(path.basename(name));
+        return fs.readFileSync(filepath);
+      });
+      expect(first).not.toEqual(second);
+    },
+  );
 
-  it('removes screenshots when a retry skips', async () => {
+  it('keeps the failed attempt when a retry skips', async () => {
     const result = await runScreenshot([
+      '--project=project-a',
       '--retry=1',
       'tests/retry-skip.test.ts',
     ]);
     await result.cli.exec;
     expect(result.cli.exec.exitCode).toBe(0);
     expect(`${result.cli.stdout}\n${result.cli.stderr}`).toContain('skipped');
-    expect(`${result.cli.stdout}\n${result.cli.stderr}`).not.toContain(
-      'Saved failed browser test screenshot:',
-    );
     expect(
       fs
         .readdirSync(fixtureDir, { recursive: true })
-        .some((entry) => entry.toString().endsWith('.png')),
-    ).toBe(false);
+        .filter((entry) => entry.toString().endsWith('.png')),
+    ).toHaveLength(1);
   });
 
   it('removes stale screenshots when test and file identities change', async () => {
