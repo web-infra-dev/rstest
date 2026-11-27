@@ -55,7 +55,9 @@ describe('browser mode - watch', () => {
       fixturesTargetPath,
     });
 
-    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath);
+    const { cli } = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
+      args: ['-c', 'rstest.ignored.config.mts'],
+    });
 
     // ========== Initial Run ==========
     // Fixture has 2 test files: index.test.ts and another.test.ts
