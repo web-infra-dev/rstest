@@ -1,6 +1,7 @@
 import type { SnapshotUpdateState } from '@vitest/snapshot';
 import type {
   BrowserExpectConfig,
+  BrowserModeConfig,
   BrowserName,
   BrowserViewport,
 } from './config';
@@ -27,7 +28,7 @@ export type BrowserInstanceConfig = {
   /** @default project `browser.viewport`. */
   viewport?: BrowserViewport;
   /** @default project `browser.screenshotFailures`. */
-  screenshotFailures?: boolean;
+  screenshotFailures?: BrowserModeConfig['screenshotFailures'];
   /** @default project `browser.expect`. */
   expect?: BrowserExpectConfig;
   /**

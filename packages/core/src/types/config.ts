@@ -332,7 +332,12 @@ export type BrowserModeConfig = {
    */
   headless?: boolean;
   /** Capture a screenshot for each failed browser test. @default browser.headless */
-  screenshotFailures?: boolean;
+  screenshotFailures?:
+    | boolean
+    | {
+        /** Clear previous failure screenshots when rerunning or removing a test file. @default true */
+        clean?: boolean;
+      };
   /**
    * Port for the browser mode dev server.
    *
@@ -827,7 +832,7 @@ export type NormalizedBrowserModeConfig = {
   cliInstances?: string[];
   cliBrowserName?: string;
   headless: boolean;
-  screenshotFailures: boolean;
+  screenshotFailures: NonNullable<BrowserModeConfig['screenshotFailures']>;
   port?: number;
   strictPort: boolean;
   viewport?: BrowserViewport;

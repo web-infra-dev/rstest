@@ -209,7 +209,7 @@ interface RunOptions {
         name?: BrowserName;
         instances?: BrowserName | BrowserName[];
         headless?: boolean;
-        screenshotFailures?: boolean;
+        screenshotFailures?: boolean | { clean?: boolean };
         viewport?: BrowserViewport;
         port?: number;
         strictPort?: boolean;

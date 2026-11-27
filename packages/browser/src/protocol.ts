@@ -1,3 +1,4 @@
+import type { BrowserInstanceConfig } from '@rstest/core';
 import type {
   BrowserViewport,
   BrowserName,
@@ -85,7 +86,7 @@ export type BrowserProjectRuntime = {
   projectRoot: string;
   /** Setup modules are re-evaluated per file, so they cannot share a worker page. */
   hasSetupFiles: boolean;
-  screenshotFailures: boolean;
+  screenshotFailures: NonNullable<BrowserInstanceConfig['screenshotFailures']>;
   /** Host-only resolved per-entry `expect` (screenshot matcher config). */
   expect?: BrowserExpectConfig;
   runtimeConfig: SerializedRuntimeConfig;
@@ -100,16 +101,20 @@ export type BrowserProjectRuntime = {
   launchKey: string;
 };
 
-/** The row as serialized to the browser: the host-only `providerOptions` is stripped. */
+/** Only the host needs provider options and the screenshot cleanup policy. */
 export type BrowserProjectWireRow = Omit<
   BrowserProjectRuntime,
-  'providerOptions'
->;
+  'providerOptions' | 'screenshotFailures'
+> & { screenshotFailures: boolean };
 
 export const toWireRow = ({
   providerOptions: _providerOptions,
+  screenshotFailures,
   ...wire
-}: BrowserProjectRuntime): BrowserProjectWireRow => wire;
+}: BrowserProjectRuntime): BrowserProjectWireRow => ({
+  ...wire,
+  screenshotFailures: Boolean(screenshotFailures),
+});
 
 /**
  * Test file info with associated project name, and (once scheduled) the browser

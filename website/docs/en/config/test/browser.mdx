@@ -43,7 +43,7 @@ type BrowserModeConfig = {
   /** @deprecated Use `instances` instead. Will be removed in 1.0. */
   browser?: BrowserName;
   headless?: boolean;
-  screenshotFailures?: boolean;
+  screenshotFailures?: boolean | { clean?: boolean };
   port?: number;
   viewport?: BrowserViewport;
   strictPort?: boolean;
@@ -61,7 +61,7 @@ type BrowserInstanceConfig = {
   browserName: BrowserName;
   headless?: boolean;
   viewport?: BrowserViewport;
-  screenshotFailures?: boolean;
+  screenshotFailures?: boolean | { clean?: boolean };
   expect?: BrowserExpectConfig;
   providerOptions?: Record<string, unknown>;
 };
@@ -261,11 +261,13 @@ Set `headless: process.env.CI === 'true'` if you want headed mode locally and he
 
 <ApiMeta addedVersion="0.12.4" />
 
-- **Type:** `boolean`
+- **Type:** `boolean | { clean?: boolean }`
 - **Default:** `browser.headless`
 - **CLI:** `--browser.screenshotFailures`
 
-Rstest saves a PNG screenshot for each failed attempt under `.rstest/screenshots/` in the project root. Filenames include the test file and test name. If a retry passes or skips, you can still inspect the earlier screenshots. Rerunning the test file clears its previous failure screenshots. Set to `false` to disable capture.
+Rstest saves a PNG screenshot for each failed attempt under `.rstest/screenshots/` in the project root. Filenames include the test file and test name. If a retry passes or skips, you can still inspect the earlier screenshots. Set to `false` to disable capture.
+
+By default, running a test file again clears its previous screenshots. Removing a file in watch mode also clears its screenshots. Set `screenshotFailures: { clean: false }` <ApiMeta sup addedVersion="1.0.0" /> to enable capture and keep screenshots across runs, including watch reruns and file removal. You can delete them manually from `.rstest/screenshots/`.
 
 ### viewport
 

@@ -30,7 +30,6 @@ import {
   type RawTestResult,
   type RawUserConsoleLog,
   reporterFileKey,
-  resolveBrowserInstances,
   resolveSnapshotPathDefault,
   type SelectedTestFile,
   serializableConfig,
@@ -176,52 +175,6 @@ const getFailureScreenshotDirectory = (
     '.rstest',
     'screenshots',
     `${safeFileName}-${fileHash}`,
-  );
-};
-
-const removeFailureScreenshotsForFiles = async (
-  projects: Pick<
-    InternalProjectContext,
-    'name' | 'rootPath' | 'normalizedConfig'
-  >[],
-  testFiles: TestFileInfo[],
-): Promise<void> => {
-  await Promise.all(
-    testFiles.flatMap(({ projectName, browserName, testPath }) => {
-      const project = projects.find((item) => item.name === projectName);
-      if (!project) {
-        return [];
-      }
-      // Watch file-set entries have no browser dimension: stale cleanup must
-      // then sweep every browser directory the project could have written,
-      // not only the bare-path hash that carries no browser segment.
-      const sweptBrowsers = browserName
-        ? [browserName]
-        : project.normalizedConfig.browser.enabled
-          ? resolveBrowserInstances(project).map((entry) => entry.browserName)
-          : [undefined];
-      return sweptBrowsers.map((sweptBrowserName) =>
-        fs
-          .rm(
-            getFailureScreenshotDirectory(
-              project.rootPath,
-              projectName,
-              testPath,
-              sweptBrowserName,
-            ),
-            {
-              recursive: true,
-              force: true,
-            },
-          )
-          .catch((error) => {
-            logger.warn(
-              `Failed to remove stale browser test screenshots for ${testPath}`,
-              error,
-            );
-          }),
-      );
-    }),
   );
 };
 
@@ -713,26 +666,49 @@ export const runBrowserController = async (
   signal?.addEventListener('abort', onAbort, { once: true });
   const watchState = runtime.watchState;
   const failureScreenshotCleanups = new Map<string, Promise<void>>();
-  const queueFailureScreenshotCleanup = (
+  const queueFailureScreenshotCleanup = async (
     testFile: TestFileInfo,
   ): Promise<void> => {
-    const project = projectByName.get(testFile.projectName);
-    if (!project) {
-      return Promise.resolve();
-    }
+    // Watch deletions carry no browser name. Apply each instance's policy to
+    // its own directory, just as when that instance starts running the file.
+    const rows = rowsByProject.get(testFile.projectName) ?? [];
+    await Promise.all(
+      rows.map(async (row) => {
+        if (
+          (testFile.browserName && testFile.browserName !== row.browserName) ||
+          (typeof row.screenshotFailures === 'object' &&
+            row.screenshotFailures.clean === false)
+        ) {
+          return;
+        }
 
-    const cleanupKey = fileKeyOf(testFile);
-    const cleanup = (
-      failureScreenshotCleanups.get(cleanupKey) ?? Promise.resolve()
-    ).then(() => removeFailureScreenshotsForFiles([project], [testFile]));
-    failureScreenshotCleanups.set(cleanupKey, cleanup);
-    const clear = () => {
-      if (failureScreenshotCleanups.get(cleanupKey) === cleanup) {
-        failureScreenshotCleanups.delete(cleanupKey);
-      }
-    };
-    void cleanup.then(clear, clear);
-    return cleanup;
+        const key = reporterFileKey(row.instanceName, testFile.testPath);
+        const directory = getFailureScreenshotDirectory(
+          row.projectRoot,
+          row.name,
+          testFile.testPath,
+          row.browserName,
+        );
+        const cleanup = (
+          failureScreenshotCleanups.get(key) ?? Promise.resolve()
+        )
+          .then(() => fs.rm(directory, { recursive: true, force: true }))
+          .catch((error) => {
+            logger.warn(
+              `Failed to remove stale browser test screenshots for ${testFile.testPath}`,
+              error,
+            );
+          });
+        failureScreenshotCleanups.set(key, cleanup);
+        try {
+          await cleanup;
+        } finally {
+          if (failureScreenshotCleanups.get(key) === cleanup) {
+            failureScreenshotCleanups.delete(key);
+          }
+        }
+      }),
+    );
   };
 
   // Track initial test files for watch mode (unfiltered disk set, including

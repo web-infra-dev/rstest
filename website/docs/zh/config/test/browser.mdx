@@ -43,7 +43,7 @@ type BrowserModeConfig = {
   /** @deprecated 请改用 `instances`，将在 1.0 移除。 */
   browser?: BrowserName;
   headless?: boolean;
-  screenshotFailures?: boolean;
+  screenshotFailures?: boolean | { clean?: boolean };
   port?: number;
   viewport?: BrowserViewport;
   strictPort?: boolean;
@@ -61,7 +61,7 @@ type BrowserInstanceConfig = {
   browserName: BrowserName;
   headless?: boolean;
   viewport?: BrowserViewport;
-  screenshotFailures?: boolean;
+  screenshotFailures?: boolean | { clean?: boolean };
   expect?: BrowserExpectConfig;
   providerOptions?: Record<string, unknown>;
 };
@@ -261,11 +261,13 @@ export default defineConfig({
 
 <ApiMeta addedVersion="0.12.4" />
 
-- **类型：** `boolean`
+- **类型：** `boolean | { clean?: boolean }`
 - **默认值：** `browser.headless`
 - **CLI：** `--browser.screenshotFailures`
 
-浏览器测试每失败一次，Rstest 就会在项目根目录的 `.rstest/screenshots/` 下保存一张 PNG 截图，文件名包含测试文件名和用例名。即使重试通过或跳过，仍可查看之前失败时的截图。重新运行测试文件时，Rstest 会清理该文件上次的失败截图。设为 `false` 可关闭截图。
+浏览器测试每失败一次，Rstest 就会在项目根目录的 `.rstest/screenshots/` 下保存一张 PNG 截图，文件名包含测试文件名和用例名。即使重试通过或跳过，仍可查看之前失败时的截图。设为 `false` 可关闭截图。
+
+默认情况下，重新运行测试文件会清理该文件上次的截图，在 watch 模式中删除文件也会清理对应的截图。设置 `screenshotFailures: { clean: false }` <ApiMeta sup addedVersion="1.0.0" /> 可开启截图并保留历次运行的截图，包括在 watch 模式中重跑或删除文件时。可以手动删除 `.rstest/screenshots/` 中的截图。
 
 ### viewport
 
