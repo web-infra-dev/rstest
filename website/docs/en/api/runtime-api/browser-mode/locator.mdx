@@ -601,17 +601,17 @@ type LocatorDispatchEventOptions = {
   timeout?: number;
 };
 
-type LocatorSelectOptionItem =
-  | string
-  | {
-      value?: string;
-      label?: string;
-      index?: number;
-    };
+type LocatorSelectOptionItem = {
+  value?: string;
+  label?: string;
+  index?: number;
+};
 
 type LocatorSelectOptionValue =
   | null
+  | string
   | LocatorSelectOptionItem
+  | readonly string[]
   | readonly LocatorSelectOptionItem[];
 
 type LocatorSelectOptionOptions = {
@@ -629,7 +629,7 @@ type LocatorSetInputFilesOptions = {
 - Only the methods documented on this page are currently supported from the Playwright `Locator` API.
 - Arguments to `and()`, `or()`, `dragTo()`, `locator(_, { has | hasNot })`, and `filter({ has | hasNot })` must be `Locator` instances returned by `@rstest/browser`.
 - `dispatchEvent(type, eventInit?, options?)` requires a non-empty `type` string and a JSON-serializable `eventInit`.
-- `selectOption()` only accepts `null`, `string`, `{ value?, label?, index? }`, or an array of those values (DOM elements are not supported). `setInputFiles()` only accepts `string` or `string[]` file paths.
+- `selectOption()` only accepts `null`, `string`, `{ value?, label?, index? }`, `string[]`, or an array of `{ value?, label?, index? }` (mixed string/object arrays and DOM elements are not supported). `setInputFiles()` only accepts `string` or `string[]` file paths.
 
 ## Using with expect.element
 

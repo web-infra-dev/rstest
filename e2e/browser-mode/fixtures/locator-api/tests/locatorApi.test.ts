@@ -540,6 +540,12 @@ test('supports locator filter({ visible }), locator(selector, options), count(),
   await expect(select.selectOption({} as unknown as string)).rejects.toThrow(
     /Locator\.selectOption\(\)/,
   );
+  await expect(
+    select.selectOption(['ts', { label: 'Rust' }] as unknown as string[]),
+  ).rejects.toThrow(/Locator\.selectOption\(\)/);
+  await expect(
+    select.selectOption([{ label: 'Rust' }, 'ts'] as unknown as string[]),
+  ).rejects.toThrow(/Locator\.selectOption\(\)/);
 });
 
 test('supports toContainClass, array matchers, ignoreCase, useInnerText, attribute overloads, and state options', async ({

@@ -601,17 +601,17 @@ type LocatorDispatchEventOptions = {
   timeout?: number;
 };
 
-type LocatorSelectOptionItem =
-  | string
-  | {
-      value?: string;
-      label?: string;
-      index?: number;
-    };
+type LocatorSelectOptionItem = {
+  value?: string;
+  label?: string;
+  index?: number;
+};
 
 type LocatorSelectOptionValue =
   | null
+  | string
   | LocatorSelectOptionItem
+  | readonly string[]
   | readonly LocatorSelectOptionItem[];
 
 type LocatorSelectOptionOptions = {
@@ -629,7 +629,7 @@ type LocatorSetInputFilesOptions = {
 - 当前仅支持本页列出的 Playwright `Locator` API 子集。
 - `and()`、`or()`、`dragTo()`、`locator(_, { has | hasNot })` 以及 `filter({ has | hasNot })` 的参数必须是 `@rstest/browser` 返回的 `Locator`。
 - `dispatchEvent(type, eventInit?, options?)` 的 `type` 必须是非空字符串，`eventInit` 必须可被 JSON 序列化。
-- `selectOption()` 仅接受 `null`、`string`、`{ value?, label?, index? }` 或它们的数组（不支持 DOM 元素）；`setInputFiles()` 仅接受 `string` 或 `string[]` 形式的文件路径。
+- `selectOption()` 仅接受 `null`、`string`、`{ value?, label?, index? }`、`string[]` 或 `{ value?, label?, index? }` 数组（不支持字符串与对象混排数组或 DOM 元素）；`setInputFiles()` 仅接受 `string` 或 `string[]` 形式的文件路径。
 
 ## 与 expect.element 配合
 

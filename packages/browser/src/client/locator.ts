@@ -205,16 +205,18 @@ export type LocatorDispatchEventOptions = {
   timeout?: number;
 };
 
-export type LocatorSelectOptionItem =
-  | string
-  | {
-      value?: string;
-      label?: string;
-      index?: number;
-    };
+export type LocatorSelectOptionItem = {
+  value?: string;
+  label?: string;
+  index?: number;
+};
 
 export type LocatorSelectOptionValue =
-  null | LocatorSelectOptionItem | readonly LocatorSelectOptionItem[];
+  | null
+  | string
+  | LocatorSelectOptionItem
+  | readonly string[]
+  | readonly LocatorSelectOptionItem[];
 
 export type LocatorSelectOptionOptions = {
   force?: boolean;
@@ -280,9 +282,6 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 const isSelectOptionItem = (
   value: unknown,
 ): value is LocatorSelectOptionItem => {
-  if (typeof value === 'string') {
-    return true;
-  }
   if (!isPlainObject(value)) {
     return false;
   }
@@ -576,11 +575,14 @@ export class Locator {
   ): Promise<string[]> {
     const isValid =
       values === null ||
+      typeof values === 'string' ||
       isSelectOptionItem(values) ||
-      (Array.isArray(values) && values.every(isSelectOptionItem));
+      (Array.isArray(values) &&
+        (values.every((item) => typeof item === 'string') ||
+          values.every(isSelectOptionItem)));
     if (!isValid) {
       throw new TypeError(
-        'Locator.selectOption() expects null, a string, { value?, label?, index? }, or an array of those values in browser mode.',
+        'Locator.selectOption() expects null, a string, { value?, label?, index? }, string[], or an array of { value?, label?, index? } in browser mode.',
       );
     }
     return await this.callLocator<string[]>(
