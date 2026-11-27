@@ -219,7 +219,8 @@ const saveFailureScreenshot = async ({
     browserName,
   );
   await fs.mkdir(directory, { recursive: true });
-  const basePath = join(directory, `${safeName}-${identityHash}`);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const basePath = join(directory, `${safeName}-${identityHash}-${timestamp}`);
   for (let index = 1; ; index++) {
     const filepath =
       index === 1 ? `${basePath}.png` : `${basePath}-${index}.png`;
