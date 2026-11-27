@@ -4,6 +4,13 @@ export type BrowserLocatorText =
   | { type: 'string'; value: string }
   | { type: 'regexp'; source: string; flags?: string };
 
+export type BrowserLocatorFilterOptions = {
+  hasText?: BrowserLocatorText;
+  hasNotText?: BrowserLocatorText;
+  has?: BrowserLocatorIR;
+  hasNot?: BrowserLocatorIR;
+};
+
 export type BrowserLocatorStep =
   | { type: 'element'; id: string }
   | {
@@ -24,6 +31,7 @@ export type BrowserLocatorStep =
   | {
       type: 'locator';
       selector: string;
+      options?: BrowserLocatorFilterOptions;
     }
   | {
       type: 'getByText';
@@ -56,11 +64,8 @@ export type BrowserLocatorStep =
     }
   | {
       type: 'filter';
-      options: {
-        hasText?: BrowserLocatorText;
-        hasNotText?: BrowserLocatorText;
-        has?: BrowserLocatorIR;
-        hasNot?: BrowserLocatorIR;
+      options: BrowserLocatorFilterOptions & {
+        visible?: boolean;
       };
     }
   | { type: 'and'; locator: BrowserLocatorIR }

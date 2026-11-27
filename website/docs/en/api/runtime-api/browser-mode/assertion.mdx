@@ -176,9 +176,9 @@ await expect
 
 ### toBeVisible
 
-- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(options?: { timeout?: number; visible?: boolean }) => Promise<void>`
 
-Asserts that the element is mounted and visible (non-empty bounding box and `visibility !== 'hidden'`). `display: none` and zero-size elements fail; `opacity: 0` still counts as visible.
+Asserts that the element is mounted and visible (non-empty bounding box and `visibility !== 'hidden'`). `display: none` and zero-size elements fail; `opacity: 0` still counts as visible. Pass `{ visible: false }` to assert that the element is hidden.
 
 ```ts
 await expect.element(page.getByRole('button', { name: 'Save' })).toBeVisible();
@@ -196,9 +196,9 @@ await expect.element(page.getByTestId('loading')).toBeHidden();
 
 ### toBeEnabled
 
-- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(options?: { timeout?: number; enabled?: boolean }) => Promise<void>`
 
-Asserts that the element is not disabled (neither `disabled`, inside a disabled `fieldset`, nor `aria-disabled="true"`).
+Asserts that the element is not disabled (neither `disabled`, inside a disabled `fieldset`, nor `aria-disabled="true"`). Pass `{ enabled: false }` to assert that the element is disabled.
 
 ```ts
 await expect
@@ -220,12 +220,15 @@ await expect
 
 ### toBeChecked
 
-- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(options?: { timeout?: number; checked?: boolean; indeterminate?: boolean }) => Promise<void>`
 
-Asserts that a checkbox or radio control has `checked === true`.
+Asserts that a checkbox or radio control has `checked === true`. Pass `{ checked: false }` to assert unchecked, or `{ indeterminate: true }` to assert an indeterminate checkbox state.
 
 ```ts
 await expect.element(page.getByLabel('Agree')).toBeChecked();
+await expect
+  .element(page.getByLabel('Select all'))
+  .toBeChecked({ indeterminate: true });
 ```
 
 ### toBeUnchecked
@@ -240,9 +243,9 @@ await expect.element(page.getByLabel('Agree')).toBeUnchecked();
 
 ### toBeAttached
 
-- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(options?: { timeout?: number; attached?: boolean }) => Promise<void>`
 
-Asserts that the node is connected to a `Document` or `ShadowRoot` (`Node.isConnected === true`), regardless of visibility.
+Asserts that the node is connected to a `Document` or `ShadowRoot` (`Node.isConnected === true`), regardless of visibility. Pass `{ attached: false }` to assert that the element is detached.
 
 ```ts
 await expect.element(page.locator('#toast')).toBeAttached();
@@ -260,9 +263,9 @@ await expect.element(page.locator('#toast')).toBeDetached();
 
 ### toBeEditable
 
-- **Type:** `(options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(options?: { timeout?: number; editable?: boolean }) => Promise<void>`
 
-Asserts that the element is both enabled and not read-only (`readonly` or `aria-readonly="true"`).
+Asserts that the element is both enabled and not read-only (`readonly` or `aria-readonly="true"`). Pass `{ editable: false }` to assert that the element is read-only.
 
 ```ts
 await expect.element(page.getByLabel('Bio')).toBeEditable();
@@ -302,7 +305,7 @@ await expect.element(page.locator('#hero')).toBeInViewport({ ratio: 0.5 });
 
 <ApiMeta addedVersion="0.12.5" />
 
-- **Type:** `(role: string, options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(role: LocatorAriaRole | (string & {}), options?: { timeout?: number }) => Promise<void>`
 
 Asserts the element's exact ARIA role (role inheritance is not matched).
 
@@ -314,9 +317,9 @@ await expect.element(page.getByTestId('save')).toHaveRole('button');
 
 <ApiMeta addedVersion="0.12.5" />
 
-- **Type:** `(name: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(name: string | RegExp, options?: { timeout?: number; ignoreCase?: boolean }) => Promise<void>`
 
-Asserts the element's accessible name. Strings match the full normalized name.
+Asserts the element's accessible name. Strings match the full normalized name. Set `ignoreCase: true` for case-insensitive matching.
 
 ```ts
 await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
@@ -326,9 +329,9 @@ await expect.element(page.getByTestId('save')).toHaveAccessibleName('Save');
 
 <ApiMeta addedVersion="0.12.5" />
 
-- **Type:** `(description: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(description: string | RegExp, options?: { timeout?: number; ignoreCase?: boolean }) => Promise<void>`
 
-Asserts the element's accessible description. Strings match the full normalized description.
+Asserts the element's accessible description. Strings match the full normalized description. Set `ignoreCase: true` for case-insensitive matching.
 
 ```ts
 await expect
@@ -338,19 +341,22 @@ await expect
 
 ### toHaveText
 
-- **Type:** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(text: string | RegExp | readonly (string | RegExp)[], options?: { timeout?: number; ignoreCase?: boolean; useInnerText?: boolean }) => Promise<void>`
 
-Asserts that the element's text content (including descendants, with whitespace normalized) matches `text`.
+Asserts that the element's text content (including descendants, with whitespace normalized) matches `text`. Pass an array to assert the exact text list of all matched elements in order. Set `useInnerText: true` to compare `element.innerText` instead of `element.textContent`, and `ignoreCase: true` for case-insensitive matching.
 
 ```ts
 await expect.element(page.getByRole('status')).toHaveText('Saved');
+await expect
+  .element(page.getByRole('listitem'))
+  .toHaveText(['First', 'Second']);
 ```
 
 ### toContainText
 
-- **Type:** `(text: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(text: string | RegExp | readonly (string | RegExp)[], options?: { timeout?: number; ignoreCase?: boolean; useInnerText?: boolean }) => Promise<void>`
 
-Asserts that the element's text content (with whitespace normalized) contains the `string` substring or matches the `RegExp`.
+Asserts that the element's text content (with whitespace normalized) contains the `string` substring or matches the `RegExp`. Pass an array to assert that each matched element contains the corresponding entry. Supports `ignoreCase` and `useInnerText`.
 
 ```ts
 await expect.element(page.getByRole('status')).toContainText('Save');
@@ -394,27 +400,54 @@ await expect
 
 ### toHaveClass
 
-- **Type:** `(value: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **Type:** `(value: string | RegExp | readonly (string | RegExp)[], options?: { timeout?: number }) => Promise<void>`
 
-Asserts that the element's `class` attribute matches `value`. Strings match the entire `class` string; use a `RegExp` to match a single class name.
+Asserts that the element's `class` attribute matches `value`. Strings match the entire `class` string; pass an array to match multiple elements, or use [`toContainClass`](#tocontainclass) to match individual class names.
 
 ```ts
 await expect.element(page.getByRole('alert')).toHaveClass(/error/);
 ```
 
+### toContainClass
+
+<ApiMeta addedVersion="1.0.0" />
+
+- **Type:** `(value: string | readonly string[], options?: { timeout?: number }) => Promise<void>`
+
+Asserts that the element's `classList` contains the expected class name(s) (space-separated strings match every listed class). Pass a string array to assert across multiple matched elements in order. Regular expressions are not supported.
+
+```ts
+await expect.element(page.getByRole('alert')).toContainClass('error');
+await expect
+  .element(page.getByRole('listitem'))
+  .toContainClass(['item', 'item active']);
+```
+
 ### toHaveAttribute
 
-- **Type:** `(name: string, value?: string | RegExp, options?: { timeout?: number }) => Promise<void>`
+- **Type:**
 
-Asserts that attribute `name` exists when `value` is omitted (or `undefined`), or that its value matches when `value` is provided.
+```ts
+function toHaveAttribute(
+  name: string,
+  options?: { timeout?: number },
+): Promise<void>;
+function toHaveAttribute(
+  name: string,
+  value?: string | RegExp,
+  options?: { timeout?: number; ignoreCase?: boolean },
+): Promise<void>;
+```
+
+Asserts that attribute `name` exists when `value` is omitted (or `undefined`), or that its value matches when `value` is provided. Set `ignoreCase: true` for case-insensitive value matching.
 
 ```ts
 await expect
   .element(page.getByRole('button', { name: 'Save' }))
-  .toHaveAttribute('type');
+  .toHaveAttribute('type', { timeout: 1000 });
 await expect
   .element(page.getByRole('button', { name: 'Save' }))
-  .toHaveAttribute('type', 'submit');
+  .toHaveAttribute('type', 'submit', { ignoreCase: true });
 ```
 
 ### toHaveCount

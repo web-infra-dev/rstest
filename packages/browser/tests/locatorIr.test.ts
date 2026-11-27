@@ -101,4 +101,41 @@ describe('browser locator IR', () => {
       flags: 'i',
     });
   });
+
+  it('should build filter({ visible }) and preserve empty text filters', () => {
+    const out = page
+      .locator('li')
+      .filter({ visible: true, hasText: '', hasNotText: '' });
+
+    const step: any = out.ir.steps[1];
+    expect(step.type).toBe('filter');
+    expect(step.options.visible).toBe(true);
+    expect(step.options.hasText).toEqual({ type: 'string', value: '' });
+    expect(step.options.hasNotText).toEqual({ type: 'string', value: '' });
+  });
+
+  it('should build locator(selector, options) IR with nested filter options', () => {
+    const badge = page.getByText('New');
+    const out = page.locator('article', {
+      hasText: 'Release',
+      hasNotText: /beta/i,
+      has: badge,
+      hasNot: page.locator('.archived'),
+    });
+
+    const step: any = out.ir.steps[0];
+    expect(step.type).toBe('locator');
+    expect(step.selector).toBe('article');
+    expect(step.options.hasText).toEqual({ type: 'string', value: 'Release' });
+    expect(step.options.hasNotText).toEqual({
+      type: 'regexp',
+      source: 'beta',
+      flags: 'i',
+    });
+    expect(step.options.has).toEqual(badge.ir);
+    expect(step.options.hasNot.steps[0]).toEqual({
+      type: 'locator',
+      selector: '.archived',
+    });
+  });
 });

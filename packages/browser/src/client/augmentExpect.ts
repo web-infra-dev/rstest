@@ -1,16 +1,32 @@
-import type { Locator } from './locator';
+import type { Locator, LocatorAriaRole } from './locator';
 
 export type BrowserElementExpect = {
   not: BrowserElementExpect;
-  toBeVisible: (options?: { timeout?: number }) => Promise<void>;
+  toBeVisible: (options?: {
+    timeout?: number;
+    visible?: boolean;
+  }) => Promise<void>;
   toBeHidden: (options?: { timeout?: number }) => Promise<void>;
-  toBeEnabled: (options?: { timeout?: number }) => Promise<void>;
+  toBeEnabled: (options?: {
+    timeout?: number;
+    enabled?: boolean;
+  }) => Promise<void>;
   toBeDisabled: (options?: { timeout?: number }) => Promise<void>;
-  toBeChecked: (options?: { timeout?: number }) => Promise<void>;
+  toBeChecked: (options?: {
+    timeout?: number;
+    checked?: boolean;
+    indeterminate?: boolean;
+  }) => Promise<void>;
   toBeUnchecked: (options?: { timeout?: number }) => Promise<void>;
-  toBeAttached: (options?: { timeout?: number }) => Promise<void>;
+  toBeAttached: (options?: {
+    timeout?: number;
+    attached?: boolean;
+  }) => Promise<void>;
   toBeDetached: (options?: { timeout?: number }) => Promise<void>;
-  toBeEditable: (options?: { timeout?: number }) => Promise<void>;
+  toBeEditable: (options?: {
+    timeout?: number;
+    editable?: boolean;
+  }) => Promise<void>;
   toBeFocused: (options?: { timeout?: number }) => Promise<void>;
   toBeEmpty: (options?: { timeout?: number }) => Promise<void>;
   toBeInViewport: (options?: {
@@ -18,21 +34,32 @@ export type BrowserElementExpect = {
     ratio?: number;
   }) => Promise<void>;
   toHaveText: (
-    text: string | RegExp,
+    text: string | RegExp | readonly (string | RegExp)[],
+    options?: {
+      timeout?: number;
+      ignoreCase?: boolean;
+      useInnerText?: boolean;
+    },
+  ) => Promise<void>;
+  toHaveRole: (
+    role: LocatorAriaRole | (string & {}),
     options?: { timeout?: number },
   ) => Promise<void>;
-  toHaveRole: (role: string, options?: { timeout?: number }) => Promise<void>;
   toHaveAccessibleName: (
     name: string | RegExp,
-    options?: { timeout?: number },
+    options?: { timeout?: number; ignoreCase?: boolean },
   ) => Promise<void>;
   toHaveAccessibleDescription: (
     description: string | RegExp,
-    options?: { timeout?: number },
+    options?: { timeout?: number; ignoreCase?: boolean },
   ) => Promise<void>;
   toContainText: (
-    text: string | RegExp,
-    options?: { timeout?: number },
+    text: string | RegExp | readonly (string | RegExp)[],
+    options?: {
+      timeout?: number;
+      ignoreCase?: boolean;
+      useInnerText?: boolean;
+    },
   ) => Promise<void>;
   toHaveValue: (
     value: string | RegExp,
@@ -46,13 +73,20 @@ export type BrowserElementExpect = {
     value: string | RegExp,
     options?: { timeout?: number },
   ) => Promise<void>;
-  toHaveAttribute: (
-    name: string,
-    value?: string | RegExp,
+  toHaveAttribute: {
+    (name: string, options?: { timeout?: number }): Promise<void>;
+    (
+      name: string,
+      value?: string | RegExp,
+      options?: { timeout?: number; ignoreCase?: boolean },
+    ): Promise<void>;
+  };
+  toHaveClass: (
+    value: string | RegExp | readonly (string | RegExp)[],
     options?: { timeout?: number },
   ) => Promise<void>;
-  toHaveClass: (
-    value: string | RegExp,
+  toContainClass: (
+    value: string | readonly string[],
     options?: { timeout?: number },
   ) => Promise<void>;
   toHaveCount: (count: number, options?: { timeout?: number }) => Promise<void>;

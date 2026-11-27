@@ -1,6 +1,7 @@
 import type { FrameLocator, Locator, Page } from 'playwright';
 import { ELEMENT_LOCATOR_SELECTOR_ENGINE } from '../../elementLocator';
 import type { BrowserLocatorIR } from '../../protocol';
+import type { BrowserLocatorFilterOptions } from '../../rpcProtocol';
 import { reviveBrowserLocatorText } from './textMatcher';
 
 export const compilePlaywrightLocator = (
@@ -19,6 +20,34 @@ export const compilePlaywrightLocator = (
       return current as Locator;
     };
 
+    const compileFilterOptions = (
+      stepOptions: BrowserLocatorFilterOptions & { visible?: boolean },
+    ) => {
+      const options: {
+        hasText?: string | RegExp;
+        hasNotText?: string | RegExp;
+        has?: Locator;
+        hasNot?: Locator;
+        visible?: boolean;
+      } = {};
+      if (stepOptions.hasText !== undefined) {
+        options.hasText = reviveBrowserLocatorText(stepOptions.hasText);
+      }
+      if (stepOptions.hasNotText !== undefined) {
+        options.hasNotText = reviveBrowserLocatorText(stepOptions.hasNotText);
+      }
+      if (stepOptions.has !== undefined) {
+        options.has = compileFromFrame(stepOptions.has);
+      }
+      if (stepOptions.hasNot !== undefined) {
+        options.hasNot = compileFromFrame(stepOptions.hasNot);
+      }
+      if (stepOptions.visible !== undefined) {
+        options.visible = stepOptions.visible;
+      }
+      return options;
+    };
+
     for (const step of ir.steps as any[]) {
       switch (step.type) {
         case 'element':
@@ -35,7 +64,12 @@ export const compilePlaywrightLocator = (
           break;
         }
         case 'locator':
-          current = (current as any).locator(step.selector);
+          current = step.options
+            ? (current as any).locator(
+                step.selector,
+                compileFilterOptions(step.options),
+              )
+            : (current as any).locator(step.selector);
           break;
         case 'getByText':
           current = (current as any).getByText(
@@ -74,27 +108,7 @@ export const compilePlaywrightLocator = (
           break;
         case 'filter': {
           const locator = ensureLocator();
-          const options: {
-            hasText?: string | RegExp;
-            hasNotText?: string | RegExp;
-            has?: Locator;
-            hasNot?: Locator;
-          } = {};
-          if (step.options?.hasText) {
-            options.hasText = reviveBrowserLocatorText(step.options.hasText);
-          }
-          if (step.options?.hasNotText) {
-            options.hasNotText = reviveBrowserLocatorText(
-              step.options.hasNotText,
-            );
-          }
-          if (step.options?.has) {
-            options.has = compileFromFrame(step.options.has);
-          }
-          if (step.options?.hasNot) {
-            options.hasNot = compileFromFrame(step.options.hasNot);
-          }
-          current = locator.filter(options);
+          current = locator.filter(compileFilterOptions(step.options ?? {}));
           break;
         }
         case 'and': {

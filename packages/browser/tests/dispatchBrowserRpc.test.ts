@@ -1041,4 +1041,207 @@ describe('dispatchPlaywrightBrowserRpc', () => {
       }),
     ).rejects.toThrow('Unknown browser rpc kind: unknown');
   });
+
+  it('dispatches invertible state matcher options to the matching Playwright expectation', async () => {
+    for (const [method, args, expectedMethod] of [
+      ['toBeVisible', [{ visible: false }], 'to.be.hidden'],
+      ['toBeVisible', [{ visible: true }], 'to.be.visible'],
+      ['toBeAttached', [{ attached: false }], 'to.be.detached'],
+      ['toBeEnabled', [{ enabled: false }], 'to.be.disabled'],
+      ['toBeEditable', [{ editable: false }], 'to.be.readonly'],
+    ] as const) {
+      const locator = new FakeLocator();
+      await dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(locator) as any,
+        request: createRequest({ kind: 'expect', method, args: [...args] }),
+        timeoutFallbackMs: 500,
+      });
+      expect(locator.expectCalls[0]?.method).toBe(expectedMethod);
+    }
+  });
+
+  it('forwards toBeChecked checked and indeterminate options', async () => {
+    const locator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toBeChecked',
+        args: [{ checked: false }],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toBeChecked',
+        args: [{ indeterminate: true }],
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(locator.expectCalls[0]?.options.expectedValue).toEqual({
+      checked: false,
+    });
+    expect(locator.expectCalls[1]?.options.expectedValue).toEqual({
+      indeterminate: true,
+    });
+  });
+
+  it('dispatches array text/class matchers and ignoreCase/useInnerText options', async () => {
+    const locator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toHaveText',
+        args: [
+          [
+            { type: 'string', value: 'One' },
+            { type: 'regexp', source: '^Two$', flags: '' },
+          ],
+          { ignoreCase: true, useInnerText: true },
+        ],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toContainText',
+        args: [
+          [{ type: 'string', value: 'hello' }],
+          { ignoreCase: true, useInnerText: false },
+        ],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toHaveClass',
+        args: [[{ type: 'string', value: 'btn primary' }]],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toHaveAttribute',
+        args: [
+          'data-mode',
+          { type: 'string', value: 'DARK' },
+          { ignoreCase: true },
+        ],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toHaveAccessibleName',
+        args: [{ type: 'string', value: 'save' }, { ignoreCase: true }],
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(locator.expectCalls[0]).toMatchObject({
+      method: 'to.have.text.array',
+      options: {
+        useInnerText: true,
+        expectedText: [
+          { string: 'One', normalizeWhiteSpace: true, ignoreCase: true },
+          {
+            regexSource: '^Two$',
+            regexFlags: '',
+            normalizeWhiteSpace: true,
+            ignoreCase: true,
+          },
+        ],
+      },
+    });
+    expect(locator.expectCalls[1]).toMatchObject({
+      method: 'to.contain.text.array',
+      options: {
+        useInnerText: false,
+        expectedText: [
+          {
+            string: 'hello',
+            matchSubstring: true,
+            normalizeWhiteSpace: true,
+            ignoreCase: true,
+          },
+        ],
+      },
+    });
+    expect(locator.expectCalls[2]).toMatchObject({
+      method: 'to.have.class.array',
+      options: {
+        expectedText: [{ string: 'btn primary' }],
+      },
+    });
+    expect(locator.expectCalls[3]).toMatchObject({
+      method: 'to.have.attribute.value',
+      options: {
+        expressionArg: 'data-mode',
+        expectedText: [{ string: 'DARK', ignoreCase: true }],
+      },
+    });
+    expect(locator.expectCalls[4]).toMatchObject({
+      method: 'to.have.accessible.name',
+      options: {
+        expectedText: [
+          { string: 'save', normalizeWhiteSpace: true, ignoreCase: true },
+        ],
+      },
+    });
+  });
+
+  it('dispatches toContainClass for single strings and string arrays and rejects invalid inputs', async () => {
+    const locator = new FakeLocator();
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toContainClass',
+        args: ['active'],
+      }),
+      timeoutFallbackMs: 500,
+    });
+    await dispatchPlaywrightBrowserRpc({
+      runnerPage: new FakePage(locator) as any,
+      request: createRequest({
+        kind: 'expect',
+        method: 'toContainClass',
+        args: [['btn', 'primary']],
+      }),
+      timeoutFallbackMs: 500,
+    });
+
+    expect(locator.expectCalls[0]).toMatchObject({
+      method: 'to.contain.class',
+      options: { expectedText: [{ string: 'active' }] },
+    });
+    expect(locator.expectCalls[1]).toMatchObject({
+      method: 'to.contain.class.array',
+      options: { expectedText: [{ string: 'btn' }, { string: 'primary' }] },
+    });
+
+    await expect(
+      dispatchPlaywrightBrowserRpc({
+        runnerPage: new FakePage(locator) as any,
+        request: createRequest({
+          kind: 'expect',
+          method: 'toContainClass',
+          args: [[123]],
+        }),
+        timeoutFallbackMs: 500,
+      }),
+    ).rejects.toThrow('toContainClass expects a string or an array of strings');
+  });
 });

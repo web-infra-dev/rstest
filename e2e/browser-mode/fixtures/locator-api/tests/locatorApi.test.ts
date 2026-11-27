@@ -459,3 +459,175 @@ test('headed keyboard routes input to the runner after the container takes focus
     outside.remove();
   }
 });
+
+test('supports locator filter({ visible }), locator(selector, options), count(), all(), clear(options), dispatchEvent(options), and selectOption alignment', async ({
+  onTestFinished,
+}) => {
+  const root = document.createElement('div');
+  root.innerHTML = `
+    <ul id="visibility-list">
+      <li class="row visible-row"><span>Visible One</span></li>
+      <li class="row hidden-row" style="display: none"><span>Hidden Two</span></li>
+      <li class="row visible-row"><span>Visible Three</span><em class="tag">Pinned</em></li>
+    </ul>
+    <input id="clear-input" value="initial" />
+    <button id="event-target">Dispatch</button>
+    <select id="multi-select" multiple>
+      <option value="ts">TypeScript</option>
+      <option value="rs">Rust</option>
+      <option value="go">Go</option>
+    </select>
+  `;
+  document.body.append(root);
+  onTestFinished(() => root.remove());
+
+  const rows = page.locator('#visibility-list li');
+  expect(await rows.count()).toBe(3);
+  expect(await rows.filter({ visible: true }).count()).toBe(2);
+  expect(await rows.filter({ visible: false }).count()).toBe(1);
+
+  const visibleLocators = await rows.filter({ visible: true }).all();
+  expect(visibleLocators).toHaveLength(2);
+  await expect.element(visibleLocators[0]!).toHaveText('Visible One');
+  await expect.element(visibleLocators[1]!).toContainText('Visible Three');
+
+  const pinnedRow = page.locator('#visibility-list li', {
+    has: page.locator('.tag'),
+    hasText: 'Visible Three',
+  });
+  await expect.element(pinnedRow).toHaveCount(1);
+
+  const clearInput = page.locator('#clear-input');
+  await clearInput.clear({ timeout: 1000 });
+  await expect.element(clearInput).toHaveValue('');
+
+  const eventBtn = root.querySelector('#event-target') as HTMLButtonElement;
+  let receivedEvent: { bubbles: boolean; cancelable: boolean } | undefined;
+  eventBtn.addEventListener('ping', (event) => {
+    receivedEvent = {
+      bubbles: event.bubbles,
+      cancelable: event.cancelable,
+    };
+  });
+  await page
+    .locator('#event-target')
+    .dispatchEvent(
+      'ping',
+      { bubbles: true, cancelable: true },
+      { timeout: 1000 },
+    );
+  expect(receivedEvent).toEqual({ bubbles: true, cancelable: true });
+  await expect(
+    page
+      .locator('#missing-event-target')
+      .dispatchEvent('ping', undefined, { timeout: 50 }),
+  ).rejects.toThrow(/50ms/);
+
+  const select = page.locator('#multi-select');
+  expect(await select.selectOption({ label: 'Rust' })).toEqual(['rs']);
+  expect(await select.selectOption([{ index: 0 }, { value: 'go' }])).toEqual([
+    'ts',
+    'go',
+  ]);
+  await expect.element(select).toHaveValues(['ts', 'go']);
+  expect(await select.selectOption(null)).toEqual([]);
+  await expect.element(select).toHaveValues([]);
+
+  const optionEl = root.querySelector('option')!;
+  await expect(
+    select.selectOption(optionEl as unknown as string),
+  ).rejects.toThrow(/Locator\.selectOption\(\)/);
+  await expect(select.selectOption({} as unknown as string)).rejects.toThrow(
+    /Locator\.selectOption\(\)/,
+  );
+});
+
+test('supports toContainClass, array matchers, ignoreCase, useInnerText, attribute overloads, and state options', async ({
+  onTestFinished,
+}) => {
+  const root = document.createElement('div');
+  root.innerHTML = `
+    <div id="card" class="card featured primary" data-theme="DarkMode">Card</div>
+    <ul id="items">
+      <li class="item alpha">First <span style="display: none">Hidden</span></li>
+      <li class="item beta">Second</li>
+    </ul>
+    <input id="indet" type="checkbox" />
+    <input id="ro" type="text" readonly value="locked" />
+    <button id="disabled-btn" disabled aria-label="Save Draft" aria-describedby="desc">Save</button>
+    <p id="desc">Stores Current Draft</p>
+    <div id="hidden-box" style="display: none">Secret</div>
+  `;
+  document.body.append(root);
+  onTestFinished(() => root.remove());
+
+  const checkbox = root.querySelector('#indet') as HTMLInputElement;
+  checkbox.indeterminate = true;
+
+  // toContainClass (single, multi-token, array, negation, RegExp rejection)
+  await expect.element(page.locator('#card')).toContainClass('featured');
+  await expect.element(page.locator('#card')).toContainClass('primary card');
+  await expect.element(page.locator('#card')).not.toContainClass('missing');
+  await expect
+    .element(page.locator('#items li'))
+    .toContainClass(['alpha', 'beta']);
+  await expect(
+    expect
+      .element(page.locator('#card'))
+      .toContainClass(/featured/ as unknown as string),
+  ).rejects.toThrow(/cannot be a RegExp value/);
+
+  // toHaveClass array
+  await expect
+    .element(page.locator('#items li'))
+    .toHaveClass(['item alpha', /^item beta$/]);
+
+  // toHaveText & toContainText array + ignoreCase + useInnerText
+  const items = page.locator('#items li');
+  await expect
+    .element(items)
+    .toHaveText(['first', 'second'], { ignoreCase: true, useInnerText: true });
+  await expect
+    .element(items)
+    .toContainText(['FIRST', 'SEC'], { ignoreCase: true, useInnerText: true });
+  await expect
+    .element(items.first())
+    .toHaveText('First Hidden', { useInnerText: false });
+
+  // toHaveAttribute 2-arg options overload + ignoreCase
+  await expect
+    .element(page.locator('#disabled-btn'))
+    .toHaveAttribute('disabled', { timeout: 1000 });
+  await expect
+    .element(page.locator('#card'))
+    .toHaveAttribute('data-theme', 'darkmode', {
+      ignoreCase: true,
+      timeout: 1000,
+    });
+
+  // toHaveAccessibleName / toHaveAccessibleDescription ignoreCase
+  await expect
+    .element(page.locator('#disabled-btn'))
+    .toHaveAccessibleName('save draft', { ignoreCase: true });
+  await expect
+    .element(page.locator('#disabled-btn'))
+    .toHaveAccessibleDescription('stores current draft', { ignoreCase: true });
+
+  // Boolean state options & toBeChecked({ indeterminate, checked })
+  await expect
+    .element(page.locator('#hidden-box'))
+    .toBeVisible({ visible: false });
+  await expect
+    .element(page.locator('#does-not-exist'))
+    .toBeAttached({ attached: false });
+  await expect
+    .element(page.locator('#disabled-btn'))
+    .toBeEnabled({ enabled: false });
+  await expect.element(page.locator('#ro')).toBeEditable({ editable: false });
+  await expect
+    .element(page.locator('#indet'))
+    .toBeChecked({ indeterminate: true });
+  checkbox.indeterminate = false;
+  checkbox.checked = false;
+  await expect.element(page.locator('#indet')).toBeChecked({ checked: false });
+});

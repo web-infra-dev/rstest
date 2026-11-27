@@ -96,17 +96,18 @@ All query methods return a `Locator` and support chaining.
 
 ### locator
 
-- **Type:** `(selector: string) => Locator`
+- **Type:** `(selector: string, options?: LocatorOptions) => Locator`
 
-Query elements by CSS selector.
+Query elements by CSS selector, optionally filtered by descendant `Locator` or text conditions (`has`, `hasNot`, `hasText`, `hasNotText`).
 
 ```ts
 const item = page.locator('.todo-item');
+const activeItem = page.locator('.todo-item', { hasText: 'Active' });
 ```
 
 ### getByRole
 
-- **Type:** `(role: string, options?: LocatorGetByRoleOptions) => Locator`
+- **Type:** `(role: LocatorAriaRole | (string & {}), options?: LocatorGetByRoleOptions) => Locator`
 
 Query elements by ARIA role. Prefer this over CSS selectors or test IDs when semantic roles are available.
 
@@ -224,7 +225,7 @@ export default defineConfig({
 
 - **Type:** `(options: LocatorFilterOptions) => Locator`
 
-Narrow an existing `Locator` by text or descendant `Locator` matches.
+Narrow an existing `Locator` by text, descendant `Locator`, or visibility (`visible`) matches.
 
 ```ts
 const profileSave = page
@@ -233,6 +234,7 @@ const profileSave = page
   .getByRole('button', { name: 'Save' });
 
 const visibleItems = page.locator('li').filter({
+  visible: true,
   hasNotText: /archived/i,
   hasNot: page.getByRole('img', { name: 'Locked' }),
 });
@@ -260,9 +262,35 @@ const exactOne = byRole.and(byId);
 
 Select a single element by 0-based index, first match, or last match from a `Locator` matching multiple elements.
 
+### count
+
+<ApiMeta addedVersion="1.0.0" />
+
+- **Type:** `() => Promise<number>`
+
+Return the number of elements currently matching the `Locator`. This does not auto-retry; use [`toHaveCount`](/api/runtime-api/browser-mode/assertion#tohavecount) for assertions.
+
+```ts
+const total = await page.getByRole('listitem').count();
+```
+
+### all
+
+<ApiMeta addedVersion="1.0.0" />
+
+- **Type:** `() => Promise<Locator[]>`
+
+Resolve the current match count and return an array of `Locator` instances pointing to each matched element via `nth(index)`. This does not auto-wait for elements to appear.
+
+```ts
+for (const item of await page.getByRole('listitem').all()) {
+  await expect.element(item).toBeVisible();
+}
+```
+
 ## Interaction API
 
-Interaction methods execute browser actions and return `Promise<void>`.
+Interaction methods execute browser actions and return `Promise<void>` (except [`selectOption`](#selectoption), which returns the selected option values).
 
 :::warning Strictness
 Locators are strict. If an action (`click`, `fill`, etc.) matches more than one element, it throws an error. Use [`first()`](#nth--first--last), [`last()`](#nth--first--last), or [`nth()`](#nth--first--last) to select a single element.
@@ -342,7 +370,7 @@ await page.getByPlaceholder('Email').fill('dev@rstest.rs');
 
 ### clear
 
-- **Type:** `() => Promise<void>`
+- **Type:** `(options?: LocatorClearOptions) => Promise<void>`
 
 Clear the value of an input element.
 
@@ -412,7 +440,7 @@ await page.getByText('Ready').waitFor();
 
 ### dispatchEvent
 
-- **Type:** `(type: string, eventInit?: LocatorDispatchEventInit) => Promise<void>`
+- **Type:** `(type: string, eventInit?: LocatorDispatchEventInit, options?: LocatorDispatchEventOptions) => Promise<void>`
 
 Dispatch a DOM event on the matched element. `type` must be a non-empty string, and `eventInit` must be JSON-serializable (`BrowserSerializable`).
 
@@ -422,12 +450,13 @@ await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
 
 ### selectOption
 
-- **Type:** `(value: string | string[], options?: LocatorSelectOptionOptions) => Promise<void>`
+- **Type:** `(values: LocatorSelectOptionValue, options?: LocatorSelectOptionOptions) => Promise<string[]>`
 
-Select option(s) on a `<select>` element. Only `string` or `string[]` values are supported.
+Select option(s) on a `<select>` element by value string, `{ value?, label?, index? }`, an array of those values, or `null` to clear selections. Resolves with the array of selected option values.
 
 ```ts
 await page.getByLabel('Choice').selectOption('b');
+await page.getByLabel('Choice').selectOption({ label: 'Option B' });
 ```
 
 ### setInputFiles
@@ -445,6 +474,18 @@ await page.locator('#upload').setInputFiles('/tmp/demo.txt');
 All option and helper types below are exported from `@rstest/browser`:
 
 ```ts
+type LocatorAriaRole =
+  | 'alert'
+  | 'alertdialog'
+  | 'button'
+  | 'checkbox'
+  | 'dialog'
+  | 'heading'
+  | 'link'
+  | 'listitem'
+  | 'textbox'
+  | /* ...standard WAI-ARIA roles */;
+
 type LocatorTextOptions = {
   exact?: boolean;
 };
@@ -466,7 +507,10 @@ type LocatorFilterOptions = {
   hasNotText?: string | RegExp;
   has?: Locator;
   hasNot?: Locator;
+  visible?: boolean;
 };
+
+type LocatorOptions = Omit<LocatorFilterOptions, 'visible'>;
 
 type LocatorKeyboardModifier =
   'Alt' | 'Control' | 'ControlOrMeta' | 'Meta' | 'Shift';
@@ -514,6 +558,11 @@ type LocatorFillOptions = {
   timeout?: number;
 };
 
+type LocatorClearOptions = {
+  force?: boolean;
+  timeout?: number;
+};
+
 type LocatorCheckOptions = {
   force?: boolean;
   position?: LocatorPosition;
@@ -548,6 +597,23 @@ type BrowserSerializable =
 
 type LocatorDispatchEventInit = BrowserSerializable;
 
+type LocatorDispatchEventOptions = {
+  timeout?: number;
+};
+
+type LocatorSelectOptionItem =
+  | string
+  | {
+      value?: string;
+      label?: string;
+      index?: number;
+    };
+
+type LocatorSelectOptionValue =
+  | null
+  | LocatorSelectOptionItem
+  | readonly LocatorSelectOptionItem[];
+
 type LocatorSelectOptionOptions = {
   force?: boolean;
   timeout?: number;
@@ -561,9 +627,9 @@ type LocatorSetInputFilesOptions = {
 ## Usage constraints
 
 - Only the methods documented on this page are currently supported from the Playwright `Locator` API.
-- Arguments to `and()`, `or()`, `dragTo()`, and `filter({ has | hasNot })` must be `Locator` instances returned by `@rstest/browser`.
-- `dispatchEvent(type, eventInit?)` requires a non-empty `type` string and a JSON-serializable `eventInit`.
-- `selectOption()` and `setInputFiles()` only accept `string` or `string[]` values.
+- Arguments to `and()`, `or()`, `dragTo()`, `locator(_, { has | hasNot })`, and `filter({ has | hasNot })` must be `Locator` instances returned by `@rstest/browser`.
+- `dispatchEvent(type, eventInit?, options?)` requires a non-empty `type` string and a JSON-serializable `eventInit`.
+- `selectOption()` only accepts `null`, `string`, `{ value?, label?, index? }`, or an array of those values (DOM elements are not supported). `setInputFiles()` only accepts `string` or `string[]` file paths.
 
 ## Using with expect.element
 

@@ -32,6 +32,7 @@ codspeed
 compat
 consolas
 contentful
+contentinfo
 corejs
 corepack
 cpuprofile
@@ -98,6 +99,8 @@ manypkg
 mattcompiles
 memfs
 menlo
+menuitemcheckbox
+menuitemradio
 metafile
 microfrontend
 microfrontends
@@ -174,6 +177,7 @@ SIGNREQUEST
 sirv
 sokra
 speedscope
+spinbutton
 Squoosh
 srcset
 stacktracey
@@ -197,6 +201,7 @@ tinyrainbow
 tinyspy
 Trae
 transpiling
+treegrid
 treeshaking
 tsbuildinfo
 tsdoc
