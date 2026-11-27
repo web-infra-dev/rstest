@@ -35,6 +35,24 @@ const {
   verifyUnsupportedImportAttribute,
 } = vmExternal;
 
+it('registers file and worker cleanups through the external core entry', async () => {
+  const { registerFileCleanup, registerWorkerCleanup } =
+    await vmExternal.loadRstest();
+  for (const [scope, register] of [
+    ['file', registerFileCleanup],
+    ['worker', registerWorkerCleanup],
+  ] as const) {
+    register(() => {
+      process.stdout.write(`VM_EXTERNAL_CLEANUP_${scope}\n`);
+    });
+    const unregister = register(() => {
+      throw new Error(`Cancelled ${scope} cleanup ran`);
+    });
+    expect(unregister()).toBe(true);
+    expect(unregister()).toBe(false);
+  }
+});
+
 it('preserves setup fs mocks for late builtin ESM imports', async () => {
   expect(await verifyLateBuiltinSync()).toEqual({
     defaultExport: true,

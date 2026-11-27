@@ -33,6 +33,8 @@ const requiredMetadata = require('./data.json');
 
 const commonJsPaths = require('./path-helper.cjs');
 
+export const loadRstest = () => import('@rstest/core');
+
 export const inspectCreateRequireParent = () => {
   const child = require('./bundle-child.cjs');
   const parent = child.parent;

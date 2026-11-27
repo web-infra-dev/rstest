@@ -1,13 +1,14 @@
 import type { Rstest, RstestUtilities } from '../../types';
+import type { RuntimeRstest } from './index';
 
 export type { Assertion } from '../../types/expect';
 export type { Mock, Mocked, MockInstance } from '../../types/mock';
 
 declare global {
-  var RSTEST_API: Rstest | undefined;
+  var RSTEST_API: RuntimeRstest | undefined;
 }
 
-const check = (name: keyof Rstest) => {
+const check = (name: keyof RuntimeRstest) => {
   if (!globalThis.RSTEST_API?.[name]) {
     throw new Error(
       `Rstest API '${name}' is not registered yet, please make sure you are running in a rstest environment.`,
@@ -15,10 +16,10 @@ const check = (name: keyof Rstest) => {
   }
 };
 
-const wrapRstestAPI = <T extends keyof Omit<Rstest, 'rstest' | 'rs'>>(
+const wrapRstestAPI = <T extends keyof Omit<RuntimeRstest, 'rstest' | 'rs'>>(
   name: T,
-): Rstest[T] => {
-  const fn = (...args: Parameters<Rstest[T]>) => {
+): RuntimeRstest[T] => {
+  const fn = (...args: Parameters<RuntimeRstest[T]>) => {
     check(name);
     return globalThis.RSTEST_API![name].call(
       globalThis.RSTEST_API![name],
@@ -37,7 +38,7 @@ const wrapRstestAPI = <T extends keyof Omit<Rstest, 'rstest' | 'rs'>>(
       }
       return Reflect.get(globalThis.RSTEST_API[name], key, receiver);
     },
-  }) as Rstest[T];
+  }) as RuntimeRstest[T];
 };
 
 const wrapRstestUtilitiesAPI = <T extends keyof Pick<Rstest, 'rstest' | 'rs'>>(
@@ -66,3 +67,7 @@ export const onTestFinished: Rstest['onTestFinished'] =
   wrapRstestAPI('onTestFinished');
 export const onTestFailed: Rstest['onTestFailed'] =
   wrapRstestAPI('onTestFailed');
+export const registerFileCleanup: RuntimeRstest['registerFileCleanup'] =
+  wrapRstestAPI('registerFileCleanup');
+export const registerWorkerCleanup: RuntimeRstest['registerWorkerCleanup'] =
+  wrapRstestAPI('registerWorkerCleanup');

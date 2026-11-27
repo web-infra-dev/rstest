@@ -87,11 +87,8 @@ export const createRstestRuntime = async (
     },
   };
 
-  // Published live for real-module importers (`public.ts` reads `RSTEST_API`).
-  // VM bundles see the VM global, while an external `@rstest/core` module
-  // imported by setup files runs in the worker host realm. Publish both
-  // worker-local surfaces so that wrapper APIs resolve the current file in
-  // either realm without sharing state across worker threads.
+  // An external package can load the real core entry in either the host or a
+  // VM realm. Its API forwarders must reach the same worker-owned runtime.
   globalThis.RSTEST_API = runtime.api;
   (runtimeGlobal ?? globalThis).RSTEST_API = runtime.api;
 
