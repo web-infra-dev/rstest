@@ -41,6 +41,7 @@ export const applyRstestWatchIgnored = (
             `${pattern.replaceAll('\\', '/').replace(/[()]/g, '\\$&')}/**`,
         ),
       {
+        // cspell:words nonegate noext nobrace
         dot: true,
         nonegate: true,
         noext: true,
