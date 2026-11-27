@@ -62,6 +62,20 @@ describe('node pool - basic', () => {
     ]);
   });
 
+  it('preserves custom static methods and mock chaining', () => {
+    const original = Object.assign(() => 42, {
+      rename(this: { mockName(name: string): unknown }) {
+        return this.mockName('renamed');
+      },
+    });
+    const mock = rs.fn(original);
+    const rename = Object.getOwnPropertyDescriptor(mock, 'rename')!;
+
+    expect(rename.value.call(mock)).toBe(mock);
+    expect(mock.getMockName()).toBe('renamed');
+    expect(mock()).toBe(42);
+  });
+
   it('strictly equals built-ins created in the host realm', () => {
     expect(new URLSearchParams('a=1').getAll('a')).toStrictEqual(['1']);
     expect(new TextEncoder().encodeInto('a', new Uint8Array(1))).toStrictEqual({

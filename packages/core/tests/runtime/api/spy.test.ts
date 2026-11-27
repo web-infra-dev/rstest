@@ -36,6 +36,54 @@ describe('initSpy fn()', () => {
     expect(isVmObject(new mock())).toBe(true);
   });
 
+  it('reuses the wrapper factory when returning to a VM realm', () => {
+    const first: typeof globalThis = runInNewContext('globalThis');
+    const second: typeof globalThis = runInNewContext('globalThis');
+    let compilations = 0;
+    first.Function = new Proxy(first.Function, {
+      apply(target, receiver, args) {
+        compilations++;
+        return Reflect.apply(target, receiver, args);
+      },
+    });
+    let realm = first;
+    const { fn } = initSpy(
+      () => '',
+      () => realm,
+    );
+    const a = fn();
+    realm = second;
+    const b = fn();
+    realm = first;
+    const c = fn();
+
+    expect(compilations).toBe(1);
+    expect(a).toBeInstanceOf(first.Function);
+    expect(b).toBeInstanceOf(second.Function);
+    expect(c).toBeInstanceOf(first.Function);
+    expect(c.prototype).not.toBe(a.prototype);
+    expect(c.mockName('third')).toBe(c);
+    expect(a.getMockName()).not.toBe('third');
+  });
+
+  it('installs mock helpers with the public mock as the setter receiver', () => {
+    const original = () => 42;
+    const installed = new WeakMap<object, unknown>();
+    Object.defineProperty(original, 'mockName', {
+      get() {
+        return installed.get(this);
+      },
+      set(value: unknown) {
+        installed.set(this, value);
+      },
+    });
+    const mock = initSpy().fn(original);
+
+    expect(installed.has(mock)).toBe(true);
+    expect(mock.mockName('renamed')).toBe(mock);
+    expect(mock.getMockName()).toBe('renamed');
+  });
+
   it('creates resolved and rejected values in the supplied VM realm', async () => {
     const context = runInNewContext('globalThis', {}) as Record<
       string,
@@ -528,7 +576,7 @@ describe('initSpy withImplementation', () => {
   });
 
   it('returns the VM mock after an asynchronous withImplementation callback', async () => {
-    const context = runInNewContext('globalThis', {}) as Record<string, any>;
+    const context: typeof globalThis = runInNewContext('globalThis');
     const { fn } = initSpy(
       () => '',
       () => context,
@@ -537,9 +585,10 @@ describe('initSpy withImplementation', () => {
 
     const result = spy.withImplementation(
       () => 'temporary',
-      () => runInNewContext('Promise.resolve()', context),
+      () => Promise.resolve(),
     );
 
+    expect(result).toBeInstanceOf(context.Promise);
     expect(await result).toBe(spy);
   });
 });

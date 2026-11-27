@@ -28,6 +28,8 @@ type MockConfig = {
   once: FunctionLike[];
 };
 
+type RealmMockFactory = (implementation: FunctionLike) => FunctionLike;
+
 type ProjectMocks = {
   histories: WeakMap<FunctionLike, MockHistory>;
   configs: WeakMap<FunctionLike, MockConfig>;
@@ -57,6 +59,7 @@ export const initSpy = (
 } => {
   let callOrder = 0;
   const mocksByProject = new Map<string, ProjectMocks>();
+  const realmMockFactories = new WeakMap<object, RealmMockFactory>();
   const realmSpies = new WeakMap<(...args: any[]) => any, MockInstance>();
 
   const getRealmPromise = (): PromiseConstructor => {
@@ -116,29 +119,36 @@ export const initSpy = (
     return project;
   };
 
-  const wrapRealmMock = <T extends FunctionLike>(spyFn: Mock<T>): Mock<T> => {
+  const wrapRealmMock = <T extends FunctionLike>(
+    spyFn: Mock<T>,
+    target: SpyInternalImpl<Parameters<T>, ReturnType<T>>,
+  ): Mock<T> => {
     const realmFunction = getRuntimeGlobal().Function;
     if (typeof realmFunction !== 'function' || realmFunction === Function) {
       return spyFn;
     }
 
-    const createFactory = realmFunction as unknown as (
-      ...args: string[]
-    ) => (implementation: FunctionLike) => FunctionLike;
-    const factory = createFactory(
-      'implementation',
-      'return function(...args) { return new.target ? Reflect.construct(implementation, args, new.target) : implementation.apply(this, args); };',
-    );
+    let factory = realmMockFactories.get(realmFunction);
+    if (!factory) {
+      const createFactory = realmFunction as (
+        ...args: string[]
+      ) => RealmMockFactory;
+      factory = createFactory(
+        'implementation',
+        'return function(...args) { return new.target ? Reflect.construct(implementation, args, new.target) : implementation.apply(this, args); };',
+      );
+      realmMockFactories.set(realmFunction, factory);
+    }
     const realmSpy = factory(spyFn) as Mock<T>;
 
-    for (const key of Reflect.ownKeys(spyFn)) {
+    for (const key of Reflect.ownKeys(target)) {
       if (key === 'caller' || key === 'callee' || key === 'arguments') {
         continue;
       }
       if (key === 'length' || key === 'name' || key === 'prototype') {
         continue;
       }
-      const descriptor = Object.getOwnPropertyDescriptor(spyFn, key);
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (!descriptor) {
         continue;
       }
@@ -266,18 +276,24 @@ export const initSpy = (
     const spyState = getInternalState(spyImpl);
     const registration = registerRestore ? new WeakRef(spyState) : undefined;
 
-    spyFn.getMockName = () => mockName || propertyName;
+    const setMethod = <K extends keyof Mock<T>>(key: K, value: Mock<T>[K]) => {
+      // An original setter must receive the callable proxy as its receiver.
+      const target = (key in spyImpl ? spyFn : spyImpl) as Mock<T>;
+      target[key] = value;
+    };
 
-    spyFn.mockName = (name: string) => {
+    setMethod('getMockName', () => mockName || propertyName);
+
+    setMethod('mockName', (name: string) => {
       mockName = name;
 
       return spyFn;
-    };
+    });
 
-    spyFn.getMockImplementation = () => {
+    setMethod('getMockImplementation', () => {
       const current = project.configs.get(spyFn);
       return current?.once.at(-1) ?? current?.implementation ?? mockFn;
-    };
+    });
 
     function withImplementation(
       fn: NormalizedProcedure<T>,
@@ -332,63 +348,63 @@ export const initSpy = (
       }
     }
 
-    spyFn.withImplementation = withImplementation;
+    setMethod('withImplementation', withImplementation);
 
-    spyFn.mockImplementation = (fn) => {
+    setMethod('mockImplementation', (fn) => {
       config().implementation = fn;
       return spyFn;
-    };
+    });
 
-    spyFn.mockImplementationOnce = (fn) => {
+    setMethod('mockImplementationOnce', (fn) => {
       config().once.push(fn);
       return spyFn;
-    };
+    });
 
-    spyFn.mockReturnValue = (value) => {
+    setMethod('mockReturnValue', (value) => {
       return spyFn.mockImplementation((() => value) as T);
-    };
+    });
 
-    spyFn.mockReturnValueOnce = (value) => {
+    setMethod('mockReturnValueOnce', (value) => {
       return spyFn.mockImplementationOnce((() => value) as T);
-    };
+    });
 
-    spyFn.mockThrow = (value) => {
+    setMethod('mockThrow', (value) => {
       return spyFn.mockImplementation(() => {
         throw value;
       });
-    };
+    });
 
-    spyFn.mockThrowOnce = (value) => {
+    setMethod('mockThrowOnce', (value) => {
       return spyFn.mockImplementationOnce(() => {
         throw value;
       });
-    };
+    });
 
-    spyFn.mockResolvedValue = (value) => {
+    setMethod('mockResolvedValue', (value) => {
       return spyFn.mockImplementation((() =>
         getRealmPromise().resolve(value)) as T);
-    };
+    });
 
-    spyFn.mockResolvedValueOnce = (value) => {
+    setMethod('mockResolvedValueOnce', (value) => {
       return spyFn.mockImplementationOnce((() =>
         getRealmPromise().resolve(value)) as T);
-    };
+    });
 
-    spyFn.mockRejectedValue = (value) => {
+    setMethod('mockRejectedValue', (value) => {
       return spyFn.mockImplementation((() =>
         getRealmPromise().reject(value)) as T);
-    };
+    });
 
-    spyFn.mockRejectedValueOnce = (value) => {
+    setMethod('mockRejectedValueOnce', (value) => {
       return spyFn.mockImplementationOnce((() =>
         getRealmPromise().reject(value)) as T);
-    };
+    });
 
-    spyFn.mockReturnThis = () => {
+    setMethod('mockReturnThis', () => {
       return spyFn.mockImplementation(function (this: ReturnType<T>) {
         return this;
       } as T);
-    };
+    });
 
     function willCall(this: unknown, ...args: Parameters<T>) {
       // A call that settles after `mockClear` must not write into the new state.
@@ -440,7 +456,7 @@ export const initSpy = (
       }
     }
 
-    Object.defineProperty(spyFn, 'mock', {
+    Object.defineProperty(spyImpl, 'mock', {
       get: (): MockContext<T> => ({
         get calls() {
           if (getRealmArray() === Array) {
@@ -482,28 +498,28 @@ export const initSpy = (
       }),
     });
 
-    spyFn.mockClear = () => {
+    setMethod('mockClear', () => {
       project.histories.delete(spyFn);
 
       return spyFn;
-    };
+    });
 
-    spyFn.mockReset = () => {
+    setMethod('mockReset', () => {
       spyFn.mockClear();
       project.configs.delete(spyFn);
 
       return spyFn;
-    };
+    });
 
-    spyFn.mockRestore = () => {
+    setMethod('mockRestore', () => {
       spyFn.mockReset();
       spyState.restore();
       if (registration) project.restores.delete(registration);
       mockName = mockFn?.name;
-    };
+    });
 
     if (Symbol.dispose) {
-      Object.defineProperty(spyFn, Symbol.dispose, {
+      Object.defineProperty(spyImpl, Symbol.dispose, {
         value: () => {
           spyFn.mockRestore();
         },
@@ -511,7 +527,7 @@ export const initSpy = (
       });
     }
 
-    const realmSpy = wrapRealmMock(spyFn);
+    const realmSpy = wrapRealmMock(spyFn, spyImpl);
     realmSpies.set(spyFn, realmSpy);
     realmSpies.set(realmSpy, realmSpy);
     if (registration) {
