@@ -78,6 +78,14 @@ const DEFAULT_BUILD_CACHE_PREFIX = 'node_modules/.cache/rstest';
  * construction-based no-collision invariant.
  */
 export const RESULTS_CACHE_DIR = 'node_modules/.cache/.rstest-results';
+/**
+ * Directory for persisted DOM test-environment bundles (see
+ * `core/environment/testEnvironmentCache.ts`). Uses a leading dot for the same
+ * no-collision invariant against `DEFAULT_BUILD_CACHE_PREFIX` (`rstest-*`) as
+ * `RESULTS_CACHE_DIR`.
+ */
+export const TEST_ENVIRONMENT_CACHE_DIR =
+  'node_modules/.cache/.rstest-test-environments';
 const DEFAULT_BUILD_CACHE_DIRECTORY_MARKER = Symbol(
   'defaultBuildCacheDirectory',
 );
