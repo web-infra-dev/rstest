@@ -142,17 +142,16 @@ export default defineConfig({
 
 #### `modifyRsbuildConfig`
 
-- **Type:** `(config: RsbuildConfig) => RsbuildConfig`
+- **Type:** `(config: RsbuildConfig) => RsbuildConfig | void`
 - **Default:** `undefined`
 
-Modify the Rsbuild config before it gets converted to Rstest config. The callback must return the `RsbuildConfig` object:
+Modify the Rsbuild config before it gets converted to Rstest config. You can mutate the config object in place or return a new `RsbuildConfig` object:
 
 ```ts
 export default defineConfig({
   extends: withRsbuildConfig({
     modifyRsbuildConfig: (rsbuildConfig) => {
       delete rsbuildConfig.source?.define;
-      return rsbuildConfig;
     },
   }),
 });

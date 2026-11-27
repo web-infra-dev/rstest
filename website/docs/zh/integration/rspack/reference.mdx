@@ -116,17 +116,16 @@ export default (env) => {
 
 #### `modifyRspackConfig`
 
-- **类型：** `(config: RspackOptions) => RspackOptions`
+- **类型：** `(config: RspackOptions) => RspackOptions | void`
 - **默认值：** `undefined`
 
-在将选中的 Rspack 配置转换为 Rstest 配置之前对其进行修改。回调函数必须返回 `RspackOptions` 对象：
+在将选中的 Rspack 配置转换为 Rstest 配置之前对其进行修改。你可以直接原地修改该配置对象，也可以返回一个新的 `RspackOptions` 对象：
 
 ```ts title="rstest.config.ts"
 export default defineConfig({
   extends: withRspackConfig({
     modifyRspackConfig: (rspackConfig) => {
       delete rspackConfig.resolve?.alias;
-      return rspackConfig;
     },
   }),
 });

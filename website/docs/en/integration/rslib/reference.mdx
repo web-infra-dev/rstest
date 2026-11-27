@@ -139,17 +139,16 @@ export default defineConfig({
 
 #### `modifyLibConfig`
 
-- **Type:** `(config: RslibConfig) => RslibConfig`
+- **Type:** `(config: RslibConfig) => RslibConfig | void`
 - **Default:** `undefined`
 
-Modify the Rslib config before it gets converted to Rstest config. The callback must return the `RslibConfig` object:
+Modify the Rslib config before it gets converted to Rstest config. You can mutate the config object in place or return a new `RslibConfig` object:
 
 ```ts
 export default defineConfig({
   extends: withRslibConfig({
     modifyLibConfig: (libConfig) => {
       delete libConfig.source?.define;
-      return libConfig;
     },
   }),
 });

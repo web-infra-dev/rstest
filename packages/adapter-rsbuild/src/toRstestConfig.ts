@@ -2,6 +2,7 @@ import { normalize } from 'node:path';
 import { mergeRsbuildConfig, type RsbuildConfig } from '@rsbuild/core';
 import type { ExtendConfig } from '@rstest/core';
 import {
+  applyModifyConfig,
   resolveBuildCache,
   resolveTestEnvironmentFromTarget,
 } from '@rstest/core/internal/adapter';
@@ -18,7 +19,7 @@ export function toRstestConfig({
   configPath?: string;
   environmentName?: string;
   rsbuildConfig: RsbuildConfig;
-  modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig;
+  modifyRsbuildConfig?: (buildConfig: RsbuildConfig) => RsbuildConfig | void;
 }): ExtendConfig {
   const { environments, ...rawBuildConfig } = rawRsbuildConfig;
 
@@ -33,9 +34,10 @@ export function toRstestConfig({
       )
     : (rawBuildConfig as RsbuildConfig);
 
-  const finalBuildConfig = modifyRsbuildConfig
-    ? modifyRsbuildConfig(rsbuildConfig)
-    : rsbuildConfig;
+  const finalBuildConfig = applyModifyConfig(
+    rsbuildConfig,
+    modifyRsbuildConfig,
+  );
 
   const { rspack, swc, bundlerChain } = finalBuildConfig.tools || {};
   const { buildCache } = finalBuildConfig.performance || {};

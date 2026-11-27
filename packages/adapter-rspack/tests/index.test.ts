@@ -99,6 +99,21 @@ export default defineConfig([
     expect(config.output).toEqual({ module: false });
   });
 
+  it('should allow in-place modification returning void', async () => {
+    const config = await withRspackConfig({
+      configPath: testConfigPath,
+      modifyRspackConfig: (rspackConfig) => {
+        rspackConfig.target = 'node';
+        if (rspackConfig.output) {
+          rspackConfig.output.module = false;
+        }
+      },
+    })({});
+
+    expect(config.output).toEqual({ module: false });
+    expect(config.testEnvironment).toBe('node');
+  });
+
   it('should select config by name', async () => {
     const config = await withRspackConfig({
       configPath: testConfigPath,

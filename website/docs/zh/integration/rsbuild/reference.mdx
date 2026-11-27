@@ -142,17 +142,16 @@ export default defineConfig({
 
 #### `modifyRsbuildConfig`
 
-- **类型：** `(config: RsbuildConfig) => RsbuildConfig`
+- **类型：** `(config: RsbuildConfig) => RsbuildConfig | void`
 - **默认值：** `undefined`
 
-在将 Rsbuild 配置转换为 Rstest 配置之前对其进行修改。回调函数必须返回修改后的 `RsbuildConfig` 对象：
+在将 Rsbuild 配置转换为 Rstest 配置之前对其进行修改。你可以直接原地修改该配置对象，也可以返回一个新的 `RsbuildConfig` 对象：
 
 ```ts
 export default defineConfig({
   extends: withRsbuildConfig({
     modifyRsbuildConfig: (rsbuildConfig) => {
       delete rsbuildConfig.source?.define;
-      return rsbuildConfig;
     },
   }),
 });

@@ -134,6 +134,40 @@ export default defineConfig({
     });
   });
 
+  it('should allow in-place modification returning void without mutating inline config', async () => {
+    const inlineConfig = {
+      source: {
+        define: {
+          'process.env.NODE_ENV': '"common"',
+          REMOVE_ME: '"yes"',
+        },
+      },
+      output: {
+        target: 'web' as const,
+      },
+    };
+
+    const config = await withRsbuildConfig({
+      config: inlineConfig,
+      modifyRsbuildConfig: (rsbuildConfig) => {
+        delete rsbuildConfig.source?.define?.REMOVE_ME;
+        if (rsbuildConfig.output) {
+          rsbuildConfig.output.target = 'node';
+        }
+      },
+    })({});
+
+    expect(config.source?.define).toEqual({
+      'process.env.NODE_ENV': '"common"',
+    });
+    expect(config.testEnvironment).toBe('node');
+    expect(inlineConfig.source.define).toEqual({
+      'process.env.NODE_ENV': '"common"',
+      REMOVE_ME: '"yes"',
+    });
+    expect(inlineConfig.output.target).toBe('web');
+  });
+
   it('should use inline rsbuild config before configPath', async () => {
     const inlineConfigPath = join(
       __dirname,

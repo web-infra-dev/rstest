@@ -1,7 +1,10 @@
 import { isAbsolute, join, normalize } from 'node:path';
 import { loadConfig, type RslibConfig, mergeRslibConfig } from '@rslib/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
-import { resolveBuildCache } from '@rstest/core/internal/adapter';
+import {
+  applyModifyConfig,
+  resolveBuildCache,
+} from '@rstest/core/internal/adapter';
 
 export interface WithRslibConfigOptions {
   /**
@@ -29,7 +32,7 @@ export interface WithRslibConfigOptions {
   /**
    * Modify rslib config before converting to rstest config
    */
-  modifyLibConfig?: (libConfig: RslibConfig) => RslibConfig;
+  modifyLibConfig?: (libConfig: RslibConfig) => RslibConfig | void;
 }
 
 export function withRslibConfig(
@@ -109,10 +112,10 @@ export function withRslibConfig(
       }
     }
 
-    // Allow modification of rslib config
-    const finalLibConfig = modifyLibConfig
-      ? modifyLibConfig(mergedRslibConfig)
-      : mergedRslibConfig;
+    const finalLibConfig = applyModifyConfig(
+      mergedRslibConfig,
+      modifyLibConfig,
+    );
 
     const { rspack, swc, bundlerChain } = finalLibConfig.tools || {};
     const { buildCache } = finalLibConfig.performance || {};

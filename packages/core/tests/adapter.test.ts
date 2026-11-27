@@ -1,6 +1,7 @@
 import { normalize, resolve } from 'node:path';
 import { describe, expect, it } from '@rstest/core';
 import {
+  applyModifyConfig,
   isNodeTarget,
   resolveCacheDependency,
   resolveTestEnvironmentFromTarget,
@@ -76,5 +77,59 @@ describe('resolveTestEnvironmentFromTarget', () => {
     expect(resolveTestEnvironmentFromTarget('async-node')).toBe('node');
     expect(resolveTestEnvironmentFromTarget('web')).toBe('happy-dom');
     expect(resolveTestEnvironmentFromTarget(undefined)).toBe('happy-dom');
+  });
+});
+
+describe('applyModifyConfig', () => {
+  it('returns the original config when callback is omitted', () => {
+    const config = { source: { define: { A: '1' } } };
+    expect(applyModifyConfig(config)).toBe(config);
+  });
+
+  it('keeps in-place mutations when callback returns void without mutating input', () => {
+    const plugin = { name: 'keep-plugin', setup: () => {} };
+    const extraPlugin = { name: 'extra-plugin', setup: () => {} };
+    const pattern = /\.json5$/;
+    const input: {
+      target?: string;
+      plugins: Array<{ name: string; setup: () => void }>;
+      source: {
+        assetsInclude: RegExp;
+        define?: Record<string, string>;
+      };
+    } = {
+      target: 'web',
+      plugins: [plugin],
+      source: {
+        assetsInclude: pattern,
+        define: { FOO: '"bar"' },
+      },
+    };
+
+    const result = applyModifyConfig(input, (config) => {
+      config.target = 'node';
+      delete config.source.define;
+      config.plugins.push(extraPlugin);
+    });
+
+    expect(result.target).toBe('node');
+    expect(result.source.define).toBeUndefined();
+    expect(result.source.assetsInclude).toBe(pattern);
+    expect(result.plugins).toEqual([plugin, extraPlugin]);
+    expect(result.plugins[0]).toBe(plugin);
+
+    expect(input.target).toBe('web');
+    expect(input.source.define).toEqual({ FOO: '"bar"' });
+    expect(input.plugins).toEqual([plugin]);
+  });
+
+  it('uses the returned config when callback returns a replacement object', () => {
+    const input = { target: 'web' };
+    const replacement = { target: 'node' };
+
+    const result = applyModifyConfig(input, () => replacement);
+
+    expect(result).toBe(replacement);
+    expect(input.target).toBe('web');
   });
 });

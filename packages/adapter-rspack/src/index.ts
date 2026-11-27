@@ -9,6 +9,7 @@ import type {
 } from '@rspack/core';
 import type { ExtendConfig, ExtendConfigFn } from '@rstest/core';
 import {
+  applyModifyConfig,
   resolveCacheDependency,
   resolveTestEnvironmentFromTarget,
 } from '@rstest/core/internal/adapter';
@@ -70,7 +71,7 @@ export interface WithRspackConfigOptions {
   /**
    * Modify Rspack config before converting to rstest config.
    */
-  modifyRspackConfig?: (config: RspackOptions) => RspackOptions;
+  modifyRspackConfig?: (config: RspackOptions) => RspackOptions | void;
 }
 
 const findDefaultConfig = (cwd: string): string | null => {
@@ -396,11 +397,9 @@ export function toRstestConfig({
   configName?: RspackConfigName;
   configPath?: string;
   cwd?: string;
-  modifyRspackConfig?: (config: RspackOptions) => RspackOptions;
+  modifyRspackConfig?: (config: RspackOptions) => RspackOptions | void;
 }): ExtendConfig {
-  const finalConfig = modifyRspackConfig
-    ? modifyRspackConfig(rspackConfig)
-    : rspackConfig;
+  const finalConfig = applyModifyConfig(rspackConfig, modifyRspackConfig);
 
   const testEnvironment = resolveTestEnvironmentFromTarget(finalConfig.target);
 
