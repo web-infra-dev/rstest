@@ -205,7 +205,10 @@ describe('experimental memory diagnostics', () => {
     const { cli, expectExecFailed } = await runRstestCli({
       command: process.execPath,
       args: [rstestBin, 'run', 'no-matching-file'],
-      options: { nodeOptions: { cwd, env: { DEBUG: 'rstest:memory' } } },
+      unsetEnv: ['NO_COLOR'],
+      options: {
+        nodeOptions: { cwd, env: { DEBUG: 'rstest:memory', FORCE_COLOR: '1' } },
+      },
       onTestFinished,
     });
     await expectExecFailed();

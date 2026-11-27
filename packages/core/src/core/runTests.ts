@@ -1,3 +1,4 @@
+import stripAnsi from 'strip-ansi';
 import { BlobReporter } from '../reporter/blob';
 import { exitReporters } from '../reporter';
 import {
@@ -71,7 +72,9 @@ export async function runTests(context: Rstest): Promise<void> {
   try {
     await executeTests(context, traceController);
   } catch (error) {
-    traceController.recordRss?.('run:error', { error: toError(error).message });
+    traceController.recordRss?.('run:error', {
+      error: stripAnsi(toError(error).message),
+    });
     await closeTrace();
     throw error;
   }
