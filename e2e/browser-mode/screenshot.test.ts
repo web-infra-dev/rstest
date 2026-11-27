@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from '@rstest/core';
-import { prepareFixtures } from '../scripts';
+import { prepareFixtures, runRstestCli } from '../scripts';
 import {
   deleteFixtureTarget,
   killCliProcessTree,
@@ -586,19 +586,18 @@ test('fails in both projects', () => {
     );
 
     fs.writeFileSync(testPath, source.replace('toBe(false)', 'toBe(true)'));
-    const passing = await runScreenshot(args);
-    await passing.expectExecSuccess();
-    expect(listScreenshots().sort()).toEqual(screenshots.sort());
-    const configPath = path.join(fixtureDir, 'rstest.keep-failures.config.mts');
-    fs.writeFileSync(
-      configPath,
-      fs
-        .readFileSync(configPath, 'utf8')
-        .replace('clean: false', 'clean: true'),
-    );
-    const clean = await runScreenshot(args);
-    await clean.expectExecSuccess();
-    expect(listScreenshots()).toHaveLength(0);
+    for (const [override, expected] of [
+      [{}, screenshots],
+      [{ clean: true }, []],
+    ] as const) {
+      const run = await runRstestCli({
+        command: 'node',
+        args: ['run-with-screenshot-options.mjs', JSON.stringify(override)],
+        options: { nodeOptions: { cwd: fixtureDir } },
+      });
+      await run.expectExecSuccess();
+      expect(listScreenshots().sort()).toEqual([...expected].sort());
+    }
   });
 
   it.each([

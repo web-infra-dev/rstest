@@ -326,12 +326,17 @@ export function mergeWithCLIOptions(
       if (options.browser.headless !== undefined) {
         config.browser.headless = options.browser.headless;
       }
-      if (options.browser.screenshotFailures !== undefined) {
-        const { screenshotFailures } = options.browser;
+      const { screenshotFailures } = options.browser;
+      if (typeof screenshotFailures === 'object') {
+        const configured = config.browser.screenshotFailures;
+        const policy = typeof configured === 'object' ? { ...configured } : {};
+        if (screenshotFailures.clean !== undefined) {
+          policy.clean = screenshotFailures.clean;
+        }
+        config.browser.screenshotFailures = policy;
+      } else if (screenshotFailures !== undefined) {
         config.browser.screenshotFailures =
-          typeof screenshotFailures === 'object'
-            ? screenshotFailures
-            : coerceCliBoolean(screenshotFailures);
+          coerceCliBoolean(screenshotFailures);
       }
       if (options.browser.viewport !== undefined) {
         config.browser.viewport = options.browser.viewport;
