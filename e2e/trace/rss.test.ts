@@ -1,5 +1,13 @@
-import { readFile, readdir, rm, stat } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import {
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { runRstestCli } from '../scripts';
@@ -22,6 +30,7 @@ type RssRecord = {
   workerId: number;
   rssScope: string;
   sampledAt: number;
+  taskId?: number;
   testPath?: string;
   pool: string;
   rss: number;
@@ -121,6 +130,7 @@ describe('experimental memory diagnostics', () => {
             env: {
               DEBUG: 'unrelated,rstest:memory',
               TRACE_RSS_PERIODIC: '1',
+              TRACE_RSS_PROJECTS: '1',
             },
           },
         },
@@ -133,21 +143,28 @@ describe('experimental memory diagnostics', () => {
       const workers = records.filter((r) => r.role === 'worker');
       const samples = workers.filter((r) => r.event !== 'worker:exit');
       expect(samples.every((r) => r.rss > 0 && r.heapUsed > 0)).toBe(true);
-      expect(
-        samples.some(
-          (r) =>
-            r.event === 'worker:sample' &&
-            r.testPath?.endsWith('basic.test.ts'),
-        ),
-      ).toBe(true);
       expect(new Set(workers.map((r) => r.workerId))).toEqual(new Set([1]));
+      expect(new Set(workers.map((r) => `${r.pid}:${r.threadId}`)).size).toBe(
+        1,
+      );
+      const starts = samples.filter((r) => r.event === 'worker:task:start');
       expect(
-        new Set(
-          samples
-            .filter((r) => r.event === 'worker:task:start')
-            .map((r) => r.testPath?.split(/[/\\]/).at(-1)),
-        ),
-      ).toEqual(new Set(['basic.test.ts', 'reuse.test.ts']));
+        starts.map((r) => [r.project, basename(r.testPath!)]).sort(),
+      ).toEqual([
+        ['first', 'basic.test.ts'],
+        ['first', 'reuse.test.ts'],
+        ['second', 'basic.test.ts'],
+      ]);
+      for (const { taskId, project, testPath } of starts) {
+        const task = samples.filter((r) => r.taskId === taskId);
+        expect(task.at(-1)?.event).toBe('worker:task:end');
+        expect(
+          task.every((r) => r.project === project && r.testPath === testPath),
+        ).toBe(true);
+        if (basename(testPath!) === 'basic.test.ts') {
+          expect(task.some((r) => r.event === 'worker:sample')).toBe(true);
+        }
+      }
       expect(workers.filter((r) => r.event === 'worker:exit')).toHaveLength(1);
       expect(
         samples.every(
@@ -175,6 +192,34 @@ describe('experimental memory diagnostics', () => {
       }
     },
   );
+
+  it('records the run error before closing the trace', async ({
+    onTestFinished,
+  }) => {
+    const cwd = await mkdtemp(join(tmpdir(), 'rstest-memory-error-'));
+    onTestFinished(() => rm(cwd, { recursive: true, force: true }));
+    await writeFile(
+      join(cwd, 'rstest.config.mjs'),
+      'export default { browser: { enabled: true } };',
+    );
+    const { cli, expectExecFailed } = await runRstestCli({
+      command: process.execPath,
+      args: [rstestBin, 'run', 'no-matching-file'],
+      options: { nodeOptions: { cwd, env: { DEBUG: 'rstest:memory' } } },
+      onTestFinished,
+    });
+    await expectExecFailed();
+    const message = 'Browser mode requires @rstest/browser';
+    expect(cli.stderr).toContain(message);
+    const path = cli.stdout.match(/RSS trace file: (.+\.jsonl)/)?.[1];
+    expect(path).toBeTruthy();
+    const records = await readRecords(path!);
+    expect(records.filter((r) => r.event === 'run:error')).toHaveLength(1);
+    expect(records.slice(-2)).toMatchObject([
+      { event: 'run:error', error: expect.stringContaining(message) },
+      { event: 'stop' },
+    ]);
+  });
 
   it('does not enable verbose logging or disk output', async () => {
     await rm(join(fixtureRoot, '.rstest'), { recursive: true, force: true });

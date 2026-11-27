@@ -176,9 +176,6 @@ describe('createWatchTeardown', () => {
     const teardown = createWatchTeardown({
       context,
       executors: [executor],
-      traceController: {
-        close: async () => {},
-      } as unknown as TraceController,
       getTraceRun: () => ({ finalize: async () => {} }) as TraceRun,
     });
 
@@ -211,9 +208,6 @@ describe('createWatchTeardown', () => {
     const teardown = createWatchTeardown({
       context,
       executors: [executor],
-      traceController: {
-        close: async () => {},
-      } as unknown as TraceController,
       getTraceRun: () => ({ finalize: async () => {} }) as TraceRun,
     });
 
@@ -237,9 +231,6 @@ describe('createWatchTeardown', () => {
     const teardown = createWatchTeardown({
       context,
       executors: [createFakeExecutor('node')],
-      traceController: {
-        close: async () => {},
-      } as unknown as TraceController,
       getTraceRun: () =>
         ({
           finalize: async () => {
@@ -620,9 +611,6 @@ describe('createWatchCycleDriver', () => {
     const teardown = createWatchTeardown({
       context,
       executors: [executor],
-      traceController: {
-        close: async () => {},
-      } as unknown as TraceController,
       getTraceRun: () => ({ finalize: async () => {} }) as TraceRun,
     });
     const driver = createDriver(context, teardown.isClosing);

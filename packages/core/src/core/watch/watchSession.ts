@@ -667,13 +667,11 @@ export interface WatchTeardown {
 export function createWatchTeardown({
   context,
   executors,
-  traceController,
   getTraceRun,
 }: {
   context: Rstest;
   /** Closed in order; the browser side goes first, as it always has. */
   executors: TestExecutor[];
-  traceController: TraceController;
   getTraceRun: () => TraceRun;
 }): WatchTeardown {
   let closePromise: Promise<void> | undefined;
@@ -713,7 +711,6 @@ export function createWatchTeardown({
     } finally {
       try {
         await step('trace run finalize', () => getTraceRun().finalize());
-        await step('trace controller cleanup', () => traceController.close());
       } finally {
         try {
           for (const cleanup of cleanups.splice(0)) {

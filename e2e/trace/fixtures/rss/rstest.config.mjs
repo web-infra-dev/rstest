@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 export default {
   projects: process.env.TRACE_RSS_PROJECTS
     ? [
-        { name: 'first', include: ['basic.test.ts'] },
+        { name: 'first', include: ['basic.test.ts', 'reuse.test.ts'] },
         { name: 'second', include: ['basic.test.ts'] },
       ]
     : undefined,

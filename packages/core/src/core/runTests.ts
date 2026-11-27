@@ -66,24 +66,20 @@ export async function runTests(context: Rstest): Promise<void> {
       : false,
     version: context.version,
   });
+  const closeTrace = () =>
+    runLifecycleStep('trace controller cleanup', () => traceController.close());
   try {
     await executeTests(context, traceController);
   } catch (error) {
     traceController.recordRss?.('run:error', { error: toError(error).message });
-    await traceController.close();
+    await closeTrace();
     throw error;
   }
   if (context.command === 'watch' && context.closeWatchSession) {
     const closeSession = context.closeWatchSession;
-    context.closeWatchSession = async () => {
-      try {
-        await closeSession();
-      } finally {
-        await traceController.close();
-      }
-    };
+    context.closeWatchSession = () => closeSession().finally(closeTrace);
   } else {
-    await traceController.close();
+    await closeTrace();
   }
 }
 
@@ -303,9 +299,6 @@ async function executeTests(
               traceController.waitForExit(),
             );
           }
-          await runLifecycleStep('trace controller cleanup', () =>
-            traceController.close(),
-          );
         } finally {
           process.off('exit', unExpectedExit);
           // API result capture must settle before onExit releases its listeners.
@@ -353,7 +346,8 @@ async function executeTests(
         }
         await Promise.all(executors.map((executor) => executor.interrupt?.()));
       },
-      release: releaseRun,
+      // The signal handler exits the process without returning through runTests.
+      release: () => releaseRun().finally(() => traceController.close()),
     });
 
     if (!context.embedded) {
@@ -585,7 +579,6 @@ async function executeTests(
   const watchTeardown = createWatchTeardown({
     context,
     executors,
-    traceController,
     getTraceRun: () => activeTraceRun,
   });
   const closeWatchSession = () => watchTeardown.close();
@@ -601,7 +594,8 @@ async function executeTests(
       interrupt: async () => {
         await Promise.all(executors.map((executor) => executor.interrupt?.()));
       },
-      release: closeActiveWatchSession,
+      release: () =>
+        closeActiveWatchSession().finally(() => traceController.close()),
     }),
   );
 
