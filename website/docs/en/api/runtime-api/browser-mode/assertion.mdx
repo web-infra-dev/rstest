@@ -121,7 +121,7 @@ await expect(page.locator('#profile-card')).toMatchScreenshot({
 
 When a reference exists, a regular assertion passes as soon as the first capture matches it within the configured tolerance. If the first capture differs, Rstest waits until two consecutive captures have the same dimensions and match within that tolerance before comparing against the reference again. Creating or updating a reference also uses the stability check.
 
-`ToMatchScreenshotOptions` options (internal type, not re-exported by `@rstest/browser`):
+`ToMatchScreenshotOptions` options (exported from `@rstest/browser`):
 
 | Option              | Default     | Behavior                                                                                                                      |
 | ------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------- |

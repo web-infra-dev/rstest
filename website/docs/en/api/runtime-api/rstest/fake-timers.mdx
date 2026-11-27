@@ -20,7 +20,7 @@ Enables fake timers for `setTimeout`, `setInterval`, `Date`, `performance`, and 
 rs.useFakeTimers();
 ```
 
-Pass `config` (`FakeTimerInstallOpts` from `@sinonjs/fake-timers`, not re-exported by `@rstest/core`) to forward options to `@sinonjs/fake-timers`: for example, `toFake` and `toNotFake` to select timer APIs, `now` to set the initial fake time, and `shouldAdvanceTime` / `advanceTimeDelta` for automatic advancement.
+Pass `config` (`FakeTimerInstallOpts`, exported from `@rstest/core`) to forward options to `@sinonjs/fake-timers`: for example, `toFake` and `toNotFake` to select timer APIs, `now` to set the initial fake time, and `shouldAdvanceTime` / `advanceTimeDelta` for automatic advancement.
 
 - **`using` syntax**
 

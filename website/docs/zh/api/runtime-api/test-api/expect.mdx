@@ -213,7 +213,7 @@ expect('secret:123').toMatchSnapshot();
   - `getState: () => MatcherState`
   - `setState: (state: Partial<MatcherState>) => void`
 
-读取或更新内部匹配器状态（`MatcherState` 为内部匹配器状态类型，未从 `@rstest/core` 直接重新导出）。
+读取或更新当前匹配器状态（`MatcherState` 从 `@rstest/core` 导出）。
 
 ```ts
 const state = expect.getState();

@@ -28,6 +28,7 @@ import type {
   ExpectPollConfig,
   ExtendConfig,
   ExtendConfigFn,
+  InlineProjectConfig,
   ProjectConfig,
   RstestCommand,
   RstestConfig,
@@ -41,6 +42,7 @@ import type {
 - `RstestConfigSyncFn` / `RstestConfigAsyncFn`: Synchronous and asynchronous config factory functions returning `RstestConfig`.
 - `RstestConfigExport`: Union of `RstestConfig`, `RstestConfigSyncFn`, and `RstestConfigAsyncFn`.
 - `ProjectConfig`: Configuration type for a standalone [Rstest Project](/guide/basic/projects).
+- `InlineProjectConfig`: Configuration type for an inline project entry in `projects` (`ProjectConfig & { name: string }`).
 - `ExtendConfig` / `ExtendConfigFn`: Return value and callback types accepted by [`extends`](/config/test/extends) and config adapters.
 - `RstestCommand`: Active CLI command (`'watch' | 'run' | 'list' | 'merge-reports'`).
 - `ExpectConfig` / `ExpectPollConfig`: Configuration types for [`expect`](/config/test/expect) and `expect.poll`.
@@ -56,6 +58,7 @@ import type {
   Describe,
   Expect,
   ExpectStatic,
+  FakeTimerInstallOpts,
   FileFixtureOptions,
   FixtureCleanup,
   FixtureLifecycle,
@@ -63,6 +66,7 @@ import type {
   MaybePromise,
   Rstest,
   RstestUtilities,
+  SuiteContext,
   TaskMeta,
   TaskMetaValue,
   TestAPIs,
@@ -78,7 +82,9 @@ import type {
 
 - `Rstest`: Full runtime API surface (`test`, `it`, `describe`, `expect`, `assert`, hooks, `rs`, and `rstest`).
 - `RstestUtilities`: Type of the `rs` and `rstest` utility objects.
+- `FakeTimerInstallOpts`: Options object accepted by [`rs.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rsusefaketimers).
 - `TestContext`: Context object passed to test callbacks and per-test hooks (`TestContext` is exported since `0.10.1`).
+- `SuiteContext`: Context object passed to `beforeAll` and `afterAll` suite hooks (`{ filepath, meta }`).
 - `TestOptions`: Per-test and per-suite options (`timeout`, `retry`, `repeats`, `meta`).
 - `TestAPIs`: Return type of `test.extend(...)`, exposing `test` modifiers and chained `.extend()`.
 - `TestForFn`: Call signature type of `test.for`.
@@ -95,8 +101,18 @@ import type {
 Use these types when helpers accept mock functions, spies, or mocked modules.
 
 ```ts
-import type { Mock, Mocked, MockInstance } from '@rstest/core';
+import type {
+  Mock,
+  MockContext,
+  Mocked,
+  MockInstance,
+  MockResult,
+  MockSettledResult,
+} from '@rstest/core';
 ```
+
+- `MockContext<T>`: Shape of `mock.mock`, containing call arguments, instances, contexts, `results`, and `settledResults`.
+- `MockResult<T>` / `MockSettledResult<T>`: Call result and async settled result union entries recorded in `mock.mock.results` and `mock.mock.settledResults`.
 
 ### Mock
 
@@ -185,6 +201,7 @@ import type {
   AsymmetricMatchersContaining,
   ExpectStatic,
   Matchers,
+  MatcherState,
 } from '@rstest/core';
 
 function expectVisible(
@@ -198,6 +215,7 @@ function expectVisible(
 - `Assertion<T>`: Chainable assertion object returned by `expect(value)`.
 - `ExpectStatic`: Callable `expect` function type with static helpers (`poll`, `soft`, `extend`, etc.).
 - `Matchers<T>` / `AsymmetricMatchersContaining`: Matcher interfaces from `@vitest/expect` for module augmentation or custom matcher typing.
+- `MatcherState`: Matcher state type returned by `expect.getState()` and accepted by `expect.setState()`.
 
 ## Rsbuild and plugin types
 

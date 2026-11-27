@@ -121,7 +121,7 @@ await expect(page.locator('#profile-card')).toMatchScreenshot({
 
 已有基线时，只要首张截图在配置的容差范围内匹配基线，普通断言就会立即通过。若首张截图不匹配，Rstest 会等待连续两张截图尺寸相同且差异在容差范围内，再重新与基线比较。创建或更新基线时同样会执行稳定性检查。
 
-`ToMatchScreenshotOptions` 选项（内部类型，未从 `@rstest/browser` 重新导出）：
+`ToMatchScreenshotOptions` 选项（从 `@rstest/browser` 导出）：
 
 | 选项                | 默认值      | 行为                                                                                    |
 | ------------------- | ----------- | --------------------------------------------------------------------------------------- |
