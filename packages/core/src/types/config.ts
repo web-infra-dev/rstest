@@ -331,7 +331,11 @@ export type BrowserModeConfig = {
    * @default Inferred from CI environment. `true` in CI, `false` otherwise.
    */
   headless?: boolean;
-  /** Capture a screenshot for each failed browser test. @default browser.headless */
+  /**
+   * Capture a screenshot for each failed browser test attempt.
+   * Pass an object to enable capture. Set `clean` to `false` to keep screenshots across runs.
+   * @default browser.headless
+   */
   screenshotFailures?:
     | boolean
     | {
