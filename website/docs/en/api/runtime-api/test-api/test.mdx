@@ -363,7 +363,7 @@ Each entry in a fixtures object is a plain value, a fixture function `(context, 
 ```ts
 import { test } from '@rstest/core';
 
-const testWithDb = test.extend({
+const testWithDb = test.extend<{ db: Database }>({
   db: async ({}, use) => {
     const db = await connectTestDb();
     await use(db);
@@ -376,7 +376,7 @@ const testWithDb = test.extend({
 
 <ApiMeta addedVersion="0.11.7" />
 
-The named fixture form takes `(name, fixture)` and returns the fixture value directly instead of calling `use`. Its second parameter provides `onCleanup` to register a cleanup callback (both functions may be async):
+The named fixture form takes `(name, fixture)` and returns the fixture value directly instead of calling `use`. Because the fixture value is returned, TypeScript infers its type automatically without explicit generics. Its second parameter provides `onCleanup` to register a cleanup callback (both functions may be async):
 
 ```ts
 import { test } from '@rstest/core';
@@ -452,7 +452,7 @@ Destructure other fixtures from the first parameter. Rstest initializes dependen
 ```ts
 import { test } from '@rstest/core';
 
-const testWithApi = test.extend({
+const testWithApi = test.extend<{ baseURL: string; token: string }>({
   baseURL: 'https://api.example.com',
   token: async ({ baseURL }, use) => {
     const token = await createTestToken(baseURL);
@@ -533,20 +533,30 @@ myTest('runs logger automatically', ({ expect }) => {
 
 ### Type inference and explicit generics
 
-Provide an explicit generic to `test.extend<MyFixtures>(...)` when inferred types are too wide. The new fixture types apply only to the returned API and leave `test` unchanged:
+- **Fixtures object form (`test.extend({ ... })`):** TypeScript cannot infer fixture types from an unannotated `use(value)` callback, so omitting generics infers `use`-based fixtures as `unknown`. Pass an explicit generic `test.extend<MyFixtures>({ ... })` when defining `use`-based fixtures, tuple fixtures, or sibling fixture dependencies in an object.
+- **Named fixture form (`test.extend(name, fixture)`):** Prefer the named fixture form when you want automatic type inference without writing explicit generics. TypeScript infers each fixture type from its return value and propagates it to subsequent `.extend()` calls.
+
+The new fixture types apply only to the returned API and leave `test` unchanged:
 
 ```ts
 import { test } from '@rstest/core';
 
+// Explicit generic for the fixtures object form
 interface MyFixtures {
   user: { name: string; role: 'admin' | 'guest' };
 }
 
-const myTest = test.extend<MyFixtures>({
+const objectTest = test.extend<MyFixtures>({
   user: async ({}, use) => {
     await use({ name: 'Alice', role: 'admin' });
   },
 });
+
+// Automatic inference with the named fixture form
+const namedTest = test.extend('user', async () => ({
+  name: 'Alice',
+  role: 'admin' as const,
+}));
 ```
 
 ## Chainable modifiers
