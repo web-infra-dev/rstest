@@ -593,6 +593,148 @@ describe('initSpy withImplementation', () => {
   });
 });
 
+describe('custom bulk mock cleanup', () => {
+  it('runs hooks in creation order and stops at a thrown error', () => {
+    const { fn, clearAllMocks } = initSpy();
+    const first = fn();
+    const custom = fn();
+    const last = fn();
+    first();
+    custom();
+    last();
+    const original = custom.mockClear;
+    let reads = 0;
+    Object.defineProperty(custom, 'mockClear', {
+      configurable: true,
+      get() {
+        reads++;
+        return function () {
+          expect(first.mock.calls).toHaveLength(0);
+          expect(custom.mock.calls).toHaveLength(1);
+          expect(last.mock.calls).toHaveLength(1);
+          throw new Error('stop here');
+        };
+      },
+    });
+
+    expect(reads).toBe(0);
+    expect(clearAllMocks).toThrow('stop here');
+    expect(reads).toBe(1);
+    expect(last.mock.calls).toHaveLength(1);
+    Object.defineProperty(custom, 'mockClear', { value: original });
+    clearAllMocks();
+    expect(custom.mock.calls).toHaveLength(0);
+    expect(last.mock.calls).toHaveLength(0);
+  });
+
+  it('keeps a custom helper copied into a VM after the host helper is restored', () => {
+    const realm: typeof globalThis = runInNewContext('globalThis');
+    const { fn, clearAllMocks } = initSpy(undefined, () => realm);
+    const implementation = () => 1;
+    let restoreHost!: () => void;
+    let clears = 0;
+    Object.defineProperty(implementation, 'mockClear', {
+      configurable: true,
+      set(original: () => unknown) {
+        Object.defineProperty(this, 'mockClear', {
+          configurable: true,
+          value() {
+            clears++;
+            return original();
+          },
+        });
+        restoreHost = () =>
+          Object.defineProperty(this, 'mockClear', { value: original });
+      },
+    });
+    const mock = fn(implementation);
+    mock();
+    restoreHost();
+    clearAllMocks();
+    expect(clears).toBe(1);
+    expect(mock.mock.calls).toHaveLength(0);
+  });
+
+  it('observes a deleted helper when the corresponding operation runs', () => {
+    const { fn, clearAllMocks, resetAllMocks } = initSpy();
+    const mock = fn();
+    const reset = mock.mockReset;
+    Reflect.deleteProperty(mock, 'mockReset');
+    clearAllMocks();
+    expect(resetAllMocks).toThrow(TypeError);
+    mock.mockReset = reset;
+    resetAllMocks();
+  });
+
+  it('picks up later mocks first used or created by a cleanup hook', () => {
+    const { fn, clearAllMocks } = initSpy();
+    const earlier = fn();
+    const custom = fn();
+    const later = fn();
+    let nestedCalls = 0;
+    custom.mockClear = () => {
+      earlier();
+      later();
+      const nested = fn();
+      nested.mockClear = () => {
+        nestedCalls++;
+        return nested;
+      };
+      return custom;
+    };
+
+    clearAllMocks();
+    expect(earlier.mock.calls).toHaveLength(1);
+    expect(later.mock.calls).toHaveLength(0);
+    expect(nestedCalls).toBe(1);
+  });
+
+  it('honors overrides through the native mock prototype constructor', () => {
+    const { fn, clearAllMocks } = initSpy();
+    const mock = fn();
+    const alias: typeof mock = mock.prototype.constructor;
+    let clears = 0;
+    alias.mockClear = () => {
+      clears++;
+      return mock;
+    };
+    clearAllMocks();
+    expect(clears).toBe(1);
+  });
+
+  it('keeps its bookkeeping out of calls to a spied Set method', () => {
+    const { spyOn, clearAllMocks } = initSpy();
+    const add = spyOn(Set.prototype, 'add');
+    try {
+      new Set().add(1);
+      clearAllMocks();
+      expect(add.mock.calls).toHaveLength(0);
+    } finally {
+      add.mockRestore();
+    }
+  });
+
+  it('only invokes overrides in the active project', () => {
+    let project = 'a';
+    const { fn, resetAllMocks } = initSpy(() => project);
+    const a = fn();
+    let resets = 0;
+    a.mockReset = () => {
+      resets++;
+      return a;
+    };
+    project = 'b';
+    const b = fn();
+    b();
+    resetAllMocks();
+    expect(b.mock.calls).toHaveLength(0);
+    expect(resets).toBe(0);
+    project = 'a';
+    resetAllMocks();
+    expect(resets).toBe(1);
+  });
+});
+
 describe('initSpy spyOn', () => {
   it('restores spies without resetting mock implementations or call history', () => {
     const { fn, spyOn, restoreAllSpies } = initSpy();

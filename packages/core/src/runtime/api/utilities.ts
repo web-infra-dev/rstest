@@ -425,6 +425,7 @@ const buildRstestUtilities = async (): Promise<{
     isMockFunction,
     clearAllMocks,
     resetAllMocks,
+    discardMockState,
     restoreAllSpies,
     createMockInstance,
     resetCallOrder,
@@ -836,7 +837,7 @@ const buildRstestUtilities = async (): Promise<{
     try {
       // Native modules can retain a spy after its export is restored. Reset
       // captured implementations too, without calling mutable public APIs.
-      resetAllMocks();
+      discardMockState();
       restoreAllSpies();
     } finally {
       cancelPendingWaits();

@@ -76,6 +76,34 @@ describe('node pool - basic', () => {
     expect(mock()).toBe(42);
   });
 
+  it('dispatches bulk cleanup to overridden mock methods', () => {
+    const mock = rs.fn(() => 'initial').mockReturnValue('configured');
+    const clear = mock.mockClear;
+    let clears = 0;
+    mock.mockClear = function () {
+      expect(this).toBe(mock);
+      clears++;
+      return clear();
+    };
+    let resets = 0;
+    const reset = rs.spyOn(mock, 'mockReset').mockImplementation(() => {
+      resets++;
+      return mock;
+    });
+    try {
+      rs.clearAllMocks();
+      expect(clears).toBe(1);
+      mock();
+      rs.resetAllMocks();
+      expect(resets).toBe(1);
+      expect(mock).toHaveBeenCalledTimes(1);
+      expect(mock()).toBe('configured');
+    } finally {
+      reset.mockRestore();
+      mock.mockClear = clear;
+    }
+  });
+
   it('strictly equals built-ins created in the host realm', () => {
     expect(new URLSearchParams('a=1').getAll('a')).toStrictEqual(['1']);
     expect(new TextEncoder().encodeInto('a', new Uint8Array(1))).toStrictEqual({

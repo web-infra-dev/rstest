@@ -236,12 +236,16 @@ mockedModule.method.mockReturnValue('mocked');
 
 Clears the call history of every mock in the current project (`mock.calls`, `mock.instances`, `mock.contexts`, `mock.invocationCallOrder`, `mock.lastCall`, `mock.results`, and `mock.settledResults`). Each mock keeps its configured implementation and any queued one-time implementations.
 
+If you override a mock’s `mockClear`, Rstest calls your method. Call the original method from your override to clear that mock’s history.
+
 ## rs.resetAllMocks
 
 - **Alias:** `rstest.resetAllMocks`
 - **Type:** `() => RstestUtilities`
 
 Clears the call history of every mock in the current project, discards queued one-time implementations, and resets each mock to its initial implementation.
+
+If you override a mock’s `mockReset`, Rstest calls your method. Call the original method from your override to apply the default reset.
 
 ## rs.restoreAllMocks
 

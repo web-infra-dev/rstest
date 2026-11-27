@@ -15,7 +15,10 @@ it('restores overwritten properties while their target is still reachable', asyn
   const discarded = (() => {
     const other = { method: original };
     const spy = rs.spyOn(other, 'method');
-    return [new WeakRef(other), new WeakRef(spy), new WeakRef(rs.fn())];
+    const mock = rs.fn().mockReturnValue(1);
+    mock();
+    mock.mockClear = () => mock;
+    return [new WeakRef(other), new WeakRef(spy), new WeakRef(mock)];
   })();
   for (let i = 0; i < 5; i++) {
     await setImmediate();
