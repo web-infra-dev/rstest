@@ -152,12 +152,6 @@ const getMaxTestTimeoutForRpc = (projects: InternalProjectContext[]): number =>
     ),
   );
 
-const getFailureScreenshotKey = (
-  project: string,
-  testPath: string,
-  testId: string,
-): string => JSON.stringify([project, testPath, testId]);
-
 const getFailureScreenshotDirectory = (
   projectRoot: string,
   projectName: string,
@@ -231,7 +225,7 @@ const removeFailureScreenshotsForFiles = async (
   );
 };
 
-const getFailureScreenshotPath = ({
+const saveFailureScreenshot = async ({
   projectRoot,
   projectName,
   testPath,
@@ -239,6 +233,7 @@ const getFailureScreenshotPath = ({
   testId,
   parentNames,
   browserName,
+  image,
 }: {
   projectRoot: string;
   projectName: string;
@@ -247,7 +242,8 @@ const getFailureScreenshotPath = ({
   testId: string;
   parentNames: string[];
   browserName?: string;
-}): string => {
+  image: Buffer;
+}): Promise<string> => {
   const safeName = `${basename(testPath)}-${testName}`
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .slice(0, 140);
@@ -263,15 +259,30 @@ const getFailureScreenshotPath = ({
     )
     .digest('hex')
     .slice(0, 16);
-  return join(
-    getFailureScreenshotDirectory(
-      projectRoot,
-      projectName,
-      testPath,
-      browserName,
-    ),
-    `${safeName}-${identityHash}.png`,
+  const directory = getFailureScreenshotDirectory(
+    projectRoot,
+    projectName,
+    testPath,
+    browserName,
   );
+  await fs.mkdir(directory, { recursive: true });
+  const basePath = join(directory, `${safeName}-${identityHash}`);
+  for (let index = 1; ; index++) {
+    const filepath =
+      index === 1 ? `${basePath}.png` : `${basePath}-${index}.png`;
+    try {
+      await fs.writeFile(filepath, image, { flag: 'wx' });
+      return filepath;
+    } catch (error) {
+      if (
+        !(error instanceof Error) ||
+        !('code' in error) ||
+        error.code !== 'EEXIST'
+      ) {
+        throw error;
+      }
+    }
+  }
 };
 
 const resolveProviderForTestPath = ({
@@ -407,9 +418,6 @@ export const runBrowserController = async (
   // name their `(project, browser)` row instead, so the host translates them
   // here and keys its own per-file maps by instance name too — a client
   // payload and the core payload it leads to then address the same entry.
-  const rowByInstance = new Map(
-    projectRuntimeConfigs.map((row) => [row.instanceName, row]),
-  );
   const rowOf = (file: { projectName: string; browserName?: string }) =>
     rowsByProject
       .get(file.projectName)
@@ -1156,27 +1164,18 @@ export const runBrowserController = async (
           ) {
             throw new Error('Invalid failed-test screenshot response.');
           }
-          const testId = testIdentity.testId;
-          const filepath = getFailureScreenshotPath({
+          await failureScreenshotCleanups.get(fileKeyOf(request));
+          const filepath = await saveFailureScreenshot({
             projectRoot: project.rootPath,
             projectName: request.projectName,
             testPath: request.testPath,
             testName,
-            testId,
+            testId: testIdentity.testId,
             parentNames: testIdentity.parentNames,
             browserName: request.browserName,
+            image: Buffer.from(result, 'base64'),
           });
-          await failureScreenshotCleanups.get(fileKeyOf(request));
-          await fs.mkdir(dirname(filepath), { recursive: true });
-          await fs.writeFile(filepath, Buffer.from(result, 'base64'));
-          failureScreenshots.set(
-            getFailureScreenshotKey(
-              instanceNameOf(request),
-              request.testPath,
-              testId,
-            ),
-            filepath,
-          );
+          logger.info(`Saved failed browser test screenshot: ${filepath}`);
           return;
         }
         const [testName] = request.args;
@@ -1287,7 +1286,6 @@ export const runBrowserController = async (
   // Track test results from browser runners
   const reporterResults: TestFileResult[] = [];
   const caseResults: TestResult[] = [];
-  const failureScreenshots = new Map<string, string>();
   const fatalErrorRef = { current: null as Error | null };
 
   // Runner lifecycle events flow through the shared RunnerEventSink (the same
@@ -1507,31 +1505,6 @@ export const runBrowserController = async (
   const handleTestCaseResult = async (
     payload: RawTestResult,
   ): Promise<void> => {
-    const screenshotKey = getFailureScreenshotKey(
-      payload.project,
-      payload.testPath,
-      payload.testId,
-    );
-    const failureScreenshot = failureScreenshots.get(screenshotKey);
-    failureScreenshots.delete(screenshotKey);
-    let screenshotPathToRemove: string | undefined;
-    if (payload.status === 'failed' && failureScreenshot) {
-      logger.info(`Saved failed browser test screenshot: ${failureScreenshot}`);
-    } else if (payload.status !== 'failed') {
-      const row = rowByInstance.get(payload.project);
-      const project = row && projectByName.get(row.name);
-      screenshotPathToRemove = project
-        ? getFailureScreenshotPath({
-            projectRoot: project.rootPath,
-            projectName: project.name,
-            testPath: payload.testPath,
-            testName: payload.name,
-            browserName: row.browserName,
-            testId: payload.testId,
-            parentNames: payload.parentNames ?? [],
-          })
-        : failureScreenshot;
-    }
     const result = await sinkForProjectName(payload.project).onTestCaseResult(
       payload,
     );
@@ -1549,15 +1522,6 @@ export const runBrowserController = async (
       taskType: 'case',
       testPath: payload.testPath,
     });
-
-    if (screenshotPathToRemove) {
-      await fs.rm(screenshotPathToRemove, { force: true }).catch((error) => {
-        logger.warn(
-          `Failed to remove non-failing test screenshot: ${screenshotPathToRemove}`,
-          error,
-        );
-      });
-    }
   };
 
   const handleTestFileComplete = async (
