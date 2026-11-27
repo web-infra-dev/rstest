@@ -265,7 +265,9 @@ export default defineConfig({
 - **默认值：** `browser.headless`
 - **CLI：** `--browser.screenshotFailures`
 
-浏览器测试每失败一次，Rstest 就会在项目根目录的 `.rstest/screenshots/` 下保存一张 PNG 截图，文件名包含测试文件名和用例名。即使重试通过或跳过，仍可查看之前失败时的截图。设为 `false` 可关闭截图。
+浏览器测试每失败一次，Rstest 就会在项目根目录的 `.rstest/screenshots/` 下保存一张 PNG 截图。即使重试通过或跳过，仍可查看之前失败时的截图。设为 `false` 可关闭截图。
+
+每个测试文件都有自己的截图子目录。同一文件在不同项目或浏览器下运行时，截图也会分开保存。文件名由用例名和 UTC 时间（`YYYYMMDD-HHmmss`）组成，例如 `login-failed-20261127-100245.png`。如果文件名已存在，Rstest 会在 `.png` 前依次加上 `-2`、`-3` 等后缀。命令行会输出每张截图的实际路径。
 
 默认情况下，重新运行测试文件会清理该文件上次的截图，在 watch 模式中删除文件也会清理对应的截图。设置 `screenshotFailures: { clean: false }` <ApiMeta sup addedVersion="1.0.0" /> 可开启截图并保留历次运行的截图，包括在 watch 模式中重跑或删除文件时。可以手动删除 `.rstest/screenshots/` 中的截图。
 

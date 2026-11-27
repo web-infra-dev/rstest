@@ -183,8 +183,6 @@ const saveFailureScreenshot = async ({
   projectName,
   testPath,
   testName,
-  testId,
-  parentNames,
   browserName,
   image,
 }: {
@@ -192,26 +190,14 @@ const saveFailureScreenshot = async ({
   projectName: string;
   testPath: string;
   testName: string;
-  testId: string;
-  parentNames: string[];
   browserName?: string;
   image: Buffer;
 }): Promise<string> => {
-  const safeName = `${basename(testPath)}-${testName}`
-    .replace(/[^a-zA-Z0-9._-]+/g, '-')
-    .slice(0, 140);
-  const identityHash = createHash('sha256')
-    .update(
-      JSON.stringify({
-        project: projectName,
-        browserName,
-        testPath,
-        testId,
-        parentNames,
-      }),
-    )
-    .digest('hex')
-    .slice(0, 16);
+  const safeName =
+    testName
+      .replace(/[^a-zA-Z0-9_-]+/g, '-')
+      .slice(0, 140)
+      .replace(/^-+|-+$/g, '') || 'test';
   const directory = getFailureScreenshotDirectory(
     projectRoot,
     projectName,
@@ -219,7 +205,12 @@ const saveFailureScreenshot = async ({
     browserName,
   );
   await fs.mkdir(directory, { recursive: true });
-  const basePath = join(directory, `${safeName}-${identityHash}`);
+  const timestamp = new Date()
+    .toISOString()
+    .slice(0, 19)
+    .replace(/[-:]/g, '')
+    .replace('T', '-');
+  const basePath = join(directory, `${safeName}-${timestamp}`);
   for (let index = 1; ; index++) {
     const filepath =
       index === 1 ? `${basePath}.png` : `${basePath}-${index}.png`;
@@ -1123,19 +1114,9 @@ export const runBrowserController = async (
           const result = await dispatch();
           const project = projectByName.get(request.projectName);
           const testName = request.args[0];
-          const testIdentity = request.args[2];
           if (
             !project ||
             typeof testName !== 'string' ||
-            typeof testIdentity !== 'object' ||
-            testIdentity === null ||
-            !('testId' in testIdentity) ||
-            typeof testIdentity.testId !== 'string' ||
-            !('parentNames' in testIdentity) ||
-            !Array.isArray(testIdentity.parentNames) ||
-            !testIdentity.parentNames.every(
-              (name) => typeof name === 'string',
-            ) ||
             typeof result !== 'string'
           ) {
             throw new Error('Invalid failed-test screenshot response.');
@@ -1146,8 +1127,6 @@ export const runBrowserController = async (
             projectName: request.projectName,
             testPath: request.testPath,
             testName,
-            testId: testIdentity.testId,
-            parentNames: testIdentity.parentNames,
             browserName: request.browserName,
             image: Buffer.from(result, 'base64'),
           });

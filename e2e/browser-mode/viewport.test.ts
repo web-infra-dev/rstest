@@ -1,5 +1,5 @@
 import { readFileSync, readdirSync, rmSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from '@rstest/core';
 import { prepareFixtures } from '../scripts';
@@ -127,7 +127,11 @@ describe('browser mode - viewport', () => {
         }
         const screenshots = readdirSync(fixtureRoot, { recursive: true })
           .map((entry) => join(fixtureRoot, entry.toString()))
-          .filter((entry) => /viewport\.test\.ts-.*\.png$/.test(entry));
+          .filter(
+            (entry) =>
+              entry.endsWith('.png') &&
+              basename(dirname(entry)).startsWith('viewport.test.ts-'),
+          );
         expect(screenshots).toHaveLength(3);
         const scale = Number(
           /VIEWPORT_DEVICE_SCALE ([\d.]+)/.exec(cli.stdout)?.[1],
