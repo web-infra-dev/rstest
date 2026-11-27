@@ -43,17 +43,48 @@ interface InlineSnapshotMatcher<T> {
   (message?: string): void;
 }
 
-interface ExpectPollOptions extends ExpectPollConfig {
+type ExpectPollOptions = ExpectPollConfig & {
   message?: string;
-}
+};
 
 type Promisify<O> = {
   [K in keyof O]: O[K] extends (...args: infer A) => infer R
-    ? Promisify<O[K]> & ((...args: A) => Promise<R>)
+    ? Promisify<O[K]> &
+        ((...args: A) => R extends Promise<any> ? R : Promise<R>)
     : O[K];
 };
 
-type PromisifyAssertion<T> = Promisify<Assertion<T>>;
+// `Omit<..., 'not' | 'resolves' | 'rejects'> & { ... }` keeps the alias opaque
+// during declaration emit (including across `.not` chains) so `expect(p).resolves`,
+// `expect.poll(...)`, and their `.not` forms don't eagerly expand `Assertion`
+// past TypeScript's serialization limit (TS7056) or leak internal `@vitest/expect`
+// symbols (TS4023).
+export type PromisifyAssertion<T> = Omit<
+  Promisify<Assertion<T>>,
+  'not' | 'resolves' | 'rejects'
+> & {
+  not: PromisifyAssertion<T>;
+  resolves: PromisifyAssertion<T>;
+  rejects: PromisifyAssertion<T>;
+} & ((type: string, message?: string) => Promise<Assertion<any>>);
+
+export type ExpectPollAssertion<T> = Omit<
+  PromisifyAssertion<Awaited<T>>,
+  | 'not'
+  | 'rejects'
+  | 'resolves'
+  | 'toThrow'
+  | 'toThrowError'
+  | 'throw'
+  | 'throws'
+  | 'matchSnapshot'
+  | 'toMatchSnapshot'
+  | 'toMatchInlineSnapshot'
+  | 'toThrowErrorMatchingSnapshot'
+  | 'toThrowErrorMatchingInlineSnapshot'
+> & {
+  not: ExpectPollAssertion<T>;
+};
 
 type CallOrderMock =
   MockInstance | Parameters<VitestAssertion['toHaveBeenCalledBefore']>[0];
@@ -144,20 +175,7 @@ export interface ExpectStatic extends VitestExpectProperties {
   poll: <T>(
     actual: () => T,
     options?: ExpectPollOptions,
-  ) => Omit<
-    PromisifyAssertion<Awaited<T>>,
-    | 'rejects'
-    | 'resolves'
-    | 'toThrow'
-    | 'toThrowError'
-    | 'throw'
-    | 'throws'
-    | 'matchSnapshot'
-    | 'toMatchSnapshot'
-    | 'toMatchInlineSnapshot'
-    | 'toThrowErrorMatchingSnapshot'
-    | 'toThrowErrorMatchingInlineSnapshot'
-  >;
+  ) => ExpectPollAssertion<T>;
   addEqualityTesters: (testers: Tester[]) => void;
   assertions: (expected: number) => void;
   hasAssertions: () => void;

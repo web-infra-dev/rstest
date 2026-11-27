@@ -5,6 +5,8 @@ import type {
 import type { FunctionLike, MaybePromise, Truthy } from './utils';
 import type { RuntimeConfig } from './worker';
 
+export type { FakeTimerInstallOpts };
+
 type FakeTimerTickTime = Parameters<FakeTimerClock['tick']>[0];
 type FakeTimerSystemTime = Parameters<FakeTimerClock['setSystemTime']>[0];
 type FakeTimerTickMode = Parameters<FakeTimerClock['setTickMode']>[0];
@@ -16,38 +18,38 @@ export type RealTimers = {
   setImmediate?: typeof globalThis.setImmediate;
 };
 
-interface MockResultReturn<T> {
+type MockResultReturn<T> = {
   type: 'return';
   /**
    * The value that was returned from the function. If function returned a Promise, then this will be a resolved value.
    */
   value: T;
-}
-interface MockResultIncomplete {
+};
+type MockResultIncomplete = {
   type: 'incomplete';
   value: undefined;
-}
-interface MockResultThrow {
+};
+type MockResultThrow = {
   type: 'throw';
   /**
    * An error that was thrown during function execution.
    */
   value: any;
-}
+};
 
-type MockResult<T> =
+export type MockResult<T> =
   MockResultReturn<T> | MockResultThrow | MockResultIncomplete;
 
-interface MockSettledResultFulfilled<T> {
+type MockSettledResultFulfilled<T> = {
   type: 'fulfilled';
   value: T;
-}
-interface MockSettledResultRejected {
+};
+type MockSettledResultRejected = {
   type: 'rejected';
   value: any;
-}
+};
 
-type MockSettledResult<T> =
+export type MockSettledResult<T> =
   MockSettledResultFulfilled<T> | MockSettledResultRejected;
 
 type RuntimeOptions = Partial<
@@ -199,26 +201,26 @@ export type MockFn = <T extends FunctionLike = FunctionLike>(fn?: T) => Mock<T>;
 
 export type WaitForCallback<T> = () => MaybePromise<T>;
 
-export interface WaitForOptions {
+export type WaitForOptions = {
   timeout?: number;
   interval?: number;
-}
+};
 
-export interface WaitUntilOptions {
+export type WaitUntilOptions = {
   timeout?: number;
   interval?: number;
-}
+};
 
 /**
  * Options for mockObject
  */
-export interface MockOptions {
+export type MockOptions = {
   /**
    * If `true`, the original implementation will be kept.
    * All methods will call the original implementation, but you can still track the calls.
    */
   spy?: boolean;
-}
+};
 
 /**
  * Options for rs.mock module mocking.

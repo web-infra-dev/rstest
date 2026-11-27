@@ -28,6 +28,7 @@ import type {
   ExpectPollConfig,
   ExtendConfig,
   ExtendConfigFn,
+  InlineProjectConfig,
   ProjectConfig,
   RstestCommand,
   RstestConfig,
@@ -41,6 +42,7 @@ import type {
 - `RstestConfigSyncFn` / `RstestConfigAsyncFn`：返回 `RstestConfig` 的同步与异步配置工厂函数。
 - `RstestConfigExport`：`RstestConfig`、`RstestConfigSyncFn` 与 `RstestConfigAsyncFn` 的联合类型。
 - `ProjectConfig`：独立 [Rstest Project](/guide/basic/projects) 配置文件的类型。
+- `InlineProjectConfig`：`projects` 数组中内联项目配置的类型（`ProjectConfig & { name: string }`）。
 - `ExtendConfig` / `ExtendConfigFn`：[`extends`](/config/test/extends) 与配置适配器使用的返回值和回调函数类型。
 - `RstestCommand`：当前执行的 CLI 命令（`'watch' | 'run' | 'list' | 'merge-reports'`）。
 - `ExpectConfig` / `ExpectPollConfig`：[`expect`](/config/test/expect) 与 `expect.poll` 的配置类型。
@@ -56,6 +58,7 @@ import type {
   Describe,
   Expect,
   ExpectStatic,
+  FakeTimerInstallOpts,
   FileFixtureOptions,
   FixtureCleanup,
   FixtureLifecycle,
@@ -63,6 +66,7 @@ import type {
   MaybePromise,
   Rstest,
   RstestUtilities,
+  SuiteContext,
   TaskMeta,
   TaskMetaValue,
   TestAPIs,
@@ -78,7 +82,9 @@ import type {
 
 - `Rstest`：完整的运行时 API 类型（包含 `test`、`it`、`describe`、`expect`、`assert`、hooks、`rs` 和 `rstest`）。
 - `RstestUtilities`：`rs` 与 `rstest` 工具对象的类型。
+- `FakeTimerInstallOpts`：[`rs.useFakeTimers`](/api/runtime-api/rstest/fake-timers#rsusefaketimers) 接受的配置对象类型。
 - `TestContext`：传给测试回调和单测 Hook 的上下文对象（自 `0.10.1` 起作为公开类型导出）。
+- `SuiteContext`：传给 `beforeAll` 和 `afterAll` 套件级 Hook 的上下文对象（`{ filepath, meta }`）。
 - `TestOptions`：单测与套件级选项（`timeout`、`retry`、`repeats`、`meta`）。
 - `TestAPIs`：`test.extend(...)` 的返回值类型，包含 `test` 修饰符和链式 `.extend()`。
 - `TestForFn`：`test.for` 的调用签名类型。
@@ -95,8 +101,18 @@ import type {
 在辅助函数中接收 mock 函数、spy 或 mocked 模块时，可以使用以下类型：
 
 ```ts
-import type { Mock, Mocked, MockInstance } from '@rstest/core';
+import type {
+  Mock,
+  MockContext,
+  Mocked,
+  MockInstance,
+  MockResult,
+  MockSettledResult,
+} from '@rstest/core';
 ```
+
+- `MockContext<T>`：`mock.mock` 的类型，包含调用参数、实例、上下文、`results` 和 `settledResults`。
+- `MockResult<T>` / `MockSettledResult<T>`：`mock.mock.results` 与 `mock.mock.settledResults` 中记录的同步调用结果与异步 settled 结果联合类型。
 
 ### Mock
 
@@ -183,8 +199,11 @@ import type {
 import type {
   Assertion,
   AsymmetricMatchersContaining,
+  ExpectPollAssertion,
   ExpectStatic,
   Matchers,
+  MatcherState,
+  PromisifyAssertion,
 } from '@rstest/core';
 
 function expectVisible(
@@ -196,8 +215,11 @@ function expectVisible(
 ```
 
 - `Assertion<T>`：`expect(value)` 返回的链式断言对象。
+- `PromisifyAssertion<T>`：`expect(promise).resolves` 与 `expect(promise).rejects` 返回的异步断言对象。
+- `ExpectPollAssertion<T>`：`expect.poll(...)` 返回的异步轮询断言对象。
 - `ExpectStatic`：可调用的 `expect` 函数类型，包含 `poll`、`soft`、`extend` 等静态方法。
 - `Matchers<T>` / `AsymmetricMatchersContaining`：来自 `@vitest/expect` 的匹配器接口，用于模块扩展或自定义匹配器类型标注。
+- `MatcherState`：`expect.getState()` 返回与 `expect.setState()` 接受的匹配器状态类型。
 
 ## Rsbuild 与插件类型
 

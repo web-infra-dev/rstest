@@ -213,7 +213,7 @@ expect('secret:123').toMatchSnapshot();
   - `getState: () => MatcherState`
   - `setState: (state: Partial<MatcherState>) => void`
 
-Reads or updates the internal matcher state (`MatcherState` is the internal matcher state type and is not re-exported directly from `@rstest/core`).
+Reads or updates the current matcher state (`MatcherState` is exported from `@rstest/core`).
 
 ```ts
 const state = expect.getState();

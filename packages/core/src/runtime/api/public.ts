@@ -1,7 +1,14 @@
 import type { Rstest, RstestUtilities } from '../../types';
 
 export type { Assertion } from '../../types/expect';
-export type { Mock, Mocked, MockInstance } from '../../types/mock';
+export type {
+  Mock,
+  MockContext,
+  Mocked,
+  MockInstance,
+  MockResult,
+  MockSettledResult,
+} from '../../types/mock';
 
 declare global {
   var RSTEST_API: Rstest | undefined;
