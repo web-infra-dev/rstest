@@ -69,8 +69,10 @@ Rstest 会向 `<rootPath>/.rstest/` 写入两个文件，并在 watch 模式每�
 通过 `DEBUG=rstest:memory` 排查编译、测试执行和覆盖率报告阶段的内存增长。这是一项实验调试能力，命名空间和输出格式可能会调整。
 
 ```bash
-DEBUG=rstest:memory npx rstest run --coverage
+DEBUG=rstest:memory npx rstest run
 ```
+
+排查覆盖率收集和报告生成阶段的内存占用时，可以加上 `--coverage`。
 
 开始采集时，Rstest 会打印 `.rstest/trace-rss-<timestamp>-<pid>.jsonl` 的路径。请在 CI 中保存这个文件，包括运行失败的任务。每条 JSON 记录都会立即写出，因此 Rstest 进程被强杀后，已经写出的记录仍然可读。
 

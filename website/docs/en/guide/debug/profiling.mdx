@@ -69,8 +69,10 @@ To investigate a slowdown with a Coding Agent, hand it both files: the summary f
 Use `DEBUG=rstest:memory` to investigate memory growth during compilation, test execution, and coverage reporting. This is an experimental debugging capability; the namespace and output format may change.
 
 ```bash
-DEBUG=rstest:memory npx rstest run --coverage
+DEBUG=rstest:memory npx rstest run
 ```
+
+Add `--coverage` to include coverage collection and reporting in the trace.
 
 Rstest prints the path to `.rstest/trace-rss-<timestamp>-<pid>.jsonl` when collection starts. Save this file as a CI artifact, including for failed jobs. Each line is a JSON record written immediately, so records already written remain available if the Rstest process is killed.
 
