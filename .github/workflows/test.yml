@@ -88,6 +88,12 @@ jobs:
 
   # ======== lint ========
   lint:
+    # Always runs (never skipped as a whole job) so required-check rulesets
+    # enforce formatting, spell check, doc type sync, harness docs, syntax
+    # lint, and dependency/version checks even on docs-only PRs. Heavy steps
+    # that require built package output (package build + publish checks,
+    # type-aware lint, and knip) are gated on `changed == 'true'`.
+    needs: [prepare]
     runs-on: ubuntu-latest
 
     steps:
@@ -109,14 +115,23 @@ jobs:
         run: pnpm install --ignore-scripts
 
       - name: Build Packages
+        if: needs.prepare.outputs.changed == 'true'
         run: pnpm run build
         env:
           # Publish checks are comparatively expensive and only need to run once
           # as part of the lint/static-check gate.
           RSTEST_PUBLISH_CHECK: true
 
-      - name: Lint
-        run: pnpm run lint
+      - name: Lint (static)
+        run: pnpm run lint:static
+
+      - name: Lint & Type Check
+        if: needs.prepare.outputs.changed == 'true'
+        run: pnpm run lint:type
+
+      - name: Lint (without type-check)
+        if: needs.prepare.outputs.changed != 'true'
+        run: pnpm exec rs lint
 
       - name: Check Dependency Version
         run: pnpm run check-dependency-version
@@ -125,6 +140,9 @@ jobs:
         run: pnpm run check-version-consistency
 
       - name: Check Unused Code
+        # Knip loads workspace rstest.config.* files, which import built
+        # `@rstest/core/dist/index.js`; it also ignores `website` and docs.
+        if: needs.prepare.outputs.changed == 'true'
         run: pnpm run check-unused
 
       - name: Check pnpm Dedupe
