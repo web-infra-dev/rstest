@@ -533,7 +533,7 @@ myTest('runs logger automatically', ({ expect }) => {
 
 ### Type inference and explicit generics
 
-- **Fixtures object form (`test.extend({ ... })`):** TypeScript cannot infer fixture types from an unannotated `use(value)` callback, so omitting generics causes `use`-based fixtures to be inferred as `unknown` (reporting `TS18046` under `strict`). Plain arrays and `[value, { auto: true }]` tuples can also produce wider union or tuple types without a generic. Pass an explicit generic `test.extend<MyFixtures>({ ... })` whenever you define `use`-based fixtures, tuple fixtures, or sibling fixture dependencies in an object.
+- **Fixtures object form (`test.extend({ ... })`):** TypeScript cannot infer fixture types from an unannotated `use(value)` callback, so omitting generics infers `use`-based fixtures as `unknown`. Pass an explicit generic `test.extend<MyFixtures>({ ... })` when defining `use`-based fixtures, tuple fixtures, or sibling fixture dependencies in an object.
 - **Named fixture form (`test.extend(name, fixture)`):** Prefer the named fixture form when you want automatic type inference without writing explicit generics. TypeScript infers each fixture type from its return value and propagates it to subsequent `.extend()` calls.
 
 The new fixture types apply only to the returned API and leave `test` unchanged:

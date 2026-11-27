@@ -533,7 +533,7 @@ myTest('runs logger automatically', ({ expect }) => {
 
 ### 类型推断与显式泛型
 
-- **fixtures 对象写法（`test.extend({ ... })`）**：TypeScript 无法从未标注类型的 `use(value)` 回调中反推 fixture 类型；不传泛型时，基于 `use` 的 fixture 会被推断为 `unknown`（在 `strict` 模式下访问属性会报 `TS18046`）。普通数组和 `[value, { auto: true }]` 元组在无泛型时也可能产生过宽的联合或元组类型。在对象写法中定义 `use` 函数、元组 fixture 或同对象内的 sibling fixture 依赖时，请显式传入泛型 `test.extend<MyFixtures>({ ... })`。
+- **fixtures 对象写法（`test.extend({ ... })`）**：TypeScript 无法从未标注类型的 `use(value)` 回调中推断 fixture 类型，不传泛型时基于 `use` 的 fixture 会被推断为 `unknown`。在对象写法中定义 `use` 函数、元组 fixture 或同对象内的 sibling fixture 依赖时，请显式传入泛型 `test.extend<MyFixtures>({ ... })`。
 - **具名 fixture 写法（`test.extend(name, fixture)`）**：如果希望在不写显式泛型的情况下自动推断类型，推荐使用具名 fixture 写法。TypeScript 会直接根据返回值推断每个 fixture 的类型，并在链式 `.extend()` 调用中向后传递。
 
 新类型仅作用于返回的新 API，不会改变原始 `test`：
