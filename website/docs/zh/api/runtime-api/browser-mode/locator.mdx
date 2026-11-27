@@ -98,7 +98,7 @@ headless 模式会恢复当前浏览器实例的初始视口尺寸，headed 模�
 
 - **类型：** `(selector: string, options?: LocatorOptions) => Locator`
 
-按 CSS selector 查询元素，可选传入 `options` <ApiMeta sup addedVersion="1.0.0" /> 按子 `Locator` 或文本条件（`has`、`hasNot`、`hasText`、`hasNotText`）过滤。
+按 CSS selector 查询元素，可选传入 `options` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 按子 `Locator` 或文本条件（`has`、`hasNot`、`hasText`、`hasNotText`）过滤。
 
 ```ts
 const item = page.locator('.todo-item');
@@ -225,7 +225,7 @@ export default defineConfig({
 
 - **类型：** `(options: LocatorFilterOptions) => Locator`
 
-基于文本、子 `Locator` 或可见性（`visible` <ApiMeta sup addedVersion="1.0.0" />）条件对已有 `Locator` 做二次过滤。
+基于文本、子 `Locator` 或可见性（`visible` <ApiMeta sup addedVersion="1.0.0-beta.1" />）条件对已有 `Locator` 做二次过滤。
 
 ```ts
 const profileSave = page
@@ -264,7 +264,7 @@ const exactOne = byRole.and(byId);
 
 ### count
 
-<ApiMeta addedVersion="1.0.0" />
+<ApiMeta addedVersion="1.0.0-beta.1" />
 
 - **类型：** `() => Promise<number>`
 
@@ -276,7 +276,7 @@ const total = await page.getByRole('listitem').count();
 
 ### all
 
-<ApiMeta addedVersion="1.0.0" />
+<ApiMeta addedVersion="1.0.0-beta.1" />
 
 - **类型：** `() => Promise<Locator[]>`
 
@@ -372,7 +372,7 @@ await page.getByPlaceholder('Email').fill('dev@rstest.rs');
 
 - **类型：** `(options?: LocatorClearOptions) => Promise<void>`
 
-清空输入元素的值，可选传入 `options` <ApiMeta sup addedVersion="1.0.0" />（`force`、`timeout`）。
+清空输入元素的值，可选传入 `options` <ApiMeta sup addedVersion="1.0.0-beta.1" />（`force`、`timeout`）。
 
 ```ts
 await page.getByPlaceholder('Email').clear();
@@ -442,7 +442,7 @@ await page.getByText('Ready').waitFor();
 
 - **类型：** `(type: string, eventInit?: LocatorDispatchEventInit, options?: LocatorDispatchEventOptions) => Promise<void>`
 
-在匹配到的元素上派发 DOM 事件。`type` 必须是非空字符串，`eventInit` 必须可被 JSON 序列化（`BrowserSerializable`），`options` <ApiMeta sup addedVersion="1.0.0" /> 支持 `{ timeout? }`。
+在匹配到的元素上派发 DOM 事件。`type` 必须是非空字符串，`eventInit` 必须可被 JSON 序列化（`BrowserSerializable`），`options` <ApiMeta sup addedVersion="1.0.0-beta.1" /> 支持 `{ timeout? }`。
 
 ```ts
 await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
@@ -452,7 +452,7 @@ await page.getByRole('button', { name: 'Event' }).dispatchEvent('custom');
 
 - **类型：** `(values: LocatorSelectOptionValue, options?: LocatorSelectOptionOptions) => Promise<string[]>`
 
-按值字符串，或 <ApiMeta sup addedVersion="1.0.0" /> `{ value?, label?, index? }`、它们的数组或 `null`（取消全部选中）选择 `<select>` 元素的选项，并返回已选中选项的 `value` 数组 <ApiMeta sup addedVersion="1.0.0" />。
+按值字符串，或 <ApiMeta sup addedVersion="1.0.0-beta.1" /> `{ value?, label?, index? }`、它们的数组或 `null`（取消全部选中）选择 `<select>` 元素的选项，并返回已选中选项的 `value` 数组 <ApiMeta sup addedVersion="1.0.0-beta.1" />。
 
 ```ts
 await page.getByLabel('Choice').selectOption('b');
