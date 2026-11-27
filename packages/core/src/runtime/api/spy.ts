@@ -33,7 +33,7 @@ type RealmMockFactory = (implementation: FunctionLike) => FunctionLike;
 type ProjectMocks = {
   histories: WeakMap<FunctionLike, MockHistory>;
   configs: WeakMap<FunctionLike, MockConfig>;
-  restores: Set<WeakRef<{ restore(): void }>>;
+  restores: Set<WeakRef<() => void>>;
 };
 
 export const initSpy = (
@@ -59,6 +59,9 @@ export const initSpy = (
 } => {
   let callOrder = 0;
   const mocksByProject = new Map<string, ProjectMocks>();
+  // An overwritten property no longer keeps its spy alive, but its target
+  // still needs the original descriptor until the spy is restored.
+  const restoresByTarget = new WeakMap<object, Set<() => void>>();
   const realmMockFactories = new WeakMap<object, RealmMockFactory>();
   const realmSpies = new WeakMap<(...args: any[]) => any, MockInstance>();
 
@@ -274,7 +277,7 @@ export const initSpy = (
     };
 
     const spyState = getInternalState(spyImpl);
-    const registration = registerRestore ? new WeakRef(spyState) : undefined;
+    let restore = spyState.restore;
 
     const setMethod = <K extends keyof Mock<T>>(key: K, value: Mock<T>[K]) => {
       // An original setter must receive the callable proxy as its receiver.
@@ -513,8 +516,7 @@ export const initSpy = (
 
     setMethod('mockRestore', () => {
       spyFn.mockReset();
-      spyState.restore();
-      if (registration) project.restores.delete(registration);
+      restore();
       mockName = mockFn?.name;
     });
 
@@ -530,8 +532,23 @@ export const initSpy = (
     const realmSpy = wrapRealmMock(spyFn, spyImpl);
     realmSpies.set(spyFn, realmSpy);
     realmSpies.set(realmSpy, realmSpy);
-    if (registration) {
-      project.restores.add(registration);
+    if (registerRestore) {
+      let targetRestores = restoresByTarget.get(obj);
+      if (!targetRestores) {
+        targetRestores = new Set();
+        restoresByTarget.set(obj, targetRestores);
+      }
+      const restoreSpy = () => {
+        spyState.restore();
+        if (targetRestores.delete(restoreSpy) && targetRestores.size === 0) {
+          restoresByTarget.delete(obj);
+        }
+        project.restores.delete(ref);
+      };
+      const ref = new WeakRef(restoreSpy);
+      targetRestores.add(restoreSpy);
+      project.restores.add(ref);
+      restore = restoreSpy;
     }
     descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
     if (descriptor) {
@@ -572,8 +589,12 @@ export const initSpy = (
   const restoreAllSpies = (): void => {
     const { restores } = projectMocks();
     for (const ref of restores) {
-      ref.deref()?.restore();
-      restores.delete(ref);
+      const restore = ref.deref();
+      if (restore) {
+        restore();
+      } else {
+        restores.delete(ref);
+      }
     }
   };
 

@@ -629,6 +629,23 @@ describe('initSpy spyOn', () => {
     expect(obj.greet).toBe(original);
   });
 
+  it('unregisters only the individually restored property of a target', () => {
+    const { spyOn, restoreAllSpies } = initSpy();
+    const original = () => 'original';
+    const replacement = () => 'replacement';
+    const target = { read: original, write: original };
+    const read = spyOn(target, 'read');
+    spyOn(target, 'write');
+
+    read.mockRestore();
+    target.read = replacement;
+    target.write = replacement;
+    restoreAllSpies();
+
+    expect(target.read).toBe(replacement);
+    expect(target.write).toBe(original);
+  });
+
   it('returns the existing mock when the method is already mocked', () => {
     const { spyOn } = initSpy();
     const obj = { greet: () => 'hi' };

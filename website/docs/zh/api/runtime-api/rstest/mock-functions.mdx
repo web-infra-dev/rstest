@@ -234,14 +234,14 @@ mockedModule.method.mockReturnValue('mocked');
 - **别名：** `rstest.clearAllMocks`
 - **类型：** `() => RstestUtilities`
 
-对所有 mock 调用 `.mockClear()`，清除所有调用记录（`mock.calls`、`mock.instances`、`mock.contexts`、`mock.invocationCallOrder`、`mock.lastCall`、`mock.results` 和 `mock.settledResults`）。
+清除当前项目中所有 mock 的调用记录（`mock.calls`、`mock.instances`、`mock.contexts`、`mock.invocationCallOrder`、`mock.lastCall`、`mock.results` 和 `mock.settledResults`），保留各 mock 配置的实现和排队等待调用的一次性实现。
 
 ## rs.resetAllMocks
 
 - **别名：** `rstest.resetAllMocks`
 - **类型：** `() => RstestUtilities`
 
-对所有 mock 调用 `.mockReset()`，清除所有调用记录，并将每个 mock 的实现重置为初始状态。
+清除当前项目中所有 mock 的调用记录，丢弃排队等待调用的一次性实现，并将每个 mock 重置为初始实现。
 
 ## rs.restoreAllMocks
 

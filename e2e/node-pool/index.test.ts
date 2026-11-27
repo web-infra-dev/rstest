@@ -46,6 +46,27 @@ describe('node pool e2e', () => {
     },
   );
 
+  it.for(['forks', 'threads', 'vmForks', 'vmThreads'] as const)(
+    'restores live spy targets after GC in %s',
+    async (pool, { onTestFinished }) => {
+      const { expectExecSuccess } = await runRstestCli({
+        command: process.execPath,
+        args: [
+          '--expose-gc',
+          join(__dirname, '../../packages/core/bin/rstest.js'),
+          'run',
+          '--pool',
+          pool,
+        ],
+        onTestFinished,
+        options: {
+          nodeOptions: { cwd: join(__dirname, './fixtures/spy-restore-gc') },
+        },
+      });
+      await expectExecSuccess();
+    },
+  );
+
   it('should support the complete importActual path under vmThreads', async ({
     onTestFinished,
   }) => {
