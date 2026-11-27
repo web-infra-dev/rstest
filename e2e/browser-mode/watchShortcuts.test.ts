@@ -210,6 +210,7 @@ it('dom gamma', () => {
     // Start with a CLI file filter (`basic`): only basic.test.ts runs on both browsers.
     const result = await runBrowserWatchCliWithCwd(fixturesTargetPath, {
       args: ['basic'],
+      selfManagedChannel: true,
     });
     const { cli } = result;
     try {
