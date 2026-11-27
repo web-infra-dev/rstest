@@ -74,13 +74,16 @@ describe('@rstest/browser public types', () => {
           };
 
           export const poll = () => expect.poll(() => 1);
+          export const negativePoll = () => expect.poll(() => 1).not;
           export const resolves = () => expect(Promise.resolve(1)).resolves;
+          export const negativeResolves = () =>
+            expect(Promise.resolve(1)).resolves.not;
 
           export async function verifyAsyncAssertionHelpers() {
             await poll().toBe(1);
-            await poll().not.toBe(2);
+            await negativePoll().toBe(2);
             await resolves().toBe(1);
-            await resolves().not.toBe(2);
+            await negativeResolves().toBe(2);
           }
         `,
       );

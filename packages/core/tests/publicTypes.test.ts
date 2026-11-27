@@ -129,8 +129,13 @@ describe('public types and built-in reporter options', () => {
         ],
       });
       export const poll = () => expect.poll(() => 1);
+      export const negativePoll = () => expect.poll(() => 1).not;
       export const resolves = () => expect(Promise.resolve(1)).resolves;
+      export const negativeResolves = () =>
+        expect(Promise.resolve(1)).resolves.not;
       export const rejects = () => expect(Promise.reject(new Error())).rejects;
+      export const negativeRejects = () =>
+        expect(Promise.reject(new Error())).rejects.not;
       export const project: InlineProjectConfig = defineInlineProject({
         name: 'unit',
       });

@@ -49,18 +49,28 @@ type ExpectPollOptions = ExpectPollConfig & {
 
 type Promisify<O> = {
   [K in keyof O]: O[K] extends (...args: infer A) => infer R
-    ? Promisify<O[K]> & ((...args: A) => Promise<R>)
+    ? Promisify<O[K]> &
+        ((...args: A) => R extends Promise<any> ? R : Promise<R>)
     : O[K];
 };
 
-// `Omit<..., never>` keeps the alias opaque during declaration emit so
-// `expect(p).resolves` and `expect.poll(...)` don't eagerly expand `Assertion`
+// `Omit<..., 'not' | 'resolves' | 'rejects'> & { ... }` keeps the alias opaque
+// during declaration emit (including across `.not` chains) so `expect(p).resolves`,
+// `expect.poll(...)`, and their `.not` forms don't eagerly expand `Assertion`
 // past TypeScript's serialization limit (TS7056) or leak internal `@vitest/expect`
 // symbols (TS4023).
-export type PromisifyAssertion<T> = Omit<Promisify<Assertion<T>>, never>;
+export type PromisifyAssertion<T> = Omit<
+  Promisify<Assertion<T>>,
+  'not' | 'resolves' | 'rejects'
+> & {
+  not: PromisifyAssertion<T>;
+  resolves: PromisifyAssertion<T>;
+  rejects: PromisifyAssertion<T>;
+} & ((type: string, message?: string) => Promise<Assertion<any>>);
 
 export type ExpectPollAssertion<T> = Omit<
   PromisifyAssertion<Awaited<T>>,
+  | 'not'
   | 'rejects'
   | 'resolves'
   | 'toThrow'
@@ -72,7 +82,9 @@ export type ExpectPollAssertion<T> = Omit<
   | 'toMatchInlineSnapshot'
   | 'toThrowErrorMatchingSnapshot'
   | 'toThrowErrorMatchingInlineSnapshot'
->;
+> & {
+  not: ExpectPollAssertion<T>;
+};
 
 type CallOrderMock =
   MockInstance | Parameters<VitestAssertion['toHaveBeenCalledBefore']>[0];
