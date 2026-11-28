@@ -62,6 +62,48 @@ describe('node pool - basic', () => {
     ]);
   });
 
+  it('preserves custom static methods and mock chaining', () => {
+    const original = Object.assign(() => 42, {
+      rename(this: { mockName(name: string): unknown }) {
+        return this.mockName('renamed');
+      },
+    });
+    const mock = rs.fn(original);
+    const rename = Object.getOwnPropertyDescriptor(mock, 'rename')!;
+
+    expect(rename.value.call(mock)).toBe(mock);
+    expect(mock.getMockName()).toBe('renamed');
+    expect(mock()).toBe(42);
+  });
+
+  it('dispatches bulk cleanup to overridden mock methods', () => {
+    const mock = rs.fn(() => 'initial').mockReturnValue('configured');
+    const clear = mock.mockClear;
+    let clears = 0;
+    mock.mockClear = function () {
+      expect(this).toBe(mock);
+      clears++;
+      return clear();
+    };
+    let resets = 0;
+    const reset = rs.spyOn(mock, 'mockReset').mockImplementation(() => {
+      resets++;
+      return mock;
+    });
+    try {
+      rs.clearAllMocks();
+      expect(clears).toBe(1);
+      mock();
+      rs.resetAllMocks();
+      expect(resets).toBe(1);
+      expect(mock).toHaveBeenCalledTimes(1);
+      expect(mock()).toBe('configured');
+    } finally {
+      reset.mockRestore();
+      mock.mockClear = clear;
+    }
+  });
+
   it('strictly equals built-ins created in the host realm', () => {
     expect(new URLSearchParams('a=1').getAll('a')).toStrictEqual(['1']);
     expect(new TextEncoder().encodeInto('a', new Uint8Array(1))).toStrictEqual({

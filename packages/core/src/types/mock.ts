@@ -435,11 +435,14 @@ export interface RstestUtilities {
     ) => MaybePartiallyMockedDeep<T>);
 
   /**
-   * Calls `.mockClear()` on all spies.
+   * Clears call history for all mocks in the current project. A mock with a
+   * custom `mockClear` handles its own cleanup.
    */
   clearAllMocks: () => RstestUtilities;
   /**
-   * Calls `.mockReset()` on all spies.
+   * Clears call history and restores the initial implementation of every mock
+   * in the current project, discarding queued one-time implementations. A mock
+   * with a custom `mockReset` handles its own reset.
    */
   resetAllMocks: () => RstestUtilities;
   /**

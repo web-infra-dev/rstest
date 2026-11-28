@@ -131,6 +131,9 @@ it('resets retained mocks and restores method and getter spies at file end', () 
   if (!previous) {
     const mocks = createMocks();
     state.mocks = mocks;
+    mocks.fn.mockReset = () => {
+      throw new Error('VM file disposal called a user cleanup method');
+    };
     registerFileCleanup(() => {
       expect(mocks.target.method()).toBe('mocked method');
       expect(mocks.target.value).toBe('mocked getter');
@@ -151,6 +154,11 @@ it('resets retained mocks and restores method and getter spies at file end', () 
   expect(mocks.fn()).toBe('initial implementation');
   expect(mocks.capturedMethod()).toBe('original method');
   expect(mocks.capturedGetter()).toBe('original getter');
+
+  mocks.fn.mockReturnValueOnce('next file');
+  rs.clearAllMocks();
+  expect(mocks.fn).not.toHaveBeenCalled();
+  expect(mocks.fn()).toBe('next file');
   console.log('VM_FILE_MOCKS_RESET_AND_RESTORED');
 });
 

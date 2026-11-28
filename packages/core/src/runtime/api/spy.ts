@@ -1,4 +1,9 @@
-import { getInternalState, internalSpyOn, type SpyInternalImpl } from 'tinyspy';
+import {
+  getInternalState,
+  internalSpyOn,
+  spies as tinyspySpies,
+  type SpyInternalImpl,
+} from 'tinyspy';
 import type {
   FunctionLike,
   Mock,
@@ -9,9 +14,28 @@ import type {
   RstestUtilities,
 } from '../../types';
 import type { CreateMockInstanceFn } from './mockObject';
+import {
+  isCleanupMethod,
+  MockRegistry,
+  type TrackedMock,
+} from './mockRegistry';
 
 const isMockFunction = (fn: any): fn is MockInstance =>
   typeof fn === 'function' && '_isMockFunction' in fn && fn._isMockFunction;
+
+type MockHistory<T extends FunctionLike = FunctionLike> = Omit<
+  MockContext<T>,
+  'lastCall'
+>;
+
+type MockConfig = {
+  implementation?: FunctionLike;
+  once: FunctionLike[];
+};
+
+type RealmMockFactory = (implementation: FunctionLike) => FunctionLike;
+
+type ProjectMocks = MockRegistry<MockHistory, MockConfig>;
 
 export const initSpy = (
   // The running file's project key (`workerState.project`). The `rstest`
@@ -23,12 +47,9 @@ export const initSpy = (
   getProjectKey: () => string = () => '',
   getRuntimeGlobal: () => Record<string, unknown> = () => globalThis,
 ): Pick<RstestUtilities, 'isMockFunction' | 'spyOn' | 'fn'> & {
-  /**
-   * Run `callback` against every live registered mock of the running file's
-   * project, pruning entries whose mock has been garbage-collected. See the
-   * registry comment below for why entries are weak and scoped per project.
-   */
-  forEachMock: (callback: (mock: MockInstance) => void) => void;
+  clearAllMocks: () => void;
+  resetAllMocks: () => void;
+  discardMockState: () => void;
   restoreAllSpies: () => void;
   createMockInstance: CreateMockInstanceFn;
   /**
@@ -39,18 +60,12 @@ export const initSpy = (
   resetCallOrder: () => void;
 } => {
   let callOrder = 0;
-  // Registry keyed by project, holding weak references. Weak so it never pins a
-  // mock alive: the `rstest` singleton lives for the whole worker, but under
-  // `isolate: false` a mock created in a per-file (later evicted) module must be
-  // collectable once that module is gone, while a mock kept alive by a module
-  // shared across files stays tracked. Keyed by project so a reused worker that
-  // serves several projects never lets one project's `*AllMocks` reach another's
-  // mocks (no module is shared across projects, so every mock belongs to one).
-  // See https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3457255132
-  // and https://github.com/web-infra-dev/rstest/pull/1376#discussion_r3458343793.
-  const mocksByProject = new Map<string, Set<WeakRef<MockInstance>>>();
+  const mocksByProject = new Map<string, ProjectMocks>();
+  // An overwritten property no longer keeps its spy alive, but its target
+  // still needs the original descriptor until the spy is restored.
+  const restoresByTarget = new WeakMap<object, Set<() => void>>();
+  const realmMockFactories = new WeakMap<object, RealmMockFactory>();
   const realmSpies = new WeakMap<(...args: any[]) => any, MockInstance>();
-  const restoreSpies = new WeakMap<MockInstance, () => void>();
 
   const getRealmPromise = (): PromiseConstructor => {
     const promise = getRuntimeGlobal().Promise;
@@ -95,36 +110,49 @@ export const initSpy = (
     return object.assign(new object(), { type, value });
   };
 
-  const projectMocks = (): Set<WeakRef<MockInstance>> => {
+  const projectMocks = (): ProjectMocks => {
     const key = getProjectKey();
-    const set = mocksByProject.get(key) ?? new Set<WeakRef<MockInstance>>();
-    mocksByProject.set(key, set);
-    return set;
+    let project = mocksByProject.get(key);
+    if (!project) {
+      project = new MockRegistry<MockHistory, MockConfig>();
+      mocksByProject.set(key, project);
+    }
+    return project;
   };
 
-  const wrapRealmMock = <T extends FunctionLike>(spyFn: Mock<T>): Mock<T> => {
+  const wrapRealmMock = <T extends FunctionLike>(
+    spyFn: Mock<T>,
+    target: SpyInternalImpl<Parameters<T>, ReturnType<T>>,
+    project: ProjectMocks,
+    entry: TrackedMock,
+  ): Mock<T> => {
     const realmFunction = getRuntimeGlobal().Function;
     if (typeof realmFunction !== 'function' || realmFunction === Function) {
       return spyFn;
     }
 
-    const createFactory = realmFunction as unknown as (
-      ...args: string[]
-    ) => (implementation: FunctionLike) => FunctionLike;
-    const factory = createFactory(
-      'implementation',
-      'return function(...args) { return new.target ? Reflect.construct(implementation, args, new.target) : implementation.apply(this, args); };',
-    );
-    const realmSpy = factory(spyFn) as Mock<T>;
+    let factory = realmMockFactories.get(realmFunction);
+    if (!factory) {
+      const createFactory = realmFunction as (
+        ...args: string[]
+      ) => RealmMockFactory;
+      factory = createFactory(
+        'implementation',
+        'return function(...args) { return new.target ? Reflect.construct(implementation, args, new.target) : implementation.apply(this, args); };',
+      );
+      realmMockFactories.set(realmFunction, factory);
+    }
+    const surface = factory(spyFn) as Mock<T>;
+    const realmSpy = new Proxy<Mock<T>>(surface, project.traps);
 
-    for (const key of Reflect.ownKeys(spyFn)) {
+    for (const key of Reflect.ownKeys(target)) {
       if (key === 'caller' || key === 'callee' || key === 'arguments') {
         continue;
       }
       if (key === 'length' || key === 'name' || key === 'prototype') {
         continue;
       }
-      const descriptor = Object.getOwnPropertyDescriptor(spyFn, key);
+      const descriptor = Object.getOwnPropertyDescriptor(target, key);
       if (!descriptor) {
         continue;
       }
@@ -148,14 +176,14 @@ export const initSpy = (
           return result;
         };
       }
-      Object.defineProperty(realmSpy, key, descriptor);
+      Object.defineProperty(surface, key, descriptor);
     }
 
-    Object.defineProperty(realmSpy, 'name', {
+    Object.defineProperty(surface, 'name', {
       configurable: true,
       value: spyFn.name,
     });
-    Object.defineProperty(realmSpy, 'length', {
+    Object.defineProperty(surface, 'length', {
       configurable: true,
       value: spyFn.length,
     });
@@ -166,8 +194,11 @@ export const initSpy = (
       spyFn.prototype &&
       Object.getPrototypeOf(spyFn.prototype) !== Object.prototype
     ) {
-      realmSpy.prototype = spyFn.prototype;
+      surface.prototype = spyFn.prototype;
+    } else {
+      surface.prototype.constructor = realmSpy;
     }
+    project.watchRealmWrapper(surface, entry);
     return realmSpy;
   };
 
@@ -208,45 +239,77 @@ export const initSpy = (
       ReturnType<T>
     >;
 
+    // internalSpyOn also registers the raw spy in tinyspy's global strong Set.
+    // Rstest owns restoration, including for spies installed in another realm.
+    (tinyspySpies as Set<FunctionLike>).delete(spyImpl);
+
     // Keep tinyspy's descriptors and function metadata, but own execution so
     // its call wrapper cannot subscribe to the returned Promise a second time.
+    const project = projectMocks();
+    // tinyspy exposes its raw callable as the constructor of its fresh prototype.
+    // Observe changes through that alias while preserving its own call behavior.
+    spyImpl.prototype.constructor = new Proxy(spyImpl, project.traps);
     const spyFn = new Proxy(spyImpl, {
+      defineProperty: project.traps.defineProperty,
+      deleteProperty: project.traps.deleteProperty,
       apply: (_target, thisArg, args) => Reflect.apply(willCall, thisArg, args),
       construct: (_target, args, newTarget) =>
         Reflect.construct(willCall, args, newTarget),
     }) as unknown as Mock<T>;
 
-    let mockImplementationOnce: NormalizedProcedure<T>[] = [];
-    let implementation = mockFn;
+    // Bind to the creating project even when a reused worker switches projects.
+    const entry: TrackedMock = { mock: spyFn, order: 0 };
     let mockName = mockFn?.name;
+    const history = (): MockHistory<T> => {
+      let state = project.histories.get(entry);
+      if (!state) {
+        state = {
+          calls: [],
+          instances: [],
+          contexts: [],
+          invocationCallOrder: [],
+          results: [],
+          settledResults: [],
+        };
+        project.histories.set(entry, state);
+      }
+      // Each function key is only used with its own call signature.
+      return state as MockHistory<T>;
+    };
 
-    const initMockState = () => ({
-      calls: [] as MockContext<T>['calls'],
-      instances: [] as ReturnType<T>[],
-      contexts: [] as ThisParameterType<T>[],
-      invocationCallOrder: [] as number[],
-      results: [] as MockContext<T>['results'],
-      settledResults: [] as MockContext<T>['settledResults'],
-    });
-
-    let mockState = initMockState();
+    const config = (): MockConfig => {
+      let current = project.configs.get(entry);
+      if (!current) {
+        current = { implementation: mockFn, once: [] };
+        project.configs.set(entry, current);
+      }
+      return current;
+    };
 
     const spyState = getInternalState(spyImpl);
-    let unregisterRestore = () => {};
+    let restore = spyState.restore;
 
-    spyFn.getMockName = () => mockName || propertyName;
+    const setMethod = <K extends keyof Mock<T>>(key: K, value: Mock<T>[K]) => {
+      // An original setter must receive the callable proxy as its receiver.
+      const target = (key in spyImpl ? spyFn : spyImpl) as Mock<T>;
+      target[key] = value;
+      if (target === spyFn && isCleanupMethod(key)) {
+        project.recordOverride(entry, spyImpl, key, value);
+      }
+    };
 
-    spyFn.mockName = (name: string) => {
+    setMethod('getMockName', () => mockName || propertyName);
+
+    setMethod('mockName', (name: string) => {
       mockName = name;
 
       return spyFn;
-    };
+    });
 
-    spyFn.getMockImplementation = () => {
-      return mockImplementationOnce.length
-        ? mockImplementationOnce[mockImplementationOnce.length - 1]
-        : implementation;
-    };
+    setMethod('getMockImplementation', () => {
+      const current = project.configs.get(entry);
+      return current?.once.at(-1) ?? current?.implementation ?? mockFn;
+    });
 
     function withImplementation(
       fn: NormalizedProcedure<T>,
@@ -260,15 +323,16 @@ export const initSpy = (
       fn: NormalizedProcedure<T>,
       cb: () => unknown,
     ): Mock<T> | Promise<Mock<T>> {
-      const originalImplementation = implementation;
-      const originalMockImplementationOnce = mockImplementationOnce;
+      const current = config();
+      const previous = current.implementation;
+      const previousOnce = current.once;
+      current.implementation = fn;
+      current.once = [];
 
-      implementation = fn;
-      mockImplementationOnce = [];
-
+      // If the mock was reset in the meantime, this config is already detached.
       const reset = () => {
-        implementation = originalImplementation;
-        mockImplementationOnce = originalMockImplementationOnce;
+        current.implementation = previous;
+        current.once = previousOnce;
       };
 
       try {
@@ -300,66 +364,67 @@ export const initSpy = (
       }
     }
 
-    spyFn.withImplementation = withImplementation;
+    setMethod('withImplementation', withImplementation);
 
-    spyFn.mockImplementation = (fn) => {
-      implementation = fn;
+    setMethod('mockImplementation', (fn) => {
+      config().implementation = fn;
       return spyFn;
-    };
+    });
 
-    spyFn.mockImplementationOnce = (fn) => {
-      mockImplementationOnce.push(fn);
+    setMethod('mockImplementationOnce', (fn) => {
+      config().once.push(fn);
       return spyFn;
-    };
+    });
 
-    spyFn.mockReturnValue = (value) => {
+    setMethod('mockReturnValue', (value) => {
       return spyFn.mockImplementation((() => value) as T);
-    };
+    });
 
-    spyFn.mockReturnValueOnce = (value) => {
+    setMethod('mockReturnValueOnce', (value) => {
       return spyFn.mockImplementationOnce((() => value) as T);
-    };
+    });
 
-    spyFn.mockThrow = (value) => {
+    setMethod('mockThrow', (value) => {
       return spyFn.mockImplementation(() => {
         throw value;
       });
-    };
+    });
 
-    spyFn.mockThrowOnce = (value) => {
+    setMethod('mockThrowOnce', (value) => {
       return spyFn.mockImplementationOnce(() => {
         throw value;
       });
-    };
+    });
 
-    spyFn.mockResolvedValue = (value) => {
+    setMethod('mockResolvedValue', (value) => {
       return spyFn.mockImplementation((() =>
         getRealmPromise().resolve(value)) as T);
-    };
+    });
 
-    spyFn.mockResolvedValueOnce = (value) => {
+    setMethod('mockResolvedValueOnce', (value) => {
       return spyFn.mockImplementationOnce((() =>
         getRealmPromise().resolve(value)) as T);
-    };
+    });
 
-    spyFn.mockRejectedValue = (value) => {
+    setMethod('mockRejectedValue', (value) => {
       return spyFn.mockImplementation((() =>
         getRealmPromise().reject(value)) as T);
-    };
+    });
 
-    spyFn.mockRejectedValueOnce = (value) => {
+    setMethod('mockRejectedValueOnce', (value) => {
       return spyFn.mockImplementationOnce((() =>
         getRealmPromise().reject(value)) as T);
-    };
+    });
 
-    spyFn.mockReturnThis = () => {
+    setMethod('mockReturnThis', () => {
       return spyFn.mockImplementation(function (this: ReturnType<T>) {
         return this;
       } as T);
-    };
+    });
 
     function willCall(this: unknown, ...args: Parameters<T>) {
       // A call that settles after `mockClear` must not write into the new state.
+      const mockState = history();
       const { calls, results, settledResults } = mockState;
       const callIndex = calls.push(args) - 1;
       results[callIndex] = { type: 'incomplete', value: undefined };
@@ -367,10 +432,10 @@ export const initSpy = (
       mockState.contexts.push(this as ThisParameterType<T>);
       mockState.invocationCallOrder.push(++callOrder);
       try {
-        let impl = implementation || (spyState.getOriginal() as T);
-        if (mockImplementationOnce.length) {
-          impl = mockImplementationOnce.shift()!;
-        }
+        const current = project.configs.get(entry);
+        const impl = current?.once.length
+          ? current.once.shift()!
+          : (current?.implementation ?? mockFn ?? spyState.getOriginal());
         const result: ReturnType<T> = impl?.apply(this, args);
         const isObject =
           (typeof result === 'object' && result !== null) ||
@@ -407,41 +472,41 @@ export const initSpy = (
       }
     }
 
-    Object.defineProperty(spyFn, 'mock', {
+    Object.defineProperty(spyImpl, 'mock', {
       get: (): MockContext<T> => ({
         get calls() {
           if (getRealmArray() === Array) {
-            return mockState.calls.slice();
+            return history().calls.slice();
           }
           return toRealmArray(
-            mockState.calls.map((call) => toRealmCall(call)),
+            history().calls.map((call) => toRealmCall(call)),
           ) as MockContext<T>['calls'];
         },
         get lastCall() {
-          const lastCall = mockState.calls.at(-1);
+          const lastCall = history().calls.at(-1);
           return lastCall
             ? (toRealmCall(lastCall) as MockContext<T>['lastCall'])
             : undefined;
         },
         get instances() {
-          return toRealmArray(mockState.instances);
+          return toRealmArray(history().instances);
         },
         get contexts() {
-          return toRealmArray(mockState.contexts);
+          return toRealmArray(history().contexts);
         },
         get invocationCallOrder() {
-          return toRealmArray(mockState.invocationCallOrder);
+          return toRealmArray(history().invocationCallOrder);
         },
         get results() {
           return toRealmArray(
-            mockState.results.map(({ type, value }) =>
+            history().results.map(({ type, value }) =>
               toRealmResult(type, value),
             ),
           ) as MockContext<T>['results'];
         },
         get settledResults() {
           return toRealmArray(
-            mockState.settledResults.map(({ type, value }) =>
+            history().settledResults.map(({ type, value }) =>
               toRealmResult(type, value),
             ),
           ) as MockContext<T>['settledResults'];
@@ -449,29 +514,27 @@ export const initSpy = (
       }),
     });
 
-    spyFn.mockClear = () => {
-      mockState = initMockState();
+    setMethod('mockClear', () => {
+      project.histories.delete(entry);
 
       return spyFn;
-    };
+    });
 
-    spyFn.mockReset = () => {
+    setMethod('mockReset', () => {
       spyFn.mockClear();
-      implementation = mockFn;
-      mockImplementationOnce = [];
+      project.configs.delete(entry);
 
       return spyFn;
-    };
+    });
 
-    spyFn.mockRestore = () => {
+    setMethod('mockRestore', () => {
       spyFn.mockReset();
-      spyState.restore();
-      unregisterRestore();
+      restore();
       mockName = mockFn?.name;
-    };
+    });
 
     if (Symbol.dispose) {
-      Object.defineProperty(spyFn, Symbol.dispose, {
+      Object.defineProperty(spyImpl, Symbol.dispose, {
         value: () => {
           spyFn.mockRestore();
         },
@@ -479,21 +542,28 @@ export const initSpy = (
       });
     }
 
-    const realmSpy = wrapRealmMock(spyFn);
+    const realmSpy = wrapRealmMock(spyFn, spyImpl, project, entry);
+    entry.mock = realmSpy;
+    project.register(spyImpl, entry);
     realmSpies.set(spyFn, realmSpy);
     realmSpies.set(realmSpy, realmSpy);
-    projectMocks().add(new WeakRef(realmSpy));
     if (registerRestore) {
-      unregisterRestore = () => {
-        restoreSpies.delete(spyFn);
-        restoreSpies.delete(realmSpy);
-      };
-      const restore = () => {
+      let targetRestores = restoresByTarget.get(obj);
+      if (!targetRestores) {
+        targetRestores = new Set();
+        restoresByTarget.set(obj, targetRestores);
+      }
+      const restoreSpy = () => {
         spyState.restore();
-        unregisterRestore();
+        if (targetRestores.delete(restoreSpy) && targetRestores.size === 0) {
+          restoresByTarget.delete(obj);
+        }
+        project.restores.delete(ref);
       };
-      restoreSpies.set(spyFn, restore);
-      restoreSpies.set(realmSpy, restore);
+      const ref = new WeakRef(restoreSpy);
+      targetRestores.add(restoreSpy);
+      project.restores.add(ref);
+      restore = restoreSpy;
     }
     descriptor = Object.getOwnPropertyDescriptor(obj, propertyName);
     if (descriptor) {
@@ -521,23 +591,17 @@ export const initSpy = (
     return realmSpy;
   };
 
-  const forEachMock = (callback: (mock: MockInstance) => void): void => {
-    const mocks = mocksByProject.get(getProjectKey());
-    if (!mocks) {
-      return;
-    }
-    for (const ref of mocks) {
-      const mock = ref.deref();
-      if (mock) {
-        callback(mock);
+  const restoreAllSpies = (): void => {
+    const restores = mocksByProject.get(getProjectKey())?.restores;
+    if (!restores) return;
+    for (const ref of restores) {
+      const restore = ref.deref();
+      if (restore) {
+        restore();
       } else {
-        mocks.delete(ref);
+        restores.delete(ref);
       }
     }
-  };
-
-  const restoreAllSpies = (): void => {
-    forEachMock((mock) => restoreSpies.get(mock)?.());
   };
 
   const fn: MockFn = <T extends FunctionLike>(mockFn?: T) => {
@@ -720,7 +784,11 @@ export const initSpy = (
     isMockFunction,
     spyOn,
     fn,
-    forEachMock,
+    clearAllMocks: () =>
+      mocksByProject.get(getProjectKey())?.clean('mockClear'),
+    resetAllMocks: () =>
+      mocksByProject.get(getProjectKey())?.clean('mockReset'),
+    discardMockState: () => mocksByProject.get(getProjectKey())?.discard(true),
     restoreAllSpies,
     createMockInstance,
     resetCallOrder: () => {

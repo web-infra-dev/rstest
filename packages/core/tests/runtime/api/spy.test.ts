@@ -1,8 +1,18 @@
 import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from '@rstest/core';
+import { spies as tinyspySpies } from 'tinyspy';
 import { initSpy } from '../../../src/runtime/api/spy';
 
 describe('initSpy fn()', () => {
+  it('keeps its mocks out of the strong tinyspy restore registry', () => {
+    const { fn, spyOn } = initSpy();
+    const initialSize = tinyspySpies.size;
+    fn();
+    const target = { method: () => 1 };
+    spyOn(target, 'method');
+    expect(tinyspySpies.size).toBe(initialSize);
+  });
+
   it('creates mocks in the supplied VM realm', () => {
     const context = runInNewContext('globalThis', {}) as Record<
       string,
@@ -24,6 +34,54 @@ describe('initSpy fn()', () => {
 
     expect(isVmFunction(mock)).toBe(true);
     expect(isVmObject(new mock())).toBe(true);
+  });
+
+  it('reuses the wrapper factory when returning to a VM realm', () => {
+    const first: typeof globalThis = runInNewContext('globalThis');
+    const second: typeof globalThis = runInNewContext('globalThis');
+    let compilations = 0;
+    first.Function = new Proxy(first.Function, {
+      apply(target, receiver, args) {
+        compilations++;
+        return Reflect.apply(target, receiver, args);
+      },
+    });
+    let realm = first;
+    const { fn } = initSpy(
+      () => '',
+      () => realm,
+    );
+    const a = fn();
+    realm = second;
+    const b = fn();
+    realm = first;
+    const c = fn();
+
+    expect(compilations).toBe(1);
+    expect(a).toBeInstanceOf(first.Function);
+    expect(b).toBeInstanceOf(second.Function);
+    expect(c).toBeInstanceOf(first.Function);
+    expect(c.prototype).not.toBe(a.prototype);
+    expect(c.mockName('third')).toBe(c);
+    expect(a.getMockName()).not.toBe('third');
+  });
+
+  it('installs mock helpers with the public mock as the setter receiver', () => {
+    const original = () => 42;
+    const installed = new WeakMap<object, unknown>();
+    Object.defineProperty(original, 'mockName', {
+      get() {
+        return installed.get(this);
+      },
+      set(value: unknown) {
+        installed.set(this, value);
+      },
+    });
+    const mock = initSpy().fn(original);
+
+    expect(installed.has(mock)).toBe(true);
+    expect(mock.mockName('renamed')).toBe(mock);
+    expect(mock.getMockName()).toBe('renamed');
   });
 
   it('creates resolved and rejected values in the supplied VM realm', async () => {
@@ -273,26 +331,30 @@ describe('initSpy fn()', () => {
     },
   );
 
-  it('keeps pending results out of a cleared mock', async () => {
-    const { fn } = initSpy();
-    let resolve!: (value: string) => void;
-    const promise = new Promise<string>((done) => {
-      resolve = done;
-    });
-    const mock = fn(() => promise);
+  it.each(['single', 'project'] as const)(
+    'keeps pending results out of a cleared mock (%s)',
+    async (scope) => {
+      const { fn, clearAllMocks } = initSpy();
+      let resolve!: (value: string) => void;
+      const promise = new Promise<string>((done) => {
+        resolve = done;
+      });
+      const mock = fn(() => promise);
 
-    mock();
-    mock.mockClear();
-    mock.mockResolvedValueOnce('new');
-    await mock();
-    resolve('old');
-    await promise;
+      mock();
+      if (scope === 'single') mock.mockClear();
+      else clearAllMocks();
+      mock.mockResolvedValueOnce('new');
+      await mock();
+      resolve('old');
+      await promise;
 
-    expect(mock.mock.calls).toEqual([[]]);
-    expect(mock.mock.settledResults).toEqual([
-      { type: 'fulfilled', value: 'new' },
-    ]);
-  });
+      expect(mock.mock.calls).toEqual([[]]);
+      expect(mock.mock.settledResults).toEqual([
+        { type: 'fulfilled', value: 'new' },
+      ]);
+    },
+  );
 
   it('preserves constructor prototypes behind a getter', () => {
     const { spyOn } = initSpy();
@@ -405,48 +467,57 @@ describe('initSpy reset semantics', () => {
     expect(spy()).toBe('base');
   });
 
-  it('visits and clears every created mock through forEachMock', () => {
-    const { fn, spyOn, forEachMock } = initSpy();
-    const a = fn();
-    const obj = { method: () => 'real' };
-    const b = spyOn(obj, 'method');
-
-    const visited = new Set();
-    forEachMock((mock) => visited.add(mock));
-    expect(visited.has(a)).toBe(true);
-    expect(visited.has(b)).toBe(true);
-
-    a();
-    obj.method();
-    // Mirror clearAllMocks: iterate the live registry.
-    forEachMock((mock) => mock.mockClear());
-    expect(a.mock.calls).toHaveLength(0);
-    expect(b.mock.calls).toHaveLength(0);
-  });
-
-  it('scopes mocks per project so one project does not reset another', () => {
-    // A reused worker under `isolate: false` serves several projects through one
-    // `rstest` singleton; the project key resolves the running file's project.
+  it('scopes call history, implementations and spy restoration to the creating project', () => {
     let project = 'A';
-    const { fn, forEachMock } = initSpy(() => project);
+    const { fn, spyOn, clearAllMocks, resetAllMocks, restoreAllSpies } =
+      initSpy(() => project);
+    const mock = fn(() => 'base').mockReturnValue('override');
+    const target = { method: () => 'original' };
+    const spy = spyOn(target, 'method');
+    mock();
 
-    const mockA = fn();
-    mockA();
-    expect(mockA.mock.calls).toHaveLength(1);
-
-    // Project B's `*AllMocks` iteration must not see A's mock.
     project = 'B';
-    forEachMock((mock) => mock.mockClear());
-    project = 'A';
-    expect(mockA.mock.calls).toHaveLength(1);
+    const other = fn();
+    other();
+    clearAllMocks();
+    resetAllMocks();
+    restoreAllSpies();
+    expect(other.mock.calls).toHaveLength(0);
+    expect(mock.mock.calls).toHaveLength(1);
+    expect(mock()).toBe('override');
+    expect(target.method).toBe(spy);
 
-    // A's own iteration still reaches it.
-    forEachMock((mock) => mock.mockClear());
-    expect(mockA.mock.calls).toHaveLength(0);
+    project = 'A';
+    const context = mock.mock;
+    mock.mockReturnValueOnce('once');
+    clearAllMocks();
+    expect(context.calls).toEqual([]);
+    expect(mock()).toBe('once');
+    expect(mock()).toBe('override');
+    mock.mockReturnValueOnce('discard');
+    resetAllMocks();
+    expect(mock.mock.calls).toEqual([]);
+    expect(mock()).toBe('base');
+    restoreAllSpies();
+    expect(target.method).not.toBe(spy);
   });
 });
 
 describe('initSpy withImplementation', () => {
+  it('does not reinstall a discarded override when an async scope finishes after reset', async () => {
+    const { fn, resetAllMocks } = initSpy();
+    const mock = fn(() => 'base').mockReturnValue('old override');
+    await mock.withImplementation(
+      () => 'temporary',
+      async () => {
+        expect(mock()).toBe('temporary');
+        resetAllMocks();
+        await Promise.resolve();
+      },
+    );
+    expect(mock()).toBe('base');
+  });
+
   it('restores the implementation after a synchronous callback throws', () => {
     const { fn } = initSpy();
     const spy = fn(() => 'original');
@@ -505,7 +576,7 @@ describe('initSpy withImplementation', () => {
   });
 
   it('returns the VM mock after an asynchronous withImplementation callback', async () => {
-    const context = runInNewContext('globalThis', {}) as Record<string, any>;
+    const context: typeof globalThis = runInNewContext('globalThis');
     const { fn } = initSpy(
       () => '',
       () => context,
@@ -514,10 +585,153 @@ describe('initSpy withImplementation', () => {
 
     const result = spy.withImplementation(
       () => 'temporary',
-      () => runInNewContext('Promise.resolve()', context),
+      () => Promise.resolve(),
     );
 
+    expect(result).toBeInstanceOf(context.Promise);
     expect(await result).toBe(spy);
+  });
+});
+
+describe('custom bulk mock cleanup', () => {
+  it('runs hooks in creation order and stops at a thrown error', () => {
+    const { fn, clearAllMocks } = initSpy();
+    const first = fn();
+    const custom = fn();
+    const last = fn();
+    first();
+    custom();
+    last();
+    const original = custom.mockClear;
+    let reads = 0;
+    Object.defineProperty(custom, 'mockClear', {
+      configurable: true,
+      get() {
+        reads++;
+        return function () {
+          expect(first.mock.calls).toHaveLength(0);
+          expect(custom.mock.calls).toHaveLength(1);
+          expect(last.mock.calls).toHaveLength(1);
+          throw new Error('stop here');
+        };
+      },
+    });
+
+    expect(reads).toBe(0);
+    expect(clearAllMocks).toThrow('stop here');
+    expect(reads).toBe(1);
+    expect(last.mock.calls).toHaveLength(1);
+    Object.defineProperty(custom, 'mockClear', { value: original });
+    clearAllMocks();
+    expect(custom.mock.calls).toHaveLength(0);
+    expect(last.mock.calls).toHaveLength(0);
+  });
+
+  it('keeps a custom helper copied into a VM after the host helper is restored', () => {
+    const realm: typeof globalThis = runInNewContext('globalThis');
+    const { fn, clearAllMocks } = initSpy(undefined, () => realm);
+    const implementation = () => 1;
+    let restoreHost!: () => void;
+    let clears = 0;
+    Object.defineProperty(implementation, 'mockClear', {
+      configurable: true,
+      set(original: () => unknown) {
+        Object.defineProperty(this, 'mockClear', {
+          configurable: true,
+          value() {
+            clears++;
+            return original();
+          },
+        });
+        restoreHost = () =>
+          Object.defineProperty(this, 'mockClear', { value: original });
+      },
+    });
+    const mock = fn(implementation);
+    mock();
+    restoreHost();
+    clearAllMocks();
+    expect(clears).toBe(1);
+    expect(mock.mock.calls).toHaveLength(0);
+  });
+
+  it('observes a deleted helper when the corresponding operation runs', () => {
+    const { fn, clearAllMocks, resetAllMocks } = initSpy();
+    const mock = fn();
+    const reset = mock.mockReset;
+    Reflect.deleteProperty(mock, 'mockReset');
+    clearAllMocks();
+    expect(resetAllMocks).toThrow(TypeError);
+    mock.mockReset = reset;
+    resetAllMocks();
+  });
+
+  it('picks up later mocks first used or created by a cleanup hook', () => {
+    const { fn, clearAllMocks } = initSpy();
+    const earlier = fn();
+    const custom = fn();
+    const later = fn();
+    let nestedCalls = 0;
+    custom.mockClear = () => {
+      earlier();
+      later();
+      const nested = fn();
+      nested.mockClear = () => {
+        nestedCalls++;
+        return nested;
+      };
+      return custom;
+    };
+
+    clearAllMocks();
+    expect(earlier.mock.calls).toHaveLength(1);
+    expect(later.mock.calls).toHaveLength(0);
+    expect(nestedCalls).toBe(1);
+  });
+
+  it('honors overrides through the native mock prototype constructor', () => {
+    const { fn, clearAllMocks } = initSpy();
+    const mock = fn();
+    const alias: typeof mock = mock.prototype.constructor;
+    let clears = 0;
+    alias.mockClear = () => {
+      clears++;
+      return mock;
+    };
+    clearAllMocks();
+    expect(clears).toBe(1);
+  });
+
+  it('keeps its bookkeeping out of calls to a spied Set method', () => {
+    const { spyOn, clearAllMocks } = initSpy();
+    const add = spyOn(Set.prototype, 'add');
+    try {
+      new Set().add(1);
+      clearAllMocks();
+      expect(add.mock.calls).toHaveLength(0);
+    } finally {
+      add.mockRestore();
+    }
+  });
+
+  it('only invokes overrides in the active project', () => {
+    let project = 'a';
+    const { fn, resetAllMocks } = initSpy(() => project);
+    const a = fn();
+    let resets = 0;
+    a.mockReset = () => {
+      resets++;
+      return a;
+    };
+    project = 'b';
+    const b = fn();
+    b();
+    resetAllMocks();
+    expect(b.mock.calls).toHaveLength(0);
+    expect(resets).toBe(0);
+    project = 'a';
+    resetAllMocks();
+    expect(resets).toBe(1);
   });
 });
 
@@ -555,6 +769,23 @@ describe('initSpy spyOn', () => {
 
     spy.mockRestore();
     expect(obj.greet).toBe(original);
+  });
+
+  it('unregisters only the individually restored property of a target', () => {
+    const { spyOn, restoreAllSpies } = initSpy();
+    const original = () => 'original';
+    const replacement = () => 'replacement';
+    const target = { read: original, write: original };
+    const read = spyOn(target, 'read');
+    spyOn(target, 'write');
+
+    read.mockRestore();
+    target.read = replacement;
+    target.write = replacement;
+    restoreAllSpies();
+
+    expect(target.read).toBe(replacement);
+    expect(target.write).toBe(original);
   });
 
   it('returns the existing mock when the method is already mocked', () => {
