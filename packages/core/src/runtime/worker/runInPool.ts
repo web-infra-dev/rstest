@@ -59,7 +59,10 @@ import {
   createWorkerRpcOptions,
   waitForPendingRpcWrites,
 } from './rpc';
-import { setFederationDynamicImportOrigin } from './runtimeHooks';
+import {
+  setActiveDynamicImportMockResolver,
+  setFederationDynamicImportOrigin,
+} from './runtimeHooks';
 import { createSilentConsoleController } from './silentConsole';
 import { RstestSnapshotEnvironment } from './snapshot';
 import { createNodeTaskContext } from './taskContext.node';
@@ -704,6 +707,8 @@ const loadFiles = async ({
       interopDefault,
     });
   }
+
+  setActiveDynamicImportMockResolver(runtimeDistPath, runtimeGlobal);
 
   // run setup files
   tracker?.transition('setupFiles');

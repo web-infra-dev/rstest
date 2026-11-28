@@ -12,6 +12,7 @@ import {
   finalizeDynamicImport,
   loadWasm,
   resolveImportSpecifier,
+  resolveMockedDynamicImport,
 } from './resolveDynamicImport';
 import {
   RSTEST_DYNAMIC_IMPORT_HOOK,
@@ -154,6 +155,18 @@ const defineRstestDynamicImport =
     importAttributes: ImportCallOptions,
     origin?: string,
   ) => {
+    const mocked = await resolveMockedDynamicImport({
+      specifier,
+      origin,
+      testPath,
+      importAttributes,
+      returnModule,
+      vmContext,
+    });
+    if (mocked.hit) {
+      return mocked.module;
+    }
+
     const currentDirectory = path.dirname(distPath);
 
     const joinedPath = isRelativePath(specifier)

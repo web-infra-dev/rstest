@@ -366,11 +366,12 @@ __webpack_require__.rstest_dynamic_require = (id, request) => {
 };
 
 const resolveRstestMockRequest = (request, origin) => {
-  if (
-    !origin ||
-    request[0] !== '.' ||
-    (request[1] !== '/' && request[1] !== '\\')
-  ) {
+  const isRelative =
+    request[0] === '.' &&
+    (request[1] === '/' ||
+      request[1] === '\\' ||
+      (request[1] === '.' && (request[2] === '/' || request[2] === '\\')));
+  if (!origin || !isRelative) {
     return request;
   }
 
@@ -461,6 +462,35 @@ __webpack_require__.rstest_require_mock = (id, request, origin) => {
   );
   return __webpack_require__(targetId);
 };
+
+// Non-literal dynamic `import(expr)` calls bypass rspack's static rewrite to
+// `rstest_dynamic_require` and flow through the worker's `__rstest_dynamic_import__`
+// hook instead. Expose a resolver on `globalThis` so the worker can check the
+// active mock registry before falling back to native module loading.
+__webpack_require__.rstest_resolve_dynamic_import = (request, origin) => {
+  const mockedId = findRstestMockedId(
+    request,
+    origin,
+    __webpack_require__.rstest_mocked_ids_by_request,
+    __webpack_require__.rstest_mocked_ids_by_request_cjs,
+  );
+  if (mockedId === undefined) {
+    return undefined;
+  }
+  return {
+    exports: Promise.resolve().then(() => __webpack_require__(mockedId)),
+  };
+};
+if (
+  typeof globalThis.__rstest_register_dynamic_import_resolver__ === 'function'
+) {
+  globalThis.__rstest_register_dynamic_import_resolver__(
+    __webpack_require__.rstest_resolve_dynamic_import,
+  );
+} else {
+  globalThis.__rstest_resolve_dynamic_import__ =
+    __webpack_require__.rstest_resolve_dynamic_import;
+}
 //#endregion
 
 //#region rs.reset_modules
