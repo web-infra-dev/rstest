@@ -1,4 +1,5 @@
 import vm from 'node:vm';
+import { clearDynamicImportMockResolvers } from './runtimeHooks';
 
 export const shouldInterop = ({
   interopDefault = true,
@@ -249,6 +250,7 @@ export const clearCacheCleaners = (): void => {
  * here so a new loader is wired in one place, not at every flush call site.
  */
 export const flushAllLoaderCaches = async (): Promise<void> => {
+  clearDynamicImportMockResolvers();
   const [esm, cjs] = await Promise.all([
     import('./loadEsModule'),
     import('./loadModule'),

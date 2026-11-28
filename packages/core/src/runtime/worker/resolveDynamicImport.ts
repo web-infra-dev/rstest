@@ -18,6 +18,8 @@ import {
   loadVmExternalModules,
 } from './vm/externalModulesLoader';
 
+let mockedSyntheticModuleCounter = 0;
+
 /**
  * Shared dynamic-import resolution + interop policy for both worker loaders.
  *
@@ -253,7 +255,12 @@ export const resolveMockedDynamicImport = async ({
   return {
     hit: true,
     module: returnModule
-      ? asModule(mockedExports, specifier, mockedExports?.default, vmContext)
+      ? asModule(
+          mockedExports,
+          `__rstest_mock__:${specifier}:${++mockedSyntheticModuleCounter}`,
+          mockedExports?.default,
+          vmContext,
+        )
       : mockedExports,
   };
 };

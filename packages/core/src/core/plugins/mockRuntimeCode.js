@@ -481,8 +481,16 @@ __webpack_require__.rstest_resolve_dynamic_import = (request, origin) => {
     exports: Promise.resolve().then(() => __webpack_require__(mockedId)),
   };
 };
-globalThis.__rstest_resolve_dynamic_import__ =
-  __webpack_require__.rstest_resolve_dynamic_import;
+if (
+  typeof globalThis.__rstest_register_dynamic_import_resolver__ === 'function'
+) {
+  globalThis.__rstest_register_dynamic_import_resolver__(
+    __webpack_require__.rstest_resolve_dynamic_import,
+  );
+} else {
+  globalThis.__rstest_resolve_dynamic_import__ =
+    __webpack_require__.rstest_resolve_dynamic_import;
+}
 //#endregion
 
 //#region rs.reset_modules

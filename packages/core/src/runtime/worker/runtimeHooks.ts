@@ -12,6 +12,8 @@
 export const RSTEST_DYNAMIC_IMPORT_HOOK = '__rstest_dynamic_import__' as const;
 export const RSTEST_RESOLVE_DYNAMIC_IMPORT_HOOK =
   '__rstest_resolve_dynamic_import__' as const;
+export const RSTEST_REGISTER_DYNAMIC_IMPORT_RESOLVER_HOOK =
+  '__rstest_register_dynamic_import_resolver__' as const;
 export const RSTEST_DYNAMIC_IMPORT_ORIGIN_HOOK =
   '__rstest_dynamic_import_origin__' as const;
 export const RSTEST_REQUIRE_RESOLVE_HOOK =
@@ -66,6 +68,38 @@ export const setFederationDynamicImportOrigin = (
       delete runtimeGlobal[RSTEST_DYNAMIC_IMPORT_HOOK];
     }
   }
+};
+
+/**
+ * Per-runtime-chunk dynamic-import mock resolvers. Under `isolate: false`,
+ * `clearModuleCache` keeps each project's runtime chunk evaluated across files,
+ * so re-entering a previously run project does not re-execute its runtime
+ * bootstrap. Storing each runtime chunk's resolver by `runtimeDistPath` lets
+ * the worker restore the active project's resolver before every file load.
+ */
+const dynamicImportMockResolvers = new Map<string, unknown>();
+
+export const setActiveDynamicImportMockResolver = (
+  runtimeKey: string | undefined,
+  target: Record<string, unknown> = globalThis,
+): void => {
+  const key = runtimeKey ?? '';
+  target[RSTEST_REGISTER_DYNAMIC_IMPORT_RESOLVER_HOOK] = (
+    resolver: unknown,
+  ) => {
+    dynamicImportMockResolvers.set(key, resolver);
+    target[RSTEST_RESOLVE_DYNAMIC_IMPORT_HOOK] = resolver;
+  };
+  const existing = dynamicImportMockResolvers.get(key);
+  if (existing !== undefined) {
+    target[RSTEST_RESOLVE_DYNAMIC_IMPORT_HOOK] = existing;
+  } else {
+    delete target[RSTEST_RESOLVE_DYNAMIC_IMPORT_HOOK];
+  }
+};
+
+export const clearDynamicImportMockResolvers = (): void => {
+  dynamicImportMockResolvers.clear();
 };
 
 /**
