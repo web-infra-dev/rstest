@@ -4,7 +4,7 @@ import {
   createRequire as createNativeRequire,
 } from 'node:module';
 import { isAbsolute } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import type vm from 'node:vm';
 import {
   asModule,
@@ -12,6 +12,7 @@ import {
   interopModule,
   shouldInterop,
 } from './interop';
+import { RSTEST_RESOLVE_DYNAMIC_IMPORT_HOOK } from './runtimeHooks';
 import {
   getVmExternalModules,
   loadVmExternalModules,
@@ -183,6 +184,80 @@ export const loadWasm = async (
  * redundant, transparent Proxy. `isBuiltinSpecifier` keeps both spellings on
  * the same branch.
  */
+type MockDynamicImportResolver = (
+  request: string,
+  origin?: string,
+) => { exports: Promise<any> } | undefined;
+
+/**
+ * Check whether a non-literal dynamic `import(expr)` specifier matches an
+ * active `rs.mock()` / `rs.doMock()` registration in the bundle's mock runtime.
+ */
+export const resolveMockedDynamicImport = async ({
+  specifier,
+  origin,
+  testPath,
+  importAttributes,
+  returnModule,
+  vmContext,
+}: {
+  specifier: string;
+  origin?: string;
+  testPath: string;
+  importAttributes?: ImportCallOptions;
+  returnModule?: boolean;
+  vmContext?: vm.Context;
+}): Promise<{ hit: true; module: any } | { hit: false }> => {
+  if (
+    importAttributes?.with?.rstest === 'importActual' ||
+    (importAttributes as { rstest?: string } | undefined)?.rstest ===
+      'importActual'
+  ) {
+    return { hit: false };
+  }
+
+  const runtimeGlobal = (vmContext ?? globalThis) as Record<string, unknown>;
+  const resolver = runtimeGlobal[RSTEST_RESOLVE_DYNAMIC_IMPORT_HOOK] as
+    MockDynamicImportResolver | undefined;
+  if (typeof resolver !== 'function') {
+    return { hit: false };
+  }
+
+  const effectiveOrigin = origin ?? testPath;
+  let match = resolver(specifier, effectiveOrigin);
+
+  if (!match) {
+    try {
+      const resolved = resolveImportSpecifier({
+        specifier,
+        origin,
+        testPath,
+        vmContext,
+      });
+      const resolvedPath = resolved.startsWith('file://')
+        ? fileURLToPath(resolved)
+        : resolved;
+      if (resolvedPath !== specifier) {
+        match = resolver(resolvedPath, effectiveOrigin);
+      }
+    } catch {
+      // Unresolvable virtual specifier — fall through to normal dynamic import.
+    }
+  }
+
+  if (!match) {
+    return { hit: false };
+  }
+
+  const mockedExports = await match.exports;
+  return {
+    hit: true,
+    module: returnModule
+      ? asModule(mockedExports, specifier, mockedExports?.default, vmContext)
+      : mockedExports,
+  };
+};
+
 export const finalizeDynamicImport = async ({
   modulePath,
   importAttributes,
